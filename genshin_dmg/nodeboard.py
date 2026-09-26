@@ -503,6 +503,7 @@ class NodeBoard(ttk.Frame):
         self._resize_start = None
         self._loading = False
         self.zoom = 1.0
+        self.project_name = ""      # 工程名称（保存/打开时写入）
 
         self._build_palette()
         self._build_canvas()
@@ -1332,13 +1333,14 @@ class NodeBoard(ttk.Frame):
         links = [dict(src=l["src"], dst=l["dst"], port=int(l["port"]))
                  for l in self.links]
         return dict(version=1, app="GenshinDamageCalc", zoom=self.zoom,
-                    nodes=nodes, links=links)
+                    name=self.project_name, nodes=nodes, links=links)
 
     def from_dict(self, data: dict) -> None:
         """从字典恢复画布（旧 id 会重映射到新 id）。"""
         self._loading = True
         try:
             self.clear_board()
+            self.project_name = str(data.get("name") or "")
             try:
                 self.zoom = max(0.4, min(2.5, float(data.get("zoom", 1.0))))
             except (TypeError, ValueError):

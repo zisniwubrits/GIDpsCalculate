@@ -133,6 +133,9 @@ class DamageApp(tk.Tk):
             self.bottom, text="教程 (F1)", command=self.show_help
         )
         self.help_button.pack(side="left", padx=4, pady=6)
+        self.project_var = tk.StringVar(value="工程：未命名")
+        ttk.Label(self.bottom, textvariable=self.project_var,
+                  foreground="#556").pack(side="left", padx=(10, 0))
 
         self.bind_all("<F1>", lambda e: self.show_help())
 
@@ -153,9 +156,13 @@ class DamageApp(tk.Tk):
         if not path:
             return
         import json
+        import os
+        name = os.path.splitext(os.path.basename(path))[0]
+        self.board.project_name = name
         with open(path, "w", encoding="utf-8") as f:
             json.dump(self.board.to_dict(), f, ensure_ascii=False, indent=2)
-        self.title("原神伤害计算器 · 工程已保存")
+        self._set_project_name(name)
+        self.title("原神伤害计算器 · %s" % name)
 
     def load_project(self) -> None:
         """读取 JSON 工程并恢复到画布。"""
@@ -166,6 +173,7 @@ class DamageApp(tk.Tk):
         if not path:
             return
         import json
+        import os
         try:
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
@@ -173,8 +181,17 @@ class DamageApp(tk.Tk):
             self._set_result(["【打开失败】%s" % e])
             return
         self.board.from_dict(data)
-        self.title("原神伤害计算器 · 已打开工程")
+        # 优先用存档里的名称，没有就用文件名
+        name = self.board.project_name or os.path.splitext(
+            os.path.basename(path))[0]
+        self.board.project_name = name
+        self._set_project_name(name)
+        self.title("原神伤害计算器 · %s" % name)
         self.calculate()
+
+    def _set_project_name(self, name: str) -> None:
+        if hasattr(self, "project_var"):
+            self.project_var.set("工程：%s" % (name or "未命名"))
 
     def open_month_star(self) -> None:
         """打开月/星反应的独立弹窗。"""
