@@ -27,7 +27,7 @@ FIELD_BG = "#f7f9fb"
 # 字段解析
 # ---------------------------------------------------------------------------
 def _num(s: str, d: float = 0.0) -> float:
-    """解析数值；支持算式（如 70+30、352+674、200*3），非法则返回 d。"""
+    """解析数值；支持算式（70+30、200*3）与变量名（如 攻击力*2），非法则返回 d。"""
     t = (s or "").strip()
     if not t:
         return d
@@ -36,7 +36,7 @@ def _num(s: str, d: float = 0.0) -> float:
     except ValueError:
         pass
     try:
-        return _eval_expr(t)      # 复用安全算术求值（支持全角/括号/幂等）
+        return _eval_expr(t)      # 复用安全算术求值（支持全角/括号/幂/变量）
     except ValueError:
         return d
 
@@ -67,12 +67,16 @@ def _plain(x: float) -> str:
 # --- 计算卡用的安全算术求值（不使用 eval）---
 _FULLWIDTH = {"，": ",", "×": "*", "÷": "/", "＋": "+", "－": "-", "（）": "()"}
 
+# 全局变量表：由「变量」卡片定义，供所有数值框/表达式引用
+VAR_ENV: dict = {}
 
-def _eval_expr(text: str) -> float:
-    """安全求值算术表达式（支持 + - * / // % ** 与括号）。失败抛 ValueError。"""
+
+def _eval_expr(text: str, env: dict | None = None) -> float:
+    """安全求值算术表达式（支持 + - * / // % **、括号、变量名）。失败抛 ValueError。"""
     import ast as _ast
     import operator as _op
 
+    env = VAR_ENV if env is None else env
     t = (text or "").strip()
     for k, v in _FULLWIDTH.items():
         t = t.replace(k, v)
@@ -97,6 +101,10 @@ def _eval_expr(text: str) -> float:
             return ev(node.body)
         if isinstance(node, _ast.Constant) and isinstance(node.value, (int, float)):
             return node.value
+        if isinstance(node, _ast.Name):          # 变量引用
+            if node.id in env:
+                return float(env[node.id])
+            raise ValueError("未定义变量: %s" % node.id)
         if isinstance(node, _ast.BinOp) and type(node.op) in ops:
             return ops[type(node.op)](ev(node.left), ev(node.right))
         if isinstance(node, _ast.UnaryOp) and type(node.op) in ops:
@@ -408,6 +416,12 @@ NODE_TYPES = {
                  font_menu=True, fields=[
         ("content", "内容", "在此输入文本", "textbox"),
     ]),
+    # 变量卡片：定义全局变量，供所有数值框/表达式引用（如 攻击力*2）
+    "var": dict(title="变量", inputs=0, compute=_t_text, isolated=True,
+                vars_card=True, resizable=True, wide_fields=True, fields=[
+        ("defs", "定义（每行：名称 = 表达式）",
+         "攻击力 = 1000\n倍率 = 200\n基础伤害 = 攻击力 * 倍率", "textbox"),
+    ]),
     "result": dict(title="★ 结果", inputs=1, compute=_t_result, fields=[]),
 }
 
@@ -425,6 +439,7 @@ class NodeBoard(ttk.Frame):
         ("base_boost", "×基础提升"), ("em_gain", "×精通增益"),
         ("calc", "计算卡"),
         ("text", "文本"),
+        ("var", "变量"),
         ("result", "★结果"),
     ]
 
@@ -805,8 +820,41 @@ class NodeBoard(ttk.Frame):
                 return l["src"]
         return None
 
+    def refresh_variables(self) -> None:
+        """解析所有「变量」卡片，刷新全局变量表，并更新变量卡片的显示。"""
+        env: dict = {}
+        for n in self.nodes.values():
+            if n["type"] != "var":
+                continue
+            lines = (n["vars"]["defs"].get() or "").splitlines()
+            for line in lines:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                name, expr = None, None
+                for sep in ("=", "：", ":"):
+                    if sep in line:
+                        name, _, expr = line.partition(sep)
+                        break
+                if name is None:
+                    continue
+                name = name.strip()
+                if not name:
+                    continue
+                try:
+                    env[name] = _eval_expr(expr.strip(), env)
+                except ValueError:
+                    continue          # 定义失败则忽略该行
+        VAR_ENV.clear()
+        VAR_ENV.update(env)
+        summary = ", ".join("%s=%s" % (k, _plain(v)) for k, v in env.items())
+        for n in self.nodes.values():
+            if n["type"] == "var":
+                n["out"].set("变量: " + (summary if summary else "(无)"))
+
     def evaluate(self):
         """从结果节点反向溯源求值，返回 (nc, cr, ex) 或抛错。"""
+        self.refresh_variables()
         result = next((k for k, n in self.nodes.items()
                        if n["type"] == "result"), None)
         if result is None:
@@ -814,8 +862,10 @@ class NodeBoard(ttk.Frame):
         return self.node_output(result)
 
     def refresh_outputs(self) -> None:
+        self.refresh_variables()
         for nid, n in self.nodes.items():
-            if NODE_TYPES[n["type"]].get("no_output"):
+            spec = NODE_TYPES[n["type"]]
+            if spec.get("no_output") or spec.get("vars_card"):
                 continue
             try:
                 v = self.node_output(nid)
