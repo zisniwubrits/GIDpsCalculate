@@ -129,6 +129,12 @@ class DamageApp(tk.Tk):
             self.bottom, text="保存工程…", command=self.save_project
         )
         self.save_json_button.pack(side="right", padx=4, pady=6)
+        self.help_button = ttk.Button(
+            self.bottom, text="教程 (F1)", command=self.show_help
+        )
+        self.help_button.pack(side="left", padx=4, pady=6)
+
+        self.bind_all("<F1>", lambda e: self.show_help())
 
         self.calculate()
 
@@ -187,6 +193,17 @@ class DamageApp(tk.Tk):
             ("节点卡片", [(r.split(" [")[0], r.split(" [", 1)[1]) for r in rows]),
             ("连线", [("link%d" % i, s) for i, s in enumerate(links)]),
         ]
+
+    def show_help(self) -> None:
+        """按 F1 打开使用教程。"""
+        dlg = getattr(self, "_help_dialog", None)
+        if dlg is not None:
+            try:
+                dlg.lift()
+                return
+            except tk.TclError:
+                self._help_dialog = None
+        self._help_dialog = HelpWindow(self)
 
     def save_report(self) -> None:
         """把当前直伤计算的输入与结果保存为一个文件。"""
@@ -534,6 +551,95 @@ class MoonStarDialog(tk.Toplevel):
         with open(path, "w", encoding="utf-8") as f:
             f.write(content)
         self.title("月 / 星 反应计算 · 已保存")
+
+
+HELP_TEXT = """【基本概念】
+· 每张卡片 = 一个乘区节点；左侧是输入端口，右侧是输出端口。
+· 计算时从「★结果」卡片沿连线反向溯源求值；未接入结果的卡片不影响结果。
+· 「＋加法」卡片有 2 个输入。
+
+【连线】
+· 从右侧输出端口按住拖到另一张卡片左侧输入端口即可连线。
+· 点击连线可删除；卡片右上 ✕ 删除卡片（一并清理连线）。
+· 鼠标悬停卡片时，与它相关的连线会高亮、其余变灰，便于追踪传递关系。
+
+【添加卡片】
+· 顶部“添加卡片”：基础值、增伤区、抗性区、防御区、暴击区、增幅反应、擢升、
+  ＋加法、激化值、剧变反应、结晶护盾、属性源、基准值源、×系数、×倍率、
+  ×(1+基础提升%)、×精通增益、计算卡、文本、变量、★结果。
+· “一键预设”可一键搭好整条链：普通直伤 / 月·直伤 / 月·反应 / 星·超导 /
+  星·扩散 / 星·扩散直伤 / 剧变反应 / 激化值。
+
+【摆放与缩放】
+· 拖动卡片标题（或 ⣿）可在画布上自由摆放。
+· 卡片右下角 ◢ 手柄可拖动改变大小；输入框随卡片宽度伸展。
+· 画布缩放：工具栏 － / ＋ / 100%，或 Ctrl+滚轮（40%~250%）。
+· 文本卡片：右键可调字号（字体 ＋/－、常用字号、重置、复制文本）。
+
+【看结果】
+· 结果直接显示在卡片上：★结果卡片（以及暴击区之后的卡片）显示
+  未暴击 ｜ 暴击 ｜ 期望。
+· 有效暴击率最多按 100% 计入（溢出截断）。
+· 若结果链里没有「暴击区」，结果卡片会标注“← 无暴击区”。
+
+【输入框用法】
+· 所有数值 / 百分比输入框都支持算式：70+30、200*3、(100+50)*2、2**3。
+· 兼容全角 × ÷ ＋ － （） 与千分位逗号。
+· 可引用「变量」卡片里定义的变量名，如 攻击力+500、倍率/2。
+
+【变量卡片】
+· 每行定义一个变量，格式：名称 = 表达式（可引用前面已定义的变量）。
+  例：攻击力 = 1000
+      倍率 = 200
+      基础伤害 = 攻击力 * 倍率
+· 定义后，所有卡片的输入框与计算卡都能使用这些变量名。
+· 卡片底部会显示已解析的变量值。
+
+【计算卡】
+· 无端口、不参与计算的小算盘：填表达式，实时显示结果。
+· 点“复制”把输出数值复制到剪贴板（纯数字，便于直接粘贴到其它输入框）。
+
+【增幅反应系数提醒】
+· 蒸发·水打火 ×2.0 与 融化·火打冰 ×2.0 相同；
+  蒸发·火打水 ×1.5 与 融化·冰打火 ×1.5 相同。
+· 系数成对相同是游戏规则，选到同一档自然结果一样。
+
+【工程与导出】
+· 保存工程… / 打开工程…：整张画布（卡片、参数、连线、尺寸、缩放、变量）
+  存为 JSON 文件，可随时完整恢复。
+· 保存结果…：导出可读文本报告（含结果与节点求值过程）。
+
+【快捷键】
+· F1 打开 / 关闭本教程；Ctrl+滚轮 缩放画布。
+"""
+
+
+class HelpWindow(tk.Toplevel):
+    """F1 使用教程窗口。"""
+
+    def __init__(self, master) -> None:
+        super().__init__(master)
+        self.title("使用教程 (F1)")
+        self.configure(bg=BG)
+        self.transient(master)
+        _center_window(self, 760, 620)
+        txt = tk.Text(self, wrap="word", font=("Microsoft YaHei", 10),
+                      padx=12, pady=10, bd=0, highlightthickness=1,
+                      highlightbackground="#c3ccd6", bg="#ffffff")
+        txt.pack(fill="both", expand=True, padx=8, pady=(8, 0))
+        txt.insert("1.0", HELP_TEXT)
+        txt.configure(state="disabled")
+        bar = ttk.Frame(self)
+        bar.pack(fill="x", pady=6, padx=8)
+        ttk.Button(bar, text="关闭 (Esc)", command=self.destroy).pack(side="right")
+        self.bind("<Escape>", lambda e: self.destroy())
+        self.bind("<F1>", self._close)      # 返回 "break" 阻止再触发主窗口的 F1
+        self.protocol("WM_DELETE_WINDOW", self.destroy)
+        self.focus_set()
+
+    def _close(self, event=None):
+        self.destroy()
+        return "break"
 
 
 def main() -> None:

@@ -419,8 +419,8 @@ NODE_TYPES = {
     # 变量卡片：定义全局变量，供所有数值框/表达式引用（如 攻击力*2）
     "var": dict(title="变量", inputs=0, compute=_t_text, isolated=True,
                 vars_card=True, resizable=True, wide_fields=True, fields=[
-        ("defs", "定义（每行：名称 = 表达式）",
-         "攻击力 = 1000\n倍率 = 200\n基础伤害 = 攻击力 * 倍率", "textbox"),
+        ("defs", "定义", "攻击力 = 1000\n倍率 = 200\n基础伤害 = 攻击力 * 倍率",
+         "textbox"),
     ]),
     "result": dict(title="★ 结果", inputs=1, compute=_t_result, fields=[]),
 }
