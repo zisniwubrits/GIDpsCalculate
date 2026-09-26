@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# PyInstaller 打包产物（可自行重新生成）
+build/
+dist/
+*.spec
+
+# 个人存档 / 私有资料（不要开源）
+private/
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
