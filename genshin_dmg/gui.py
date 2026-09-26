@@ -115,25 +115,21 @@ class DamageApp(tk.Tk):
 
         self._build_bottom_bar()
         self.bind_all("<F1>", lambda e: self.show_help())
+        # 撤销 / 重做
+        self.bind_all("<Control-z>", lambda e: (self.board.undo(), "break")[1])
+        self.bind_all("<Control-Z>", lambda e: (self.board.redo(), "break")[1])
+        self.bind_all("<Control-y>", lambda e: (self.board.redo(), "break")[1])
 
+        self._set_project_name("")          # 标题显示工程名（未命名）
         self.calculate()
 
     # ------------------------------------------------------------------
     # 底部工具栏：左侧工程信息 / 右侧「文件操作 | 帮助 | 主操作」
     # ------------------------------------------------------------------
     def _build_bottom_bar(self) -> None:
-        self.project_var = tk.StringVar(value="工程：未命名")
-        ttk.Label(self.bottom, textvariable=self.project_var,
-                  foreground="#556").pack(side="left", padx=(6, 0), pady=6)
-
         right = ttk.Frame(self.bottom)
         right.pack(side="right", padx=6, pady=6)
 
-        self.update_button = ttk.Button(right, text="计算", width=8,
-                                        command=self.calculate)
-        self.update_button.pack(side="right")
-        ttk.Separator(right, orient="vertical").pack(
-            side="right", fill="y", padx=8, pady=2)
         self.help_button = ttk.Button(right, text="教程 (F1)",
                                       command=self.show_help)
         self.help_button.pack(side="right", padx=3)
@@ -156,9 +152,11 @@ class DamageApp(tk.Tk):
 
     def save_project(self) -> None:
         """把整张画布（节点+连线+参数）以 JSON 保存为一个工程文件。"""
+        # 默认文件名使用当前工程名（导入时得到的名称）
+        base = self.board.project_name or _timestamp_name("伤害工程").replace(".txt", "")
         path = _fd.asksaveasfilename(
             title="保存工程(JSON)",
-            initialfile=_timestamp_name("伤害工程").replace(".txt", ".json"),
+            initialfile="%s.json" % base,
             defaultextension=".json",
             filetypes=[("JSON 工程", "*.json"), ("所有文件", "*.*")],
         )
@@ -199,8 +197,8 @@ class DamageApp(tk.Tk):
         self.calculate()
 
     def _set_project_name(self, name: str) -> None:
-        if hasattr(self, "project_var"):
-            self.project_var.set("工程：%s" % (name or "未命名"))
+        """工程名显示在窗口标题上。"""
+        self.title("原神伤害计算器 · %s" % (name or "未命名"))
 
     def open_month_star(self) -> None:
         """打开月/星反应的独立弹窗。"""
@@ -295,7 +293,11 @@ class DamageApp(tk.Tk):
             lines.extend(board.describe())
         except Exception as e:
             board.refresh_outputs()
-            lines = ["【无法计算】%s" % e]
+            if "结果" in str(e):
+                lines = ["【提示】画布中还没有「★结果」卡片：",
+                         "各卡片仍会显示自身系数与输出；把链尾连到 ★结果 即可汇总伤害。"]
+            else:
+                lines = ["【无法计算】%s" % e]
         self._set_result(lines)
 
 
@@ -587,14 +589,16 @@ HELP_TEXT = """【基本概念】
 【连线】
 · 从右侧输出端口按住拖到另一张卡片左侧输入端口即可连线。
 · 点击连线可删除；卡片右上 ✕ 删除卡片（一并清理连线）。
+· 「＋加法合并」卡片标题栏上有 `＋` 按钮，点一下增加一个输入端口（最多 12 个）。
 · 鼠标悬停卡片时，与它相关的连线会高亮、其余变灰，便于追踪传递关系。
 
 【添加卡片】
-· 顶部“添加卡片”：基础值、增伤区、抗性区、防御区、暴击区、增幅反应、擢升、
+· 左侧“添加卡片”：基础值、增伤区、抗性区、防御区、暴击区、增幅反应、擢升、
   ＋加法、激化值、剧变反应、结晶护盾、属性源、基准值源、×系数、×倍率、
-  ×(1+基础提升%)、×精通增益、计算卡、文本、变量、★结果。
-· “一键预设”可一键搭好整条链：普通直伤 / 月·直伤 / 月·反应 / 星·超导 /
-  星·扩散 / 星·扩散直伤 / 剧变反应 / 激化值。
+  ×(1+基础提升%)、×精通增益、星超导系数、计算卡、文本、变量、理想圣遗物、★结果。
+· “星超导系数”只需填「层数(hit 0~12)」，系数自动查表（0→1.0 … 12→2.0）。
+· “一键预设”可一键搭好一条链（不含★结果，需要汇总时自己接一张）：
+  普通直伤 / 月·直伤 / 月·反应 / 星·超导 / 星·扩散 / 星·扩散直伤 / 剧变反应 / 激化值。
 
 【摆放与缩放】
 · 拖动卡片标题（或 ⣿）可在画布上自由摆放。
@@ -625,6 +629,12 @@ HELP_TEXT = """【基本概念】
 · 无端口、不参与计算的小算盘：填表达式，实时显示结果。
 · 点“复制”把输出数值复制到剪贴板（纯数字，便于直接粘贴到其它输入框）。
 
+【理想圣遗物卡片】
+· 一张只读的表格（属性 / 强化区间 / 最高区间 / 平均值，五星满强化）。
+· 点单元格即可选中（蓝色高亮），按住拖动可选择一块矩形区域。
+· 选中后按 Ctrl+C 复制：单格复制原文，多格/多行复制为 TSV（可直接粘进 Excel）；
+  未选中时复制整表。没有复制按钮。
+
 【增幅反应系数提醒】
 · 蒸发·水打火 ×2.0 与 融化·火打冰 ×2.0 相同；
   蒸发·火打水 ×1.5 与 融化·冰打火 ×1.5 相同。
@@ -637,6 +647,7 @@ HELP_TEXT = """【基本概念】
 
 【快捷键】
 · F1 打开 / 关闭本教程；Ctrl+滚轮 缩放画布。
+· Ctrl+Z 撤销；Ctrl+Shift+Z（或 Ctrl+Y）重做（按编辑停顿自动记录一步）。
 """
 
 

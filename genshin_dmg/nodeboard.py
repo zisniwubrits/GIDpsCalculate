@@ -17,10 +17,15 @@ from tkinter import ttk
 
 from genshin_dmg import damage
 
-BG = "#e9eef3"
+BG = "#f4f6f8"          # 与 gui.py 保持一致（统一背景色）
 ACCENT = "#2f6fa7"
 NODE_BG = "#ffffff"
 FIELD_BG = "#f7f9fb"
+
+# 连线配色（冷色系）：普通 / 高亮 / 弱化
+LINK_COLOR = "#2f6fa7"
+LINK_HOT = "#0b57d0"
+LINK_DIM = "#c3ced9"
 
 
 # ---------------------------------------------------------------------------
@@ -136,9 +141,9 @@ def _t_base(get, ins):
 
 
 def _t_add(get, ins):
-    a = ins[0] if len(ins) > 0 else (0, 0, 0)
-    b = ins[1] if len(ins) > 1 else (0, 0, 0)
-    return (a[0] + b[0], a[1] + b[1], a[2] + b[2])
+    """加法合并：把所有输入逐分量相加（输入个数可变）。"""
+    vals = list(ins) or [(0.0, 0.0, 0.0)]
+    return tuple(sum(v[i] for v in vals) for i in range(3))
 
 
 def _t_dmg(get, ins):
@@ -255,6 +260,78 @@ def _t_result(get, ins):
     return ins[0] if ins else (0, 0, 0)
 
 
+# --- 各卡片「本卡系数」显示函数（用于卡片底部展示该乘区数值）---
+def _f_dmg(get, ins):
+    return "增伤区 ×%s" % _fmt(1 + _pct(get("dmg_net")))
+
+
+def _f_res(get, ins):
+    return "抗性系数 %s" % _fmt(
+        damage.resistance_coefficient(_pct(get("resistance"), 10.0)))
+
+
+def _f_def(get, ins):
+    return "防御系数 %s" % _fmt(damage.defense_coefficient(
+        _num(get("char_level"), 90), _num(get("enemy_level"), 90),
+        def_reduction=_pct(get("def_reduction")),
+        ignore_def=_pct(get("ignore_def"))))
+
+
+def _f_crit(get, ins):
+    cd = _pct(get("crit_damage"), 100.0)
+    cr = min(max(_pct(get("crit_rate"), 50.0), 0.0), 1.0)
+    return "暴击系数 %s ｜ 期望系数 %s" % (_fmt(1 + cd), _fmt(1 + cr * cd))
+
+
+def _f_amp(get, ins):
+    name = _amp_key(get("formula"))
+    if name == "无" or get("shield"):
+        c = 1.0
+    else:
+        c = damage.amplify_for_reaction(
+            name, _num(get("em")), _pct(get("amp_bonus")))
+    return "蒸发融化系数 %s" % _fmt(c)
+
+
+def _f_boost(get, ins):
+    return "擢升 ×%s" % _fmt(1 + _pct(get("boost")))
+
+
+def _f_coeff(get, ins):
+    return "系数 %s" % _fmt(_num(get("coeff"), 1.0))
+
+
+def _f_mult(get, ins):
+    return "倍率 ×%s" % _fmt(_pct(get("multiplier"), 200.0))
+
+
+def _f_base_boost(get, ins):
+    return "基础提升 ×%s" % _fmt(1 + _pct(get("base_boost")))
+
+
+def _f_em_gain(get, ins):
+    em = _num(get("em"))
+    k = _num(get("k"), 6.0)
+    den = _num(get("denom"), 2000.0)
+    bonus = _pct(get("bonus"))
+    term = 0.0 if em + den == 0 else k * em / (em + den)
+    return "精通增益 ×%s" % _fmt(1 + term + bonus)
+
+
+# --- 星超导系数（按附着层数/hit 查表：0~12 → 1.0~2.0）---
+def _star_rate(get) -> float:
+    hits = int(max(0, min(12, _num(get("hits"), 0))))
+    return damage.STAR_SUPERCOND_RATE[hits]
+
+
+def _t_star_coeff(get, ins):
+    return _mul(ins[0], _star_rate(get))
+
+
+def _f_star_coeff(get, ins):
+    return "星超导系数 ×%s" % _fmt(_star_rate(get))
+
+
 def _t_calc(get, ins):
     """计算卡：求输入表达式的数值（无输入端口）。"""
     v = _eval_expr(get("expr"))
@@ -264,6 +341,44 @@ def _t_calc(get, ins):
 def _t_text(get, ins):
     """纯文本卡片：只用于标注，不参与计算。"""
     return (0.0, 0.0, 0.0)
+
+
+# --- const 卡片：理想圣遗物词条参考表 ---
+RELIC_ROWS = [
+    ("暴击率（%）", "2.72/3.11/3.50/3.89", "16.32~23.34", "3.305"),
+    ("暴击伤害（%）", "5.44/6.22/6.99/7.77", "32.64~46.62", "6.605"),
+    ("固定攻击力", "13.62/15.56/17.51/19.45", "81.72~116.70", "16.535"),
+    ("百分比攻击力（%）", "4.08/4.66/5.25/5.83", "24.48~34.98", "4.955"),
+    ("固定生命值", "209.13/239.00/268.88/298.75", "1254.78~1792.50", "253.94"),
+    ("百分比生命值（%）", "4.08/4.66/5.25/5.83", "24.48~34.98", "4.955"),
+    ("固定防御力", "16.20/18.52/20.83/23.15", "97.20~138.90", "19.675"),
+    ("百分比防御力（%）", "5.10/5.83/6.56/7.29", "30.60~43.74", "6.195"),
+    ("元素精通", "16.32/18.65/20.98/23.31", "97.92~139.86", "19.815"),
+    ("元素充能效率（%）", "4.53/5.18/5.83/6.48", "27.18~38.88", "5.505"),
+]
+
+
+def _disp_width(s: str) -> int:
+    """显示宽度（中文按 2 计），用于表格对齐。"""
+    return sum(2 if ord(c) > 0x2E7F else 1 for c in s)
+
+
+def _pad_disp(s: str, width: int) -> str:
+    return s + " " * max(0, width - _disp_width(s))
+
+
+def relic_table_text() -> str:
+    head = ("属性", "强化区间", "最高区间", "平均值")
+    cols = [max(_disp_width(r[i]) for r in (head,) + tuple(RELIC_ROWS))
+            for i in range(4)]
+    lines = ["【理想圣遗物词条（五星·满强化）】", ""]
+    lines.append("  ".join(_pad_disp(h, cols[i]) for i, h in enumerate(head)))
+    lines.append("─" * (sum(cols) + 6))
+    for r in RELIC_ROWS:
+        lines.append("  ".join(_pad_disp(r[i], cols[i]) for i in range(4)))
+    lines.append("")
+    lines.append("（可直接拖选后 Ctrl+C 复制）")
+    return "\n".join(lines)
 
 
 # --- 拆分开的乘区部件（星/月/剧变 源都可由此组合）---
@@ -333,51 +448,58 @@ _AUX_STAT = [
 ]
 
 NODE_TYPES = {
-    "base": dict(title="① 基础值(属性×倍率)", inputs=0, compute=_t_base, fields=[
+    "base": dict(title="基础值 (属性×倍率)", inputs=0, compute=_t_base, fields=[
         ("stat_base", "白值", "1000", "num"),
         ("stat_big", "大增益%", "0", "pct"),
         ("stat_flat", "小增益", "0", "num"),
         ("multiplier", "倍率%", "200", "pct"),
     ]),
-    "dmg": dict(title="② 增伤区 ×", inputs=1, compute=_t_dmg, fields=[
+    "dmg": dict(title="增伤区 ×", inputs=1, compute=_t_dmg, factor=_f_dmg,
+                fields=[
         ("dmg_net", "增伤区净%", "46.6", "pct"),
     ]),
-    "res": dict(title="③ 抗性区 ×", inputs=1, compute=_t_res, fields=[
+    "res": dict(title="抗性区 ×", inputs=1, compute=_t_res, factor=_f_res,
+                fields=[
         ("resistance", "敌人抗性%", "10", "pct"),
     ]),
-    "def": dict(title="④ 防御区 ×", inputs=1, compute=_t_def, fields=[
+    "def": dict(title="防御区 ×", inputs=1, compute=_t_def, factor=_f_def,
+                fields=[
         ("char_level", "角色等级", "90", "num"),
         ("enemy_level", "敌人等级", "90", "num"),
         ("def_reduction", "减防%", "0", "pct"),
         ("ignore_def", "无视防御%", "0", "pct"),
     ]),
-    "crit": dict(title="⑤ 暴击区 (暴击率/暴伤)", inputs=1, compute=_t_crit, fields=[
+    "crit": dict(title="暴击区 (暴击率/暴伤)", inputs=1, compute=_t_crit,
+                 factor=_f_crit, fields=[
         ("crit_rate", "暴击率%", "50", "pct"),
         ("crit_damage", "暴击伤害%", "100", "pct"),
     ]),
-    "amp": dict(title="⑥ 增幅反应 ×", inputs=1, compute=_t_amp, fields=[
+    "amp": dict(title="增幅反应 ×", inputs=1, compute=_t_amp, factor=_f_amp,
+                fields=[
         ("formula", "配方", "无", "combo", _AMP_OPTS),
         ("em", "元素精通", "0", "num"),
         ("amp_bonus", "反应增伤%", "0", "pct"),
         ("shield", "命中护盾(不计)", False, "check"),
     ]),
-    "boost": dict(title="⑦ 擢升 ×", inputs=1, compute=_t_boost, fields=[
+    "boost": dict(title="擢升 ×", inputs=1, compute=_t_boost,
+                  factor=_f_boost, fields=[
         ("boost", "擢升%", "0", "pct"),
     ]),
-    "add": dict(title="⑧ ＋加法合并", inputs=2, compute=_t_add, fields=[]),
-    "aggravate": dict(title="㊀ 激化值(源)", inputs=0, compute=_t_aggravate, fields=[
+    "add": dict(title="＋加法合并", inputs=2, compute=_t_add, variadic=True,
+                fields=[]),
+    "aggravate": dict(title="激化值(源)", inputs=0, compute=_t_aggravate, fields=[
         ("kind", "类型", "超激化", "combo", ["超激化", "蔓激化"]),
         ("em", "元素精通", "0", "num"),
         ("bonus", "激化提高%", "0", "pct"),
         ("level", "等级", "90", "num"),
     ]),
-    "transform": dict(title="㊁ 剧变反应(源)", inputs=0, compute=_t_transform, fields=[
+    "transform": dict(title="剧变反应(源)", inputs=0, compute=_t_transform, fields=[
         ("reaction", "反应", "超载", "combo", list(damage.TRANSFORM_RATE.keys())),
         ("em", "元素精通", "0", "num"),
         ("bonus", "反应增伤%", "0", "pct"),
         ("level", "等级", "90", "num"),
     ]),
-    "crystal": dict(title="㊂ 结晶护盾(源)", inputs=0, compute=_t_crystal, fields=[
+    "crystal": dict(title="结晶护盾(源)", inputs=0, compute=_t_crystal, fields=[
         ("em", "元素精通", "0", "num"),
         ("shield_strength", "护盾强效%", "0", "pct"),
     ]),
@@ -389,20 +511,28 @@ NODE_TYPES = {
     ]),
     "react_base": dict(title="◈ 基准值源(1446.85)", inputs=0, compute=_t_react_base,
                        fields=[("level", "等级", "90", "num")]),
-    "coeff": dict(title="× 系数", inputs=1, compute=_t_coeff, fields=[
+    "coeff": dict(title="× 系数", inputs=1, compute=_t_coeff, factor=_f_coeff,
+                  fields=[
         ("coeff", "系数", "1", "num"),
     ]),
-    "mult": dict(title="× 倍率%", inputs=1, compute=_t_mult, fields=[
+    "mult": dict(title="× 倍率%", inputs=1, compute=_t_mult, factor=_f_mult,
+                 fields=[
         ("multiplier", "倍率%", "200", "pct"),
     ]),
     "base_boost": dict(title="× (1+基础提升%)", inputs=1, compute=_t_base_boost,
+                       factor=_f_base_boost,
                        fields=[("base_boost", "基础提升%", "0", "pct")]),
     "em_gain": dict(title="× 精通增益(1+k·EM/(EM+den)+增伤%)", inputs=1,
-                    compute=_t_em_gain, fields=[
+                    compute=_t_em_gain, factor=_f_em_gain, fields=[
         ("em", "元素精通", "0", "num"),
         ("k", "精通系数k", "6", "num"),
         ("denom", "分母", "2000", "num"),
         ("bonus", "增伤%", "0", "pct"),
+    ]),
+    # 星超导系数：只填“层数(hit)”，系数按表取（0→1.0 … 12→2.0）
+    "star_coeff": dict(title="星超导系数 ×", inputs=1, compute=_t_star_coeff,
+                       factor=_f_star_coeff, fields=[
+        ("hits", "层数", "0", "num"),
     ]),
     # 计算卡：无端口、可自定义标题、可拖动放大，计算表达式数值并可复制输出
     "calc": dict(title="计算卡", inputs=0, compute=_t_calc, isolated=True,
@@ -422,6 +552,12 @@ NODE_TYPES = {
         ("defs", "定义", "攻击力 = 1000\n倍率 = 200\n基础伤害 = 攻击力 * 倍率",
          "textbox"),
     ]),
+    # const 卡片：只读参考表（理想圣遗物词条），可拖选复制，无复制按钮
+    "const": dict(title="理想圣遗物词条", inputs=0, compute=_t_text,
+                  isolated=True, no_output=True, resizable=True,
+                  wide_fields=True, plain=True, readonly=True, fields=[
+        ("content", "内容", "", "textbox"),
+    ]),
     "result": dict(title="★ 结果", inputs=1, compute=_t_result, fields=[]),
 }
 
@@ -437,9 +573,11 @@ class NodeBoard(ttk.Frame):
         ("attr", "属性源"), ("react_base", "基准值源"),
         ("coeff", "×系数"), ("mult", "×倍率"),
         ("base_boost", "×基础提升"), ("em_gain", "×精通增益"),
+        ("star_coeff", "星超导系数"),
         ("calc", "计算卡"),
         ("text", "文本"),
         ("var", "变量"),
+        ("const", "理想圣遗物"),
         ("result", "★结果"),
     ]
 
@@ -447,42 +585,40 @@ class NodeBoard(ttk.Frame):
     PRESETS = {
         "普通直伤": [
             ("base", {}), ("dmg", {}), ("res", {}), ("def", {}),
-            ("crit", {}), ("amp", {}), ("result", {}),
+            ("crit", {}), ("amp", {}),
         ],
         "月·直伤": [
             ("attr", {}), ("coeff", {"coeff": "3"}), ("mult", {"multiplier": "200"}),
             ("base_boost", {}), ("em_gain", {"k": "6", "denom": "2000"}),
-            ("res", {}), ("crit", {}), ("boost", {}), ("result", {}),
+            ("res", {}), ("crit", {}), ("boost", {}),
         ],
         "月·反应": [
             ("react_base", {}), ("coeff", {"coeff": "1.8"}),
             ("base_boost", {}), ("em_gain", {"k": "6", "denom": "2000"}),
-            ("res", {}), ("crit", {}), ("boost", {}), ("result", {}),
+            ("res", {}), ("crit", {}), ("boost", {}),
         ],
         "星·超导": [
-            ("attr", {}), ("coeff", {"coeff": "1.45"}), ("mult", {"multiplier": "200"}),
+            ("attr", {}), ("star_coeff", {"hits": "0"}), ("mult", {"multiplier": "200"}),
             ("base_boost", {}), ("em_gain", {"k": "6", "denom": "2000"}),
-            ("res", {}), ("crit", {}), ("boost", {}), ("result", {}),
+            ("res", {}), ("crit", {}), ("boost", {}),
         ],
         "星·扩散": [
             ("react_base", {}), ("coeff", {"coeff": "0.75"}),
             ("base_boost", {}), ("em_gain", {"k": "6", "denom": "2000"}),
-            ("res", {}), ("crit", {}), ("boost", {}), ("result", {}),
+            ("res", {}), ("crit", {}), ("boost", {}),
         ],
         "星·扩散直伤": [
             ("attr", {}), ("coeff", {"coeff": "1"}), ("mult", {"multiplier": "200"}),
             ("base_boost", {}), ("em_gain", {"k": "6", "denom": "2000"}),
-            ("res", {}), ("crit", {}), ("boost", {}), ("result", {}),
+            ("res", {}), ("crit", {}), ("boost", {}),
         ],
         "剧变反应": [
             ("react_base", {}), ("coeff", {"coeff": "2.75"}),
-            ("em_gain", {"k": "16", "denom": "2000"}),
-            ("res", {}), ("result", {}),
+            ("em_gain", {"k": "16", "denom": "2000"}), ("res", {}),
         ],
         "激化值": [
             ("react_base", {}), ("coeff", {"coeff": "1.15"}),
             ("em_gain", {"k": "5", "denom": "1200", "bonus": "0"}),
-            ("result", {}),
         ],
     }
 
@@ -504,20 +640,27 @@ class NodeBoard(ttk.Frame):
         self._loading = False
         self.zoom = 1.0
         self.project_name = ""      # 工程名称（保存/打开时写入）
+        # 撤销 / 重做
+        self._undo: list = []
+        self._redo: list = []
+        self._last_state = None
+        self._history_job = None
+        self._restoring = False
 
         self._build_palette()
         self._build_canvas()
         self._build_default_graph()
+        self._last_state = self.to_dict()
 
     # ------------------------------------------------------------------
     def _build_palette(self) -> None:
         """左侧纵向菜单栏（按钮逐行排列，可滚动）。"""
-        side = ttk.Frame(self)
+        side = tk.Frame(self, bg=BG)
         side.pack(side="left", fill="y")
 
         cv = tk.Canvas(side, width=178, highlightthickness=0, bg=BG)
         sb = ttk.Scrollbar(side, orient="vertical", command=cv.yview)
-        col = ttk.Frame(cv)
+        col = tk.Frame(cv, bg=BG)
         col.bind("<Configure>",
                  lambda e: cv.configure(scrollregion=cv.bbox("all")))
         cv.create_window((0, 0), window=col, anchor="nw")
@@ -532,10 +675,10 @@ class NodeBoard(ttk.Frame):
             pass
 
         def group(title: str) -> None:
-            ttk.Label(col, text=title, foreground=ACCENT,
-                      font=("Microsoft YaHei", 10, "bold")).pack(
+            tk.Label(col, text=title, bg=BG, fg=ACCENT,
+                     font=("Microsoft YaHei", 10, "bold")).pack(
                 fill="x", padx=8, pady=(8, 2))
-            ttk.Separator(col, orient="horizontal").pack(fill="x", padx=4)
+            tk.Frame(col, height=1, bg="#d8dee6").pack(fill="x", padx=4)
 
         def item(text: str, cmd) -> None:
             ttk.Button(col, text=text, command=cmd,
@@ -551,17 +694,17 @@ class NodeBoard(ttk.Frame):
         item("清空画布", self.clear_board)
 
         group("画布缩放")
-        zoom_row = ttk.Frame(col)
+        zoom_row = tk.Frame(col, bg=BG)
         zoom_row.pack(fill="x", padx=6, pady=1)
         ttk.Button(zoom_row, text="－", width=3,
                    command=lambda: self.zoom_by(1 / 1.15)).pack(side="left")
         self.zoom_var = tk.StringVar(value="100%")
-        ttk.Label(zoom_row, textvariable=self.zoom_var, width=5,
-                  anchor="center").pack(side="left", padx=2)
+        tk.Label(zoom_row, textvariable=self.zoom_var, width=5, bg=BG,
+                 anchor="center").pack(side="left", padx=2)
         ttk.Button(zoom_row, text="＋", width=3,
                    command=lambda: self.zoom_by(1.15)).pack(side="left")
         item("重置 100%", lambda: self.set_zoom(1.0))
-        ttk.Label(col, text="Ctrl+滚轮 也可缩放", foreground="#999").pack(
+        tk.Label(col, text="Ctrl+滚轮 也可缩放", bg=BG, fg="#999").pack(
             fill="x", padx=8, pady=(0, 6))
 
         # 侧栏滚轮滚动
@@ -620,26 +763,42 @@ class NodeBoard(ttk.Frame):
                    command=lambda: self.remove_node(nid)).pack(side="right")
         grip = ttk.Label(head, text="⣿", cursor="fleur", foreground=ACCENT)
         grip.pack(side="right", padx=(0, 4))
+        if spec.get("variadic"):     # 加法卡：点「＋」增加一个输入端口
+            ttk.Button(head, text="＋", width=2,
+                       command=lambda: self.add_input(nid, 1)).pack(
+                side="right", padx=(0, 4))
+        # 缩放手柄：先占好底部位置，避免卡片被拖小后手柄被内容挤出/遮住
+        rsz = ttk.Label(lf, text="◢", cursor="sizing", foreground="#888")
+        rsz.pack(side="bottom", anchor="e")
         body = ttk.Frame(lf)
         wide = spec.get("wide_fields")
-        body.pack(fill="both", expand=True)
         vars_: dict[str, tk.StringVar] = {}
         texts_: dict[str, tk.Text] = {}
+        if type_key == "const":
+            self._build_relic_table(body, vars_)      # 理想圣遗物：真表格
         for f in spec["fields"]:
+            if type_key == "const":
+                break
             key, label, default, kind = f[0], f[1], f[2], f[3]
             if wide:
                 # 宽表布局：标签在上、输入框占满整行（便于拖动放大后编辑长算式）
-                plain = (type_key == "text")   # 纯文本卡片：不显示字段标签
+                plain = spec.get("plain") or type_key == "text"
                 if not plain:
                     ttk.Label(body, text=label, anchor="w").pack(fill="x")
                 if kind == "textbox":
-                    var = tk.StringVar(value=str(default))
+                    content = str(default)
+                    if type_key == "const" and not content:
+                        content = relic_table_text()      # 参考表内容
+                    var = tk.StringVar(value=content)
                     kw = dict(height=3, width=22, wrap="word")
                     if plain:   # 窄边框：文本框本身无边框，只留内边距
                         kw.update(borderwidth=0, highlightthickness=0,
                                   padx=6, pady=4, bg="#ffffff")
                     txt = tk.Text(body, **kw)
-                    txt.insert("1.0", str(default))
+                    if type_key == "const":
+                        txt.configure(font=("Consolas", 9))
+                        txt._mono_family = "Consolas"
+                    txt.insert("1.0", content)
                     txt.pack(fill="both", expand=True)
                     texts_[key] = txt
 
@@ -649,6 +808,22 @@ class NodeBoard(ttk.Frame):
 
                     txt.bind("<KeyRelease>", _sync)
                     txt.bind("<FocusOut>", _sync)
+                    if spec.get("readonly"):
+                        # 只读但可选可复制：仅放行 Ctrl+C 及导航键
+                        def _ro(e):
+                            if (e.state & 0x4) and e.keysym.lower() in ("c", "a"):
+                                return None
+                            if e.keysym in ("Left", "Right", "Up", "Down",
+                                            "Home", "End", "Prior", "Next",
+                                            "Shift_L", "Shift_R",
+                                            "Control_L", "Control_R"):
+                                return None
+                            return "break"
+
+                        txt.bind("<Key>", _ro)
+                        for seq in ("<<Paste>>", "<<Cut>>", "<<Undo>>"):
+                            txt.bind(seq, lambda e: "break")
+                        txt.configure(insertwidth=0)
                 else:
                     var = tk.StringVar(value=str(default))
                     ttk.Entry(body, textvariable=var).pack(fill="x")
@@ -676,7 +851,6 @@ class NodeBoard(ttk.Frame):
                 var.trace_add("write", lambda *a: self._notify())
             vars_[key] = var
         info = ttk.Frame(lf)
-        info.pack(fill="x", pady=(4, 0))
         out_var = tk.StringVar(value="输出: -")
         if not spec.get("no_output"):
             ttk.Label(info, textvariable=out_var,
@@ -688,13 +862,14 @@ class NodeBoard(ttk.Frame):
         if spec.get("copyable"):
             ttk.Button(info, text="复制", width=4,
                        command=lambda: self._copy_output(nid)).pack(side="right")
-        # 可拖动放大：右下角缩放手柄（所有卡片均支持）
-        rsz = ttk.Label(lf, text="◢", cursor="sizing", foreground="#888")
-        rsz.pack(side="bottom", anchor="e")
+        # pack 顺序：手柄(bottom) → 输出行(bottom) → 内容区(expand)，保证小手柄不被挤掉
+        info.pack(side="bottom", fill="x", pady=(4, 0))
+        body.pack(fill="both", expand=True)
         rsz.bind("<ButtonPress-1>",
                  lambda e, k=nid: self._start_resize(k, e))
         rsz.bind("<B1-Motion>", self._resize_motion)
         rsz.bind("<ButtonRelease-1>", self._end_resize)
+        rsz.lift()
 
         win = self.canvas.create_window(0, 0, window=frame, anchor="nw",
                                         tags=(nid,))
@@ -724,6 +899,98 @@ class NodeBoard(ttk.Frame):
         self._notify()
         self._scroll_to(nid)
         return nid
+
+    def _build_relic_table(self, parent, vars_) -> None:
+        """理想圣遗物词条：带边框的表格，可**单选/拖选单元格**后 Ctrl+C 复制（无复制按钮）。"""
+        border = "#c3ccd6"
+        outer = tk.Frame(parent, bg=border, takefocus=1)
+        outer.pack(fill="both", expand=True, padx=2, pady=2)
+
+        table = [("属性", "强化区间", "最高区间", "平均值")] + \
+            [tuple(r) for r in RELIC_ROWS]
+        ncol = len(table[0])
+        cells = []
+        for r, row in enumerate(table):
+            line = []
+            for c, val in enumerate(row):
+                lb = tk.Label(outer, text=val, anchor="w", padx=6, pady=2,
+                              bg="#eef3f8" if r == 0 else "#ffffff",
+                              font=("Microsoft YaHei", 9))
+                lb._bold = (r == 0)
+                # 1px 间隙露出底色，形成表格线
+                lb.grid(row=r, column=c, sticky="nsew",
+                        padx=(1 if c else 0), pady=(1 if r else 0))
+                line.append(lb)
+            cells.append(line)
+        for c in range(ncol):
+            outer.columnconfigure(c, weight=1)
+
+        sel = {"r0": None, "c0": None, "r1": None, "c1": None, "drag": False}
+
+        def paint():
+            for r, line in enumerate(cells):
+                for c, lb in enumerate(line):
+                    hit = (sel["r0"] is not None
+                           and min(sel["r0"], sel["r1"]) <= r <= max(sel["r0"], sel["r1"])
+                           and min(sel["c0"], sel["c1"]) <= c <= max(sel["c0"], sel["c1"]))
+                    base = "#eef3f8" if r == 0 else "#ffffff"
+                    lb.configure(bg="#cfe2ff" if hit else base)
+
+        def on_press(r, c):
+            sel.update(r0=r, c0=c, r1=r, c1=c, drag=True)
+            paint()
+            outer.focus_set()
+
+        def on_motion(r, c):
+            if sel["drag"]:
+                sel["r1"], sel["c1"] = r, c
+                paint()
+
+        def _copy(e=None):
+            if sel["r0"] is None:                 # 未选中 → 复制整表
+                text = "\n".join("\t".join(r) for r in table)
+            else:
+                r0, r1 = sorted((sel["r0"], sel["r1"]))
+                c0, c1 = sorted((sel["c0"], sel["c1"]))
+                text = "\n".join(
+                    "\t".join(table[r][c] for c in range(c0, c1 + 1))
+                    for r in range(r0, r1 + 1))
+            self.clipboard_clear()
+            self.clipboard_append(text)
+            self.update_idletasks()
+            return "break"
+
+        for r, line in enumerate(cells):
+            for c, lb in enumerate(line):
+                lb.bind("<ButtonPress-1>", lambda e, r=r, c=c: on_press(r, c))
+                lb.bind("<B1-Motion>", lambda e, r=r, c=c: on_motion(r, c))
+                lb.bind("<ButtonRelease-1>", lambda e: sel.update(drag=False))
+                lb.bind("<Control-c>", _copy)
+                lb.bind("<Control-C>", _copy)
+        outer.bind("<Control-c>", _copy)
+        outer.bind("<Control-C>", _copy)
+        vars_["content"] = tk.StringVar(
+            value="\n".join("\t".join(r) for r in RELIC_ROWS))
+
+    def _inputs_of(self, nid: str) -> int:
+        """该卡片当前的输入端口数（加法卡可动态增加）。"""
+        spec = NODE_TYPES[self.nodes[nid]["type"]]
+        return int(self.nodes[nid].get("inputs", spec["inputs"]))
+
+    def add_input(self, nid: str, delta: int = 1) -> None:
+        """增加（或减少）卡片入度，加法卡专用。"""
+        if nid not in self.nodes:
+            return
+        cur = self._inputs_of(nid)
+        new = max(1, min(12, cur + delta))
+        if new == cur:
+            return
+        self.nodes[nid]["inputs"] = new
+        if new < cur:      # 减少时清掉多余的连线
+            self.links = [l for l in self.links
+                          if not (l["dst"] == nid and l["port"] >= new)]
+        self.draw_all()
+        self._notify()
 
     def _free_slot(self):
         """新卡片落位：从左上开始找第一个不重叠的网格位置。"""
@@ -778,7 +1045,8 @@ class NodeBoard(ttk.Frame):
         self._notify()
 
     def _build_default_graph(self) -> None:
-        self.build_preset("普通直伤")
+        """启动时为空白画布（不预置任何卡片）。"""
+        self.draw_all()
 
     def clear_board(self) -> None:
         """清空画布上的所有卡片与连线。"""
@@ -790,14 +1058,35 @@ class NodeBoard(ttk.Frame):
         self.draw_all()
         self._notify()
 
+    def _area_free(self, x: float, y: float, w: float, h: float) -> bool:
+        """检查一块矩形区域是否与已有卡片重叠（模型坐标）。"""
+        for nid in self.nodes:
+            nx, ny = self.nodes[nid]["pos"]
+            bw, bh = self._base_size(nid)
+            if (x < nx + bw + 20 and nx < x + w + 20
+                    and y < ny + bh + 20 and ny < y + h + 20):
+                return False
+        return True
+
+    def _find_chain_origin(self, count: int, spacing: int = 350, x0: int = 40):
+        """为一串 count 张卡片找一块空白起始位置（从上往下扫描）。"""
+        w = (count - 1) * spacing + 360
+        h = 300
+        y = 120
+        for _ in range(400):
+            if self._area_free(x0, y, w, h):
+                return x0, y
+            y += 300
+        return x0, y
+
     def build_preset(self, name: str) -> None:
-        """按预设用拆分开的乘区部件搭好一条链。"""
+        """按预设搭好一条链；不清空画布，自动放在空白位置。"""
         spec = self.PRESETS.get(name)
         if spec is None:
             return
-        self.clear_board()
         prev = None
-        x, y = 40, 120
+        x, y = self._find_chain_origin(len(spec))
+        new_ids = []
         for type_key, overrides in spec:
             nid = self.add_node(type_key, x, y)
             for k, v in overrides.items():
@@ -806,7 +1095,15 @@ class NodeBoard(ttk.Frame):
             if prev is not None:
                 self.links.append(dict(src=prev, dst=nid, port=0))
             prev = nid
-            x += 250
+            new_ids.append(nid)
+            x += 320
+        # 卡片渲染后（输出文字变长）宽度会变化，按真实宽度再排一次，避免相互压叠
+        self.draw_all()
+        cx = self.nodes[new_ids[0]]["pos"][0]
+        for i, nid in enumerate(new_ids):
+            self.move_node(nid, cx, y)
+            # 留出足够余量（卡片显示长输出后会变宽）
+            cx += max(self._base_size(nid)[0], 300) + 40
         self.draw_all()
         self._notify()
 
@@ -829,7 +1126,7 @@ class NodeBoard(ttk.Frame):
         node = self.nodes[nid]
         spec = NODE_TYPES[node["type"]]
         ins = []
-        for port in range(spec["inputs"]):
+        for port in range(self._inputs_of(nid)):
             src = self._link_src(nid, port)
             if src is None:
                 ins.append((0.0, 0.0, 0.0))
@@ -892,13 +1189,21 @@ class NodeBoard(ttk.Frame):
                 continue
             try:
                 v = self.node_output(nid)
-                # 结果卡片始终显示三条路；其它卡片在三条路不同时（如经过暴击区）也显示三条
+                parts = []
+                fac = spec.get("factor")
+                if fac:                      # 先显示本卡系数，如 抗性系数 1.2000
+                    try:
+                        parts.append(str(fac(self._getter(n), [])))
+                    except Exception:
+                        pass
+                # 三条路不同时（经过暴击区）把三条都显示，否则只显示输出
                 if (n["type"] == "result"
                         or abs(v[1] - v[0]) > 1e-9 or abs(v[2] - v[0]) > 1e-9):
-                    n["out"].set("未暴击 %s ｜ 暴击 %s ｜ 期望 %s" % (
+                    parts.append("未暴击 %s ｜ 暴击 %s ｜ 期望 %s" % (
                         _fmt(v[0]), _fmt(v[1]), _fmt(v[2])))
                 else:
-                    n["out"].set("输出: %s" % _fmt(v[0]))
+                    parts.append("输出 %s" % _fmt(v[0]))
+                n["out"].set(" ｜ ".join(parts))
             except Exception as e:
                 n["out"].set("输出: 错误(%s)" % e)
 
@@ -912,8 +1217,7 @@ class NodeBoard(ttk.Frame):
             if nid in seen:
                 return
             seen.add(nid)
-            spec = NODE_TYPES[self.nodes[nid]["type"]]
-            for p in range(spec["inputs"]):
+            for p in range(self._inputs_of(nid)):
                 s = self._link_src(nid, p)
                 if s:
                     walk(s)
@@ -998,9 +1302,10 @@ class NodeBoard(ttk.Frame):
             self.canvas.coords(n["win"], x, y)   # 缩放后同步窗口坐标
             w, h = self._card_size(nid)
             n["ports"] = {}
-            if spec["inputs"] > 0:
-                step = h / (spec["inputs"] + 1)
-                for p in range(spec["inputs"]):
+            nin = self._inputs_of(nid)
+            if nin > 0:
+                step = h / (nin + 1)
+                for p in range(nin):
                     py = y + step * (p + 1)
                     item = self.canvas.create_oval(
                         x - 7, py - 7, x + 7, py + 7, fill="#3a7", outline="#185",
@@ -1035,10 +1340,21 @@ class NodeBoard(ttk.Frame):
         size = max(6, int(round(base * z)))
 
         def walk(w):
-            try:
-                w.configure(font=(fam, size))
-            except tk.TclError:
-                pass
+            if isinstance(w, ttk.Treeview):      # 表格用 style 控制字体/行高
+                try:
+                    ttk.Style().configure(
+                        "Relic.Treeview", font=(fam, size),
+                        rowheight=max(18, int(size * 2.2)))
+                except tk.TclError:
+                    pass
+            else:
+                fam_w = getattr(w, "_mono_family", fam)
+                fspec = (fam_w, size, "bold") if getattr(w, "_bold", False) \
+                    else (fam_w, size)
+                try:
+                    w.configure(font=fspec)
+                except tk.TclError:
+                    pass
             for c in w.winfo_children():
                 walk(c)
 
@@ -1131,10 +1447,32 @@ class NodeBoard(ttk.Frame):
         self.zoom_by(1.1 if getattr(event, "delta", 0) > 0 else 1 / 1.1)
         return "break"
 
-    def _bezier(self, p1, p2, steps: int = 28):
-        x1, y1 = p1
-        x2, y2 = p2
-        dx = max(60.0, min(240.0, abs(x2 - x1) * 0.5))
+    def _route_points(self, sp, dp):
+        """正交走线：起止都垂直于卡片边（水平进出），中间用横竖段连接。"""
+        x1, y1 = sp[0], sp[1]
+        x2, y2 = dp[0], dp[1]
+        pad = 26 * self.zoom
+        if abs(y2 - y1) < 1.0:                      # 同一水平线：直线
+            return [(x1, y1), (x2, y2)]
+        if x2 >= x1 + 2 * pad:                      # 正常向右连接：Z 形
+            mx = (x1 + pad + x2 - pad) / 2.0
+            pts = [(x1, y1), (x1 + pad, y1), (mx, y1),
+                   (mx, y2), (x2 - pad, y2), (x2, y2)]
+        else:                                        # 目标在左侧/很近：反向 Z 形
+            my = (y1 + y2) / 2.0
+            pts = [(x1, y1), (x1 + pad, y1), (x1 + pad, my),
+                   (x2 - pad, my), (x2 - pad, y2), (x2, y2)]
+        out = [pts[0]]
+        for p in pts[1:]:
+            if abs(p[0] - out[-1][0]) > 0.5 or abs(p[1] - out[-1][1]) > 0.5:
+                out.append(p)
+        return out
+
+    def _bezier_path(self, sp, dp, steps: int = 28):
+        """平滑 S 曲线（空间不足时的兜底，保证有弧度、不退化为直角）。"""
+        x1, y1 = sp[0], sp[1]
+        x2, y2 = dp[0], dp[1]
+        dx = max(40.0 * self.zoom, min(220.0 * self.zoom, abs(x2 - x1) * 0.5))
         c1x, c1y = x1 + dx, y1
         c2x, c2y = x2 - dx, y2
         pts = []
@@ -1145,6 +1483,36 @@ class NodeBoard(ttk.Frame):
             y = (mt ** 3) * y1 + 3 * mt * mt * t * c1y + 3 * mt * t * t * c2y + (t ** 3) * y2
             pts.extend((x, y))
         return pts
+
+    def _round_corners(self, pts, radius: float = 12.0, steps: int = 6):
+        """把折线的直角拐点替换成圆角（二次贝塞尔采样）。"""
+        if len(pts) < 3:
+            return [c for p in pts for c in p]
+        r = radius * self.zoom
+        result = [pts[0]]
+        for i in range(1, len(pts) - 1):
+            p0, p1, p2 = pts[i - 1], pts[i], pts[i + 1]
+            v0 = (p0[0] - p1[0], p0[1] - p1[1])
+            v1 = (p2[0] - p1[0], p2[1] - p1[1])
+            l0 = max((v0[0] ** 2 + v0[1] ** 2) ** 0.5, 1e-6)
+            l1 = max((v1[0] ** 2 + v1[1] ** 2) ** 0.5, 1e-6)
+            d = min(r, l0 / 2.0, l1 / 2.0)
+            a = (p1[0] + v0[0] / l0 * d, p1[1] + v0[1] / l0 * d)
+            b = (p1[0] + v1[0] / l1 * d, p1[1] + v1[1] / l1 * d)
+            result.append(a)
+            for s in range(1, steps):
+                t = s / steps
+                mt = 1 - t
+                result.append((
+                    mt * mt * a[0] + 2 * mt * t * p1[0] + t * t * b[0],
+                    mt * mt * a[1] + 2 * mt * t * p1[1] + t * t * b[1]))
+            result.append(b)
+        result.append(pts[-1])
+        return [c for p in result for c in p]
+
+    def _link_path(self, sp, dp):
+        """连线路径：正交走线 + 圆角拐弯。"""
+        return self._round_corners(self._route_points(sp, dp))
 
     def _op_symbol(self, dst_id: str) -> str:
         t = self.nodes[dst_id]["type"]
@@ -1159,17 +1527,12 @@ class NodeBoard(ttk.Frame):
         dp = self.nodes[l["dst"]]["ports"].get("in%d" % l["port"])
         if not sp or not dp:
             return
-        pts = self._bezier((sp[0], sp[1]), (dp[0], dp[1]))
+        pts = self._link_path(sp, dp)
         line = self.canvas.create_line(
-            *pts, width=max(1, 2 * self.zoom), fill=ACCENT, tags=("link",),
-            arrow="last", arrowshape=(12, 14, 5), capstyle="round",
-            joinstyle="round")
-        # 目标端操作符（× / ＋ / ★），紧贴输入端口便于辨认
-        sym = self.canvas.create_text(
-            dp[0] - 13, dp[1], text=self._op_symbol(l["dst"]),
-            fill=ACCENT, tags="link",
-            font=("Microsoft YaHei", max(7, int(11 * self.zoom)), "bold"))
-        l["items"] = (line, sym)
+            *pts, width=max(1, 2 * self.zoom), fill=LINK_COLOR, tags=("link",),
+            arrow="last", arrowshape=(11, 13, 4),
+            capstyle="round", joinstyle="round")
+        l["items"] = (line,)
 
     # ------------------------------------------------------------------
     # 悬停高亮：突出与当前卡片相关的连线，弱化其余
@@ -1206,13 +1569,12 @@ class NodeBoard(ttk.Frame):
             hot = self._hover is not None and (
                 l["src"] == self._hover or l["dst"] == self._hover)
             if hot:
-                color, width = "#e8590c", max(2, 3.5 * self.zoom)
+                color, width = LINK_HOT, max(2, 3.5 * self.zoom)
             elif self._hover is not None:
-                color, width = "#b9c6d2", max(1, 2 * self.zoom)
+                color, width = LINK_DIM, max(1, 2 * self.zoom)
             else:
-                color, width = ACCENT, max(1, 2 * self.zoom)
+                color, width = LINK_COLOR, max(1, 2 * self.zoom)
             self.canvas.itemconfigure(items[0], fill=color, width=width)
-            self.canvas.itemconfigure(items[1], fill=color)
 
     def _hit_port(self, x, y):
         for item in self.canvas.find_overlapping(x - 3, y - 3, x + 3, y + 3):
@@ -1245,7 +1607,7 @@ class NodeBoard(ttk.Frame):
         if hit and hit[0] == "out":
             self._wire_from = hit[1]
             self._wire_line = self.canvas.create_line(
-                x, y, x, y, width=2, fill="#c60", dash=(4, 3), tags="wire")
+                x, y, x, y, width=2, fill=LINK_HOT, dash=(4, 3), tags="wire")
             return
         link_item = self._hit_link(x, y)
         if link_item is not None:
@@ -1336,6 +1698,63 @@ class NodeBoard(ttk.Frame):
             return
         if self.on_change:
             self.on_change()
+        self._schedule_history()
+
+    # ------------------------------------------------------------------
+    # 撤销 / 重做（快照式，编辑停顿后记录一次）
+    # ------------------------------------------------------------------
+    def _schedule_history(self) -> None:
+        if self._restoring:
+            return
+        if self._history_job:
+            try:
+                self.after_cancel(self._history_job)
+            except Exception:
+                pass
+        self._history_job = self.after(450, self._push_history)
+
+    def _push_history(self) -> None:
+        self._history_job = None
+        if self._restoring:
+            return
+        try:
+            state = self.to_dict()
+        except Exception:
+            return
+        if self._last_state is None:
+            self._last_state = state
+            return
+        if state == self._last_state:
+            return
+        self._undo.append(self._last_state)
+        if len(self._undo) > 80:
+            self._undo.pop(0)
+        self._last_state = state
+        self._redo.clear()
+
+    def _restore_state(self, state: dict) -> None:
+        self._restoring = True
+        try:
+            self.from_dict(state)
+        finally:
+            self._restoring = False
+        self._last_state = self.to_dict()
+
+    def undo(self) -> bool:
+        """撤销上一步（Ctrl+Z）。"""
+        if not self._undo:
+            return False
+        self._redo.append(self._last_state)
+        self._restore_state(self._undo.pop())
+        return True
+
+    def redo(self) -> bool:
+        """重做（Ctrl+Shift+Z / Ctrl+Y）。"""
+        if not self._redo:
+            return False
+        self._undo.append(self._last_state)
+        self._restore_state(self._redo.pop())
+        return True
 
     # ------------------------------------------------------------------
     # JSON 工程存档
@@ -1350,6 +1769,7 @@ class NodeBoard(ttk.Frame):
                 pos=[float(n["pos"][0]), float(n["pos"][1])],
                 size=(list(n["size"]) if n.get("size") else None),
                 font_size=n.get("font_size"),
+                inputs=int(n.get("inputs", NODE_TYPES[n["type"]]["inputs"])),
                 fields=fields,
             ))
         links = [dict(src=l["src"], dst=l["dst"], port=int(l["port"]))
@@ -1388,10 +1808,18 @@ class NodeBoard(ttk.Frame):
                 sz = nd.get("size")
                 if sz and len(sz) == 2:
                     n["size"] = [float(sz[0]), float(sz[1])]
+                ni = nd.get("inputs")
+                if ni:
+                    n["inputs"] = max(1, min(12, int(ni)))
                 fs = nd.get("font_size")
                 if fs:
                     n["font_size"] = float(fs)
-                    self._measure_base(new)
+                    # 注意：自定义过尺寸的卡片 _measure_base 会直接返回，
+                    # 必须显式应用字体，否则加载后字号不生效
+                    if n.get("size"):
+                        self._apply_fonts(new)
+                    else:
+                        self._measure_base(new)
             for l in data.get("links", []):
                 s = idmap.get(l.get("src"))
                 d = idmap.get(l.get("dst"))
@@ -1432,8 +1860,7 @@ class NodeBoard(ttk.Frame):
             if nid in seen:
                 return
             seen.add(nid)
-            spec = NODE_TYPES[self.nodes[nid]["type"]]
-            for p in range(spec["inputs"]):
+            for p in range(self._inputs_of(nid)):
                 s = self._link_src(nid, p)
                 if s:
                     walk(s, depth + 1)
