@@ -113,33 +113,42 @@ class DamageApp(tk.Tk):
         self._build_input_panel()
         self._build_result_panel()
 
-        self.update_button = ttk.Button(
-            self.bottom, text="计算", command=self.calculate
-        )
-        self.update_button.pack(side="right", padx=12, pady=6)
-        self.save_button = ttk.Button(
-            self.bottom, text="保存结果…", command=self.save_report
-        )
-        self.save_button.pack(side="right", padx=4, pady=6)
-        self.load_json_button = ttk.Button(
-            self.bottom, text="打开工程…", command=self.load_project
-        )
-        self.load_json_button.pack(side="right", padx=4, pady=6)
-        self.save_json_button = ttk.Button(
-            self.bottom, text="保存工程…", command=self.save_project
-        )
-        self.save_json_button.pack(side="right", padx=4, pady=6)
-        self.help_button = ttk.Button(
-            self.bottom, text="教程 (F1)", command=self.show_help
-        )
-        self.help_button.pack(side="left", padx=4, pady=6)
-        self.project_var = tk.StringVar(value="工程：未命名")
-        ttk.Label(self.bottom, textvariable=self.project_var,
-                  foreground="#556").pack(side="left", padx=(10, 0))
-
+        self._build_bottom_bar()
         self.bind_all("<F1>", lambda e: self.show_help())
 
         self.calculate()
+
+    # ------------------------------------------------------------------
+    # 底部工具栏：左侧工程信息 / 右侧「文件操作 | 帮助 | 主操作」
+    # ------------------------------------------------------------------
+    def _build_bottom_bar(self) -> None:
+        self.project_var = tk.StringVar(value="工程：未命名")
+        ttk.Label(self.bottom, textvariable=self.project_var,
+                  foreground="#556").pack(side="left", padx=(6, 0), pady=6)
+
+        right = ttk.Frame(self.bottom)
+        right.pack(side="right", padx=6, pady=6)
+
+        self.update_button = ttk.Button(right, text="计算", width=8,
+                                        command=self.calculate)
+        self.update_button.pack(side="right")
+        ttk.Separator(right, orient="vertical").pack(
+            side="right", fill="y", padx=8, pady=2)
+        self.help_button = ttk.Button(right, text="教程 (F1)",
+                                      command=self.show_help)
+        self.help_button.pack(side="right", padx=3)
+        ttk.Separator(right, orient="vertical").pack(
+            side="right", fill="y", padx=8, pady=2)
+        # 文件操作（从左到右：保存工程 / 打开工程 / 导出结果）
+        self.save_button = ttk.Button(right, text="导出结果…",
+                                      command=self.save_report)
+        self.save_button.pack(side="right", padx=3)
+        self.load_json_button = ttk.Button(right, text="打开工程…",
+                                           command=self.load_project)
+        self.load_json_button.pack(side="right", padx=3)
+        self.save_json_button = ttk.Button(right, text="保存工程…",
+                                           command=self.save_project)
+        self.save_json_button.pack(side="right", padx=3)
 
     def _on_board_change(self) -> None:
         if hasattr(self, "board"):

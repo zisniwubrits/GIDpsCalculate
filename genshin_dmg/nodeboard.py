@@ -511,45 +511,67 @@ class NodeBoard(ttk.Frame):
 
     # ------------------------------------------------------------------
     def _build_palette(self) -> None:
-        box = ttk.Frame(self)
-        box.pack(side="top", fill="x", padx=6, pady=(4, 0))
-        ttk.Label(box, text="添加卡片：", foreground="#556").grid(
-            row=0, column=0, sticky="w")
-        for i, (key, label) in enumerate(self.PALETTE):
-            ttk.Button(box, text=label, width=11,
-                       command=lambda k=key: self.add_node(k)).grid(
-                row=i // 6, column=1 + i % 6, padx=1, pady=1, sticky="ew")
+        """左侧纵向菜单栏（按钮逐行排列，可滚动）。"""
+        side = ttk.Frame(self)
+        side.pack(side="left", fill="y")
 
-        box2 = ttk.Frame(self)
-        box2.pack(side="top", fill="x", padx=6, pady=(2, 4))
-        ttk.Label(box2, text="一键预设：", foreground="#556").grid(
-            row=0, column=0, sticky="w")
-        for i, name in enumerate(self.PRESETS):
-            ttk.Button(box2, text=name, width=11,
-                       command=lambda n=name: self.build_preset(n)).grid(
-                row=i // 5, column=1 + i % 5, padx=1, pady=1, sticky="ew")
-        # “清空”放在预设按钮下方独占一行，避免与按钮重叠
-        clear_row = (len(self.PRESETS) - 1) // 5 + 1
-        ttk.Button(box2, text="清空画布", width=10,
-                   command=self.clear_board).grid(
-            row=clear_row, column=1, columnspan=2, padx=1, pady=(4, 1),
-            sticky="ew")
+        cv = tk.Canvas(side, width=178, highlightthickness=0, bg=BG)
+        sb = ttk.Scrollbar(side, orient="vertical", command=cv.yview)
+        col = ttk.Frame(cv)
+        col.bind("<Configure>",
+                 lambda e: cv.configure(scrollregion=cv.bbox("all")))
+        cv.create_window((0, 0), window=col, anchor="nw")
+        cv.configure(yscrollcommand=sb.set)
+        cv.pack(side="left", fill="y", expand=True)
+        sb.pack(side="right", fill="y")
 
-        # 画布缩放
-        box3 = ttk.Frame(self)
-        box3.pack(side="top", fill="x", padx=6, pady=(0, 4))
-        ttk.Label(box3, text="画布缩放：", foreground="#556").pack(side="left")
-        ttk.Button(box3, text="－", width=3,
-                   command=lambda: self.zoom_by(1 / 1.15)).pack(side="left", padx=1)
+        # 左对齐的按钮样式（不支持则退化为居中，仍是纵向排列）
+        try:
+            ttk.Style().configure("Side.TButton", anchor="w", padding=(8, 3))
+        except tk.TclError:
+            pass
+
+        def group(title: str) -> None:
+            ttk.Label(col, text=title, foreground=ACCENT,
+                      font=("Microsoft YaHei", 10, "bold")).pack(
+                fill="x", padx=8, pady=(8, 2))
+            ttk.Separator(col, orient="horizontal").pack(fill="x", padx=4)
+
+        def item(text: str, cmd) -> None:
+            ttk.Button(col, text=text, command=cmd,
+                       style="Side.TButton").pack(fill="x", padx=6, pady=1)
+
+        group("添加卡片")
+        for key, label in self.PALETTE:
+            item(label, lambda k=key: self.add_node(k))
+
+        group("一键预设")
+        for name in self.PRESETS:
+            item(name, lambda n=name: self.build_preset(n))
+        item("清空画布", self.clear_board)
+
+        group("画布缩放")
+        zoom_row = ttk.Frame(col)
+        zoom_row.pack(fill="x", padx=6, pady=1)
+        ttk.Button(zoom_row, text="－", width=3,
+                   command=lambda: self.zoom_by(1 / 1.15)).pack(side="left")
         self.zoom_var = tk.StringVar(value="100%")
-        ttk.Label(box3, textvariable=self.zoom_var, width=6,
+        ttk.Label(zoom_row, textvariable=self.zoom_var, width=5,
                   anchor="center").pack(side="left", padx=2)
-        ttk.Button(box3, text="＋", width=3,
-                   command=lambda: self.zoom_by(1.15)).pack(side="left", padx=1)
-        ttk.Button(box3, text="100%", width=6,
-                   command=lambda: self.set_zoom(1.0)).pack(side="left", padx=4)
-        ttk.Label(box3, text="（也可 Ctrl+滚轮）", foreground="#999").pack(
-            side="left", padx=4)
+        ttk.Button(zoom_row, text="＋", width=3,
+                   command=lambda: self.zoom_by(1.15)).pack(side="left")
+        item("重置 100%", lambda: self.set_zoom(1.0))
+        ttk.Label(col, text="Ctrl+滚轮 也可缩放", foreground="#999").pack(
+            fill="x", padx=8, pady=(0, 6))
+
+        # 侧栏滚轮滚动
+        def bind_wheel(w):
+            w.bind("<MouseWheel>",
+                   lambda e: cv.yview_scroll(int(-e.delta / 120), "units"))
+            for c in w.winfo_children():
+                bind_wheel(c)
+
+        bind_wheel(col)
 
     def _build_canvas(self) -> None:
         wrap = tk.Frame(self, bg=BG)
