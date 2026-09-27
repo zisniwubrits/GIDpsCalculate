@@ -8,10 +8,12 @@
   * 末端「结果」节点只有 1 个输入，计算时从它反向溯源求值。
   * 每个节点维护三元组 (未暴击, 暴击, 期望)；暴击区节点负责暴击率/暴伤。
   * 未接入「结果」的节点不参与最终伤害，仅展示自身输出。
+  * 「结果」卡片可把三元组分别命名为变量（未暴击/暴击/期望），供其它卡片引用。
 """
 
 from __future__ import annotations
 
+import keyword
 import tkinter as tk
 from tkinter import ttk
 
@@ -74,6 +76,23 @@ _FULLWIDTH = {"，": ",", "×": "*", "÷": "/", "＋": "+", "－": "-", "（）"
 
 # 全局变量表：由「变量」卡片定义，供所有数值框/表达式引用
 VAR_ENV: dict = {}
+
+
+def _var_name(s: str) -> str:
+    """校验用户填写的变量名；空 / 非法标识符 / Python 关键字时返回空串（表示不定义）。"""
+    t = (s or "").strip()
+    if not t or keyword.iskeyword(t) or not t.isidentifier():
+        return ""
+    return t
+
+
+# 结果卡片三元组变量的字段键与显示名（右键菜单「设置结果变量…」里填写）
+RESULT_VAR_FIELDS = (
+    ("var_nc", "未暴击变量"),
+    ("var_cr", "暴击变量"),
+    ("var_ex", "期望变量"),
+)
+RESULT_VAR_KEYS = tuple(k for k, _ in RESULT_VAR_FIELDS)
 
 
 def _eval_expr(text: str, env: dict | None = None) -> float:
@@ -266,12 +285,12 @@ def _f_dmg(get, ins):
 
 
 def _f_res(get, ins):
-    return "抗性系数 %s" % _fmt(
+    return "抗性系数 ×%s" % _fmt(
         damage.resistance_coefficient(_pct(get("resistance"), 10.0)))
 
 
 def _f_def(get, ins):
-    return "防御系数 %s" % _fmt(damage.defense_coefficient(
+    return "防御系数 ×%s" % _fmt(damage.defense_coefficient(
         _num(get("char_level"), 90), _num(get("enemy_level"), 90),
         def_reduction=_pct(get("def_reduction")),
         ignore_def=_pct(get("ignore_def"))))
@@ -280,7 +299,7 @@ def _f_def(get, ins):
 def _f_crit(get, ins):
     cd = _pct(get("crit_damage"), 100.0)
     cr = min(max(_pct(get("crit_rate"), 50.0), 0.0), 1.0)
-    return "暴击系数 %s ｜ 期望系数 %s" % (_fmt(1 + cd), _fmt(1 + cr * cd))
+    return "暴击系数 ×%s ｜ 期望系数 ×%s" % (_fmt(1 + cd), _fmt(1 + cr * cd))
 
 
 def _f_amp(get, ins):
@@ -290,7 +309,7 @@ def _f_amp(get, ins):
     else:
         c = damage.amplify_for_reaction(
             name, _num(get("em")), _pct(get("amp_bonus")))
-    return "蒸发融化系数 %s" % _fmt(c)
+    return "蒸发融化系数 ×%s" % _fmt(c)
 
 
 def _f_boost(get, ins):
@@ -298,7 +317,7 @@ def _f_boost(get, ins):
 
 
 def _f_coeff(get, ins):
-    return "系数 %s" % _fmt(_num(get("coeff"), 1.0))
+    return "系数 ×%s" % _fmt(_num(get("coeff"), 1.0))
 
 
 def _f_mult(get, ins):
@@ -555,11 +574,130 @@ NODE_TYPES = {
     # const 卡片：只读参考表（理想圣遗物词条），可拖选复制，无复制按钮
     "const": dict(title="理想圣遗物词条", inputs=0, compute=_t_text,
                   isolated=True, no_output=True, resizable=True,
-                  wide_fields=True, plain=True, readonly=True, fields=[
+                  wide_fields=True, plain=True, readonly=True, table="relic",
+                  fields=[
         ("content", "内容", "", "textbox"),
     ]),
-    "result": dict(title="★ 结果", inputs=1, compute=_t_result, fields=[]),
+    # 变量表卡片：无端口，实时列出所有可用变量（变量卡片 + 结果三元组），样式同理想圣遗物
+    "vartable": dict(title="变量表", inputs=0, compute=_t_text,
+                     isolated=True, no_output=True, resizable=True,
+                     table="vars", fields=[]),
+    # 结果卡片：外观不变（无输入框）；三元组变量名通过右键菜单设置，供其他卡片引用
+    "result": dict(title="★ 结果", inputs=1, compute=_t_result, fields=[],
+                   ctx_menu=True, hidden_fields=[
+        (k, label, "") for k, label in RESULT_VAR_FIELDS
+    ]),
 }
+
+
+class _Table:
+    """卡片内嵌的只读表格（理想圣遗物词条 / 变量表共用）。
+
+    * 1px 间隙露出底色形成表格线；表头浅蓝、正文白底。
+    * 单击或按住拖动可框选单元格，Ctrl+C 复制选中区域（未选中则复制整表）。
+    * set_rows() 可动态更换内容（行数可变），变量表靠它实时刷新。
+    """
+
+    BORDER = "#c3ccd6"
+    HEAD_BG = "#eef3f8"
+    CELL_BG = "#ffffff"
+    SEL_BG = "#cfe2ff"
+
+    def __init__(self, parent, board, header) -> None:
+        self.board = board
+        self.nid = None                  # 所属卡片 id（set_rows 后自动套用字号）
+        self.header = tuple(str(h) for h in header)
+        self.rows: list = []
+        self.sel = {"r0": None, "c0": None, "r1": None, "c1": None, "drag": False}
+        self.outer = tk.Frame(parent, bg=self.BORDER, takefocus=1)
+        self.outer.pack(fill="both", expand=True, padx=2, pady=2)
+        self._rebuild()
+
+    # --- 内容 ---
+    def data(self) -> list:
+        """当前整表内容（含表头），供复制使用。"""
+        return [self.header] + [tuple(str(c) for c in r) for r in self.rows]
+
+    def set_rows(self, rows) -> None:
+        """更换正文行（行数可变）；内容未变时不做任何事。"""
+        rows = [tuple(str(c) for c in r) for r in rows]
+        if rows == self.rows:
+            return
+        self.rows = rows
+        self._rebuild()
+        if self.nid and self.nid in self.board.nodes:
+            self.board._apply_fonts(self.nid)
+            self.board._measure_base(self.nid)
+            self.board.draw_all()      # 行数变化会改变卡片尺寸，端口/连线随之重排
+
+    def _rebuild(self) -> None:
+        for w in self.outer.winfo_children():
+            w.destroy()
+        self.cells = []
+        for r, row in enumerate(self.data()):
+            line = []
+            for c, val in enumerate(row):
+                lb = tk.Label(self.outer, text=val, anchor="w", padx=6, pady=2,
+                              bg=self.HEAD_BG if r == 0 else self.CELL_BG,
+                              font=("Microsoft YaHei", 9))
+                lb._bold = (r == 0)
+                # 1px 间隙露出底色，形成表格线
+                lb.grid(row=r, column=c, sticky="nsew",
+                        padx=(1 if c else 0), pady=(1 if r else 0))
+                line.append(lb)
+            self.cells.append(line)
+        for c in range(max(1, len(self.header))):
+            self.outer.columnconfigure(c, weight=1)
+        self.sel.update(r0=None, c0=None, r1=None, c1=None, drag=False)
+        self._bind_cells()
+
+    # --- 选择 / 复制 ---
+    def _paint(self) -> None:
+        for r, line in enumerate(self.cells):
+            for c, lb in enumerate(line):
+                hit = (self.sel["r0"] is not None
+                       and min(self.sel["r0"], self.sel["r1"]) <= r
+                       <= max(self.sel["r0"], self.sel["r1"])
+                       and min(self.sel["c0"], self.sel["c1"]) <= c
+                       <= max(self.sel["c0"], self.sel["c1"]))
+                base = self.HEAD_BG if r == 0 else self.CELL_BG
+                lb.configure(bg=self.SEL_BG if hit else base)
+
+    def _on_press(self, r: int, c: int) -> None:
+        self.sel.update(r0=r, c0=c, r1=r, c1=c, drag=True)
+        self._paint()
+        self.outer.focus_set()
+
+    def _on_motion(self, r: int, c: int) -> None:
+        if self.sel["drag"]:
+            self.sel["r1"], self.sel["c1"] = r, c
+            self._paint()
+
+    def copy_text(self) -> str:
+        table = self.data()
+        if self.sel["r0"] is None:                # 未选中 → 复制整表
+            return "\n".join("\t".join(r) for r in table)
+        r0, r1 = sorted((self.sel["r0"], self.sel["r1"]))
+        c0, c1 = sorted((self.sel["c0"], self.sel["c1"]))
+        return "\n".join("\t".join(table[r][c] for c in range(c0, c1 + 1))
+                         for r in range(r0, r1 + 1))
+
+    def _copy(self, _e=None):
+        self.board.clipboard_clear()
+        self.board.clipboard_append(self.copy_text())
+        self.board.update_idletasks()
+        return "break"
+
+    def _bind_cells(self) -> None:
+        for r, line in enumerate(self.cells):
+            for c, lb in enumerate(line):
+                lb.bind("<ButtonPress-1>", lambda e, r=r, c=c: self._on_press(r, c))
+                lb.bind("<B1-Motion>", lambda e, r=r, c=c: self._on_motion(r, c))
+                lb.bind("<ButtonRelease-1>", lambda e: self.sel.update(drag=False))
+                lb.bind("<Control-c>", self._copy)
+                lb.bind("<Control-C>", self._copy)
+        self.outer.bind("<Control-c>", self._copy)
+        self.outer.bind("<Control-C>", self._copy)
 
 
 class NodeBoard(ttk.Frame):
@@ -577,6 +715,7 @@ class NodeBoard(ttk.Frame):
         ("calc", "计算卡"),
         ("text", "文本"),
         ("var", "变量"),
+        ("vartable", "变量表"),
         ("const", "理想圣遗物"),
         ("result", "★结果"),
     ]
@@ -774,8 +913,11 @@ class NodeBoard(ttk.Frame):
         wide = spec.get("wide_fields")
         vars_: dict[str, tk.StringVar] = {}
         texts_: dict[str, tk.Text] = {}
+        table = None
         if type_key == "const":
-            self._build_relic_table(body, vars_)      # 理想圣遗物：真表格
+            table = self._build_relic_table(body, vars_)   # 理想圣遗物：静态参考表
+        elif type_key == "vartable":
+            table = self._build_var_table(body, vars_)     # 变量表：内容实时刷新
         for f in spec["fields"]:
             if type_key == "const":
                 break
@@ -850,6 +992,9 @@ class NodeBoard(ttk.Frame):
                     side="left", fill="x", expand=True)
                 var.trace_add("write", lambda *a: self._notify())
             vars_[key] = var
+        # 隐藏字段：只建变量、不建控件（如结果卡片的三元组变量名，右键菜单设置）
+        for hf in spec.get("hidden_fields", []):
+            vars_[hf[0]] = tk.StringVar(value=str(hf[2]))
         info = ttk.Frame(lf)
         out_var = tk.StringVar(value="输出: -")
         if not spec.get("no_output"):
@@ -875,8 +1020,10 @@ class NodeBoard(ttk.Frame):
                                         tags=(nid,))
         node = dict(id=nid, type=type_key, frame=frame, vars=vars_,
                     texts=texts_, out=out_var, win=win, pos=[0, 0], ports={},
-                    size=None, font_size=None)
+                    size=None, font_size=None, table=table)
         self.nodes[nid] = node
+        if table is not None:
+            table.nid = nid            # 表格内容变化后自动重新套用字号/尺寸
         if x is None:
             x, y = self._free_slot()
         self.move_node(nid, x, y)
@@ -886,8 +1033,8 @@ class NodeBoard(ttk.Frame):
             w.bind("<B1-Motion>", self._node_drag_motion)
             w.bind("<ButtonRelease-1>", self._end_node_drag)
         self._bind_hover(frame, nid)
-        if spec.get("font_menu"):
-            self._bind_context(frame, nid)      # 右键调字号
+        if spec.get("font_menu") or spec.get("ctx_menu"):
+            self._bind_context(frame, nid)      # 右键：字号 / 结果变量
         # 记录“基准尺寸”（缩放前），供缩放与命中判定使用
         self._apply_fonts(nid, scale=1.0)
         self.update_idletasks()
@@ -900,77 +1047,29 @@ class NodeBoard(ttk.Frame):
         self._scroll_to(nid)
         return nid
 
-    def _build_relic_table(self, parent, vars_) -> None:
-        """理想圣遗物词条：带边框的表格，可**单选/拖选单元格**后 Ctrl+C 复制（无复制按钮）。"""
-        border = "#c3ccd6"
-        outer = tk.Frame(parent, bg=border, takefocus=1)
-        outer.pack(fill="both", expand=True, padx=2, pady=2)
-
-        table = [("属性", "强化区间", "最高区间", "平均值")] + \
-            [tuple(r) for r in RELIC_ROWS]
-        ncol = len(table[0])
-        cells = []
-        for r, row in enumerate(table):
-            line = []
-            for c, val in enumerate(row):
-                lb = tk.Label(outer, text=val, anchor="w", padx=6, pady=2,
-                              bg="#eef3f8" if r == 0 else "#ffffff",
-                              font=("Microsoft YaHei", 9))
-                lb._bold = (r == 0)
-                # 1px 间隙露出底色，形成表格线
-                lb.grid(row=r, column=c, sticky="nsew",
-                        padx=(1 if c else 0), pady=(1 if r else 0))
-                line.append(lb)
-            cells.append(line)
-        for c in range(ncol):
-            outer.columnconfigure(c, weight=1)
-
-        sel = {"r0": None, "c0": None, "r1": None, "c1": None, "drag": False}
-
-        def paint():
-            for r, line in enumerate(cells):
-                for c, lb in enumerate(line):
-                    hit = (sel["r0"] is not None
-                           and min(sel["r0"], sel["r1"]) <= r <= max(sel["r0"], sel["r1"])
-                           and min(sel["c0"], sel["c1"]) <= c <= max(sel["c0"], sel["c1"]))
-                    base = "#eef3f8" if r == 0 else "#ffffff"
-                    lb.configure(bg="#cfe2ff" if hit else base)
-
-        def on_press(r, c):
-            sel.update(r0=r, c0=c, r1=r, c1=c, drag=True)
-            paint()
-            outer.focus_set()
-
-        def on_motion(r, c):
-            if sel["drag"]:
-                sel["r1"], sel["c1"] = r, c
-                paint()
-
-        def _copy(e=None):
-            if sel["r0"] is None:                 # 未选中 → 复制整表
-                text = "\n".join("\t".join(r) for r in table)
-            else:
-                r0, r1 = sorted((sel["r0"], sel["r1"]))
-                c0, c1 = sorted((sel["c0"], sel["c1"]))
-                text = "\n".join(
-                    "\t".join(table[r][c] for c in range(c0, c1 + 1))
-                    for r in range(r0, r1 + 1))
-            self.clipboard_clear()
-            self.clipboard_append(text)
-            self.update_idletasks()
-            return "break"
-
-        for r, line in enumerate(cells):
-            for c, lb in enumerate(line):
-                lb.bind("<ButtonPress-1>", lambda e, r=r, c=c: on_press(r, c))
-                lb.bind("<B1-Motion>", lambda e, r=r, c=c: on_motion(r, c))
-                lb.bind("<ButtonRelease-1>", lambda e: sel.update(drag=False))
-                lb.bind("<Control-c>", _copy)
-                lb.bind("<Control-C>", _copy)
-        outer.bind("<Control-c>", _copy)
-        outer.bind("<Control-C>", _copy)
+    def _build_relic_table(self, parent, vars_) -> _Table:
+        """理想圣遗物词条：静态参考表（带边框，可拖选单元格后 Ctrl+C 复制）。"""
+        table = _Table(parent, self, ("属性", "强化区间", "最高区间", "平均值"))
+        table.set_rows(RELIC_ROWS)
         vars_["content"] = tk.StringVar(
             value="\n".join("\t".join(r) for r in RELIC_ROWS))
+        return table
+
+    def _build_var_table(self, parent, vars_) -> _Table:
+        """变量表：实时列出当前所有可用变量（变量卡片定义 + 结果三元组变量）。"""
+        return _Table(parent, self, ("变量", "值"))
+
+    def variable_rows(self) -> list:
+        """变量表的正文行：名称 / 数值（无变量时给一行占位提示）。"""
+        rows = [(name, _plain(val)) for name, val in VAR_ENV.items()]
+        return rows or [("（暂无变量）", "")]
+
+    def refresh_var_tables(self) -> None:
+        """把所有「变量表」卡片的内容刷新为当前变量。"""
+        for n in self.nodes.values():
+            table = n.get("table")
+            if n["type"] == "vartable" and table is not None:
+                table.set_rows(self.variable_rows())
 
     def _inputs_of(self, nid: str) -> int:
         """该卡片当前的输入端口数（加法卡可动态增加）。"""
@@ -1140,9 +1239,37 @@ class NodeBoard(ttk.Frame):
                 return l["src"]
         return None
 
-    def refresh_variables(self) -> None:
-        """解析所有「变量」卡片，刷新全局变量表，并更新变量卡片的显示。"""
-        env: dict = {}
+    def result_var_names(self, node) -> list:
+        """取某张结果卡片设置的三个变量名（顺序：未暴击/暴击/期望；非法/未填 → 空串）。"""
+        get = self._getter(node)
+        return [_var_name(get(k)) for k in RESULT_VAR_KEYS]
+
+    def result_vars(self) -> dict:
+        """把「★结果」卡片的三元组登记为变量，返回 {变量名: 数值}。
+
+        未暴击 / 暴击 / 期望 各自独立命名，留空的项不定义。
+        """
+        out: dict = {}
+        for nid, n in self.nodes.items():
+            if n["type"] != "result":
+                continue
+            names = self.result_var_names(n)
+            if not any(names):
+                continue
+            try:
+                v = self.node_output(nid)
+            except Exception:
+                continue          # 结果链尚未接好：本次不登记
+            for name, val in zip(names, v):
+                if name:
+                    out[name] = float(val)
+        return out
+
+    def _parse_var_cards(self, env: dict, locked=()) -> dict:
+        """把「变量」卡片里的 `名称 = 表达式` 逐行解析进 env（就地更新并返回）。
+
+        locked 中的名字（来自结果卡片的三元组变量）不会被变量卡片覆盖。
+        """
         for n in self.nodes.values():
             if n["type"] != "var":
                 continue
@@ -1159,18 +1286,33 @@ class NodeBoard(ttk.Frame):
                 if name is None:
                     continue
                 name = name.strip()
-                if not name:
+                if not name or name in locked:
                     continue
                 try:
                     env[name] = _eval_expr(expr.strip(), env)
                 except ValueError:
                     continue          # 定义失败则忽略该行
+        return env
+
+    def refresh_variables(self) -> None:
+        """刷新全局变量表：「变量」卡片定义 + 「★结果」卡片三元组变量。"""
+        env = self._parse_var_cards({})
+        # 先让「变量」卡片的定义生效，结果卡片才能求值
+        VAR_ENV.clear()
+        VAR_ENV.update(env)
+        rvars = self.result_vars()
+        if rvars:
+            # 第二轮：允许「变量」卡片引用结果三元组变量（如 秒伤 = 期望伤害/时间）；
+            # 结果卡片的名字为准，变量卡片里的同名定义被忽略（locked）。
+            env = self._parse_var_cards(dict(env, **rvars), locked=set(rvars))
+            env.update(rvars)
         VAR_ENV.clear()
         VAR_ENV.update(env)
         summary = ", ".join("%s=%s" % (k, _plain(v)) for k, v in env.items())
         for n in self.nodes.values():
             if n["type"] == "var":
                 n["out"].set("变量: " + (summary if summary else "(无)"))
+        self.refresh_var_tables()       # 变量表卡片：实时同步内容
 
     def evaluate(self):
         """从结果节点反向溯源求值，返回 (nc, cr, ex) 或抛错。"""
@@ -1196,13 +1338,21 @@ class NodeBoard(ttk.Frame):
                         parts.append(str(fac(self._getter(n), [])))
                     except Exception:
                         pass
-                # 三条路不同时（经过暴击区）把三条都显示，否则只显示输出
-                if (n["type"] == "result"
-                        or abs(v[1] - v[0]) > 1e-9 or abs(v[2] - v[0]) > 1e-9):
+                # 链上经过暴击区（三条路不同）才显示三元组；否则简洁显示单个数值
+                if abs(v[1] - v[0]) > 1e-9 or abs(v[2] - v[0]) > 1e-9:
                     parts.append("未暴击 %s ｜ 暴击 %s ｜ 期望 %s" % (
                         _fmt(v[0]), _fmt(v[1]), _fmt(v[2])))
                 else:
-                    parts.append("输出 %s" % _fmt(v[0]))
+                    # 单值结果：直接带上绑定的变量名，方便对照引用
+                    names = [t for t in self.result_var_names(n) if t] \
+                        if n["type"] == "result" else []
+                    if names:
+                        parts.append("结果 %s ｜ 变量 %s" % (
+                            _fmt(v[0]), " / ".join(names)))
+                    elif n["type"] == "result":
+                        parts.append("结果 %s" % _fmt(v[0]))
+                    else:
+                        parts.append("输出 %s" % _fmt(v[0]))
                 n["out"].set(" ｜ ".join(parts))
             except Exception as e:
                 n["out"].set("输出: 错误(%s)" % e)
@@ -1397,6 +1547,12 @@ class NodeBoard(ttk.Frame):
     def _show_font_menu(self, nid: str, event) -> None:
         cur = float(self.nodes[nid].get("font_size") or 9)
         m = tk.Menu(self, tearoff=0)
+        if self.nodes[nid]["type"] == "result":     # 结果卡片：右键设置三元组变量
+            m.add_command(label="设置结果变量…",
+                          command=lambda: self._ask_result_vars(nid))
+            m.add_command(label="清除结果变量",
+                          command=lambda: self._clear_result_vars(nid))
+            m.add_separator()
         m.add_command(label="字体 ＋ (当前 %g)" % cur,
                       command=lambda: self.bump_node_font(nid, 2))
         m.add_command(label="字体 －",
@@ -1414,6 +1570,67 @@ class NodeBoard(ttk.Frame):
             m.tk_popup(event.x_root, event.y_root)
         finally:
             m.grab_release()
+
+    def _clear_result_vars(self, nid: str) -> None:
+        """清除结果卡片上的三个变量名（恢复为不定义）。"""
+        for key in RESULT_VAR_KEYS:
+            self.nodes[nid]["vars"][key].set("")
+        self._notify()
+
+    def _ask_result_vars(self, nid: str) -> None:
+        """右键菜单：弹窗把结果三元组分别命名为变量（留空 = 不定义）。"""
+        node = self.nodes[nid]
+        get = self._getter(node)
+        dlg = tk.Toplevel(self)
+        dlg.title("结果卡片 · 三元组变量")
+        dlg.configure(bg=BG)
+        dlg.resizable(False, False)
+        try:
+            dlg.transient(self.winfo_toplevel())
+        except Exception:
+            pass
+
+        body = ttk.Frame(dlg, padding=10)
+        body.pack(fill="both", expand=True)
+        ttk.Label(body, text="把结果的三元组分别命名为变量（留空 = 不定义）：",
+                  foreground="#333").pack(anchor="w", pady=(0, 6))
+        vs: dict[str, tk.StringVar] = {}
+        for key, label in RESULT_VAR_FIELDS:
+            r = ttk.Frame(body)
+            r.pack(fill="x", pady=2)
+            ttk.Label(r, text=label, width=10, anchor="w").pack(side="left")
+            var = tk.StringVar(value=get(key) or "")
+            vs[key] = var
+            ttk.Entry(r, textvariable=var, width=24).pack(side="left", fill="x",
+                                                          expand=True)
+        ttk.Label(body, text="名字需为合法标识符（支持中文），例：期望伤害",
+                  foreground="#888").pack(anchor="w", pady=(6, 0))
+
+        def apply(_e=None):
+            for key, var in vs.items():
+                node["vars"][key].set(var.get().strip())
+            dlg.destroy()
+            self._notify()
+
+        btns = ttk.Frame(body)
+        btns.pack(fill="x", pady=(10, 0))
+        ttk.Button(btns, text="确定", command=apply).pack(side="right")
+        ttk.Button(btns, text="取消", command=dlg.destroy).pack(
+            side="right", padx=(0, 6))
+        ttk.Button(btns, text="全部清除",
+                   command=lambda: [v.set("") for v in vs.values()]).pack(
+            side="left")
+        dlg.bind("<Return>", apply)
+        dlg.bind("<Escape>", lambda e: dlg.destroy())
+
+        dlg.update_idletasks()
+        top = self.winfo_toplevel()
+        x = top.winfo_rootx() + max(0, (top.winfo_width() - dlg.winfo_reqwidth()) // 2)
+        y = top.winfo_rooty() + max(0, (top.winfo_height() - dlg.winfo_reqheight()) // 3)
+        dlg.geometry("+%d+%d" % (x, y))
+        dlg.grab_set()
+        dlg.focus_set()
+        dlg.wait_window()
 
     def _copy_node_text(self, nid: str) -> None:
         txt = ""
@@ -1836,7 +2053,7 @@ class NodeBoard(ttk.Frame):
         for nid, n in self.nodes.items():
             spec = NODE_TYPES[n["type"]]
             vals = []
-            for f in spec["fields"]:
+            for f in list(spec["fields"]) + list(spec.get("hidden_fields", [])):
                 v = n["vars"][f[0]].get()
                 vals.append("%s=%s" % (f[1], v))
             rows.append("%s [%s] @%s %s" % (
@@ -1870,7 +2087,8 @@ class NodeBoard(ttk.Frame):
                     _fmt(v[0]), _fmt(v[1]), _fmt(v[2]))
             except Exception as e:
                 txt = "(错误: %s)" % e
-            lines.append("%s%s  →  %s" % ("    " * depth, spec["title"], txt))
+            lines.append("%s%s  →  %s" % (
+                "    " * depth, NODE_TYPES[self.nodes[nid]["type"]]["title"], txt))
 
         walk(result, 0)
         return lines
