@@ -318,7 +318,7 @@ def _f_em_gain(get, ins):
     return "精通增益 ×%s" % _fmt(1 + term + bonus)
 
 
-# --- 星超导系数（按附着层数/hit 查表：0~12 → 1.0~2.0）---
+# --- 星超导系数（按附着层数/hit 查表：0~12 → 1.0~2.0，hit 1 起每层 +0.05）---
 def _star_rate(get) -> float:
     hits = int(max(0, min(12, _num(get("hits"), 0))))
     return damage.STAR_SUPERCOND_RATE[hits]
@@ -529,7 +529,7 @@ NODE_TYPES = {
         ("denom", "分母", "2000", "num"),
         ("bonus", "增伤%", "0", "pct"),
     ]),
-    # 星超导系数：只填“层数(hit)”，系数按表取（0→1.0 … 12→2.0）
+    # 星超导系数：只填“层数(hit)”，系数按表取（0→1.0 … 12→2.0，hit 1 起每层 +0.05）
     "star_coeff": dict(title="星超导系数 ×", inputs=1, compute=_t_star_coeff,
                        factor=_f_star_coeff, fields=[
         ("hits", "层数", "0", "num"),

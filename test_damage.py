@@ -314,6 +314,14 @@ class TestStar(unittest.TestCase):
             2.0 * 2000 * 0.9,
         )
 
+    def test_supercond_uniform_step(self):
+        # hit 1 起等步长：每层 +0.05，1.45 → 2.00
+        rates = [damage.STAR_SUPERCOND_RATE[i] for i in range(1, 13)]
+        steps = [round(b - a, 10) for a, b in zip(rates, rates[1:])]
+        self.assertEqual(steps, [0.05] * 11)
+        self.assertAlmostEqual(rates[0], 1.45)
+        self.assertAlmostEqual(rates[-1], 2.0)
+
     def test_supercond_clamp(self):
         # 超过12 clamp到12；负数clamp到0
         self.assertAlmostEqual(
