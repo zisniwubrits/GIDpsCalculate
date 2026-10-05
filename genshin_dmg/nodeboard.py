@@ -21,8 +21,6 @@ from genshin_dmg import damage
 
 BG = "#f4f6f8"          # 与 gui.py 保持一致（统一背景色）
 ACCENT = "#2f6fa7"
-NODE_BG = "#ffffff"
-FIELD_BG = "#f7f9fb"
 
 # 连线配色（冷色系）：普通 / 高亮 / 弱化
 LINK_COLOR = "#2f6fa7"
@@ -232,47 +230,14 @@ def _attr(get):
         _num(get("stat_base"), 1000), _pct(get("stat_big")), _num(get("stat_flat")))
 
 
-def _t_month_direct(get, ins):
-    v = damage.month_direct(
-        get("kind") or "月感电", _attr(get), _pct(get("multiplier"), 2.0),
-        elemental_mastery=_num(get("em")), base_boost=_pct(get("base_boost")),
-        reaction_bonus=_pct(get("bonus")), resistance=0.0,
-        crit=False, boost_multi=1.0)
-    return _root(v)
 
 
-def _t_month_reaction(get, ins):
-    v = damage.month_reaction(
-        get("kind") or "月感电", elemental_mastery=_num(get("em")),
-        base_boost=_pct(get("base_boost")), reaction_bonus=_pct(get("bonus")),
-        resistance=0.0, crit=False, boost_multi=1.0, level=int(_num(get("level"), 90)))
-    return _root(v)
 
 
-def _t_star_super(get, ins):
-    v = damage.star_superconduct_direct(
-        int(_num(get("hits"), 0)), _attr(get), _pct(get("multiplier"), 2.0),
-        elemental_mastery=_num(get("em")), base_boost=_pct(get("base_boost")),
-        reaction_bonus=_pct(get("bonus")), resistance=0.0,
-        crit=False, boost_multi=1.0)
-    return _root(v)
 
 
-def _t_star_swirl(get, ins):
-    v = damage.star_swirl_reaction(
-        get("subtype") or "风", vortex_count=int(_num(get("vortex"), 1)),
-        elemental_mastery=_num(get("em")), base_boost=_pct(get("base_boost")),
-        reaction_bonus=_pct(get("bonus")), resistance=0.0,
-        crit=False, boost_multi=1.0, level=int(_num(get("level"), 90)))
-    return _root(v)
 
 
-def _t_star_direct(get, ins):
-    v = damage.star_swirl_direct(
-        _attr(get), _pct(get("multiplier"), 2.0), elemental_mastery=_num(get("em")),
-        base_boost=_pct(get("base_boost")), reaction_bonus=_pct(get("bonus")),
-        resistance=0.0, crit=False, boost_multi=1.0)
-    return _root(v)
 
 
 def _t_result(get, ins):
@@ -377,30 +342,10 @@ RELIC_ROWS = [
 ]
 
 
-def _disp_width(s: str) -> int:
-    """显示宽度（中文按 2 计），用于表格对齐。"""
-    return sum(2 if ord(c) > 0x2E7F else 1 for c in s)
 
 
-def _pad_disp(s: str, width: int) -> str:
-    return s + " " * max(0, width - _disp_width(s))
 
 
-def relic_table_text() -> str:
-    head = ("属性", "强化区间", "最高区间", "平均值")
-    cols = [max(_disp_width(r[i]) for r in (head,) + tuple(RELIC_ROWS))
-            for i in range(4)]
-    lines = ["【理想圣遗物词条（五星·满强化）】", ""]
-    lines.append("  ".join(_pad_disp(h, cols[i]) for i, h in enumerate(head)))
-    lines.append("─" * (sum(cols) + 6))
-    for r in RELIC_ROWS:
-        lines.append("  ".join(_pad_disp(r[i], cols[i]) for i in range(4)))
-    lines.append("")
-    lines.append("（可直接拖选后 Ctrl+C 复制）")
-    return "\n".join(lines)
-
-
-# --- 拆分开的乘区部件（星/月/剧变 源都可由此组合）---
 def _t_attr(get, ins):
     """属性源 = 白值×(1+大增益%)+小增益。"""
     return _root(_attr(get))
@@ -574,7 +519,7 @@ NODE_TYPES = {
     # const 卡片：只读参考表（理想圣遗物词条），可拖选复制，无复制按钮
     "const": dict(title="理想圣遗物词条", inputs=0, compute=_t_text,
                   isolated=True, no_output=True, resizable=True,
-                  wide_fields=True, plain=True, readonly=True, table="relic",
+                  wide_fields=True, plain=True, table="relic",
                   fields=[
         ("content", "内容", "", "textbox"),
     ]),
@@ -771,7 +716,6 @@ class NodeBoard(ttk.Frame):
         self._drag_off = (0, 0)
         self._wire_from = None           # 连线起点 node id
         self._wire_line = None
-        self._spawn = [40, 60]
         self._hover = None
         self._clear_job = None
         self._resize_node = None
@@ -785,6 +729,8 @@ class NodeBoard(ttk.Frame):
         self._last_state = None
         self._history_job = None
         self._restoring = False
+        self.dirty = False          # 是否有未保存改动
+        self.selection: set = set()  # Shift 点选中的卡片
 
         self._build_palette()
         self._build_canvas()
@@ -845,6 +791,17 @@ class NodeBoard(ttk.Frame):
         item("重置 100%", lambda: self.set_zoom(1.0))
         tk.Label(col, text="Ctrl+滚轮 也可缩放", bg=BG, fg="#999").pack(
             fill="x", padx=8, pady=(0, 6))
+
+        # 选中的卡片：多选后对齐
+        group("选中的卡片")
+        self.sel_var = tk.StringVar(value="已选 0 张（Shift 点选）")
+        tk.Label(col, textvariable=self.sel_var, bg=BG, fg="#556").pack(
+            fill="x", padx=8, pady=(0, 2))
+        item("左对齐", lambda: self.align_selected("left"))
+        item("顶对齐", lambda: self.align_selected("top"))
+        item("水平居中", lambda: self.align_selected("hcenter"))
+        item("垂直居中", lambda: self.align_selected("vcenter"))
+        item("取消选择", self.clear_selection)
 
         # 侧栏滚轮滚动
         def bind_wheel(w):
@@ -929,8 +886,6 @@ class NodeBoard(ttk.Frame):
                     ttk.Label(body, text=label, anchor="w").pack(fill="x")
                 if kind == "textbox":
                     content = str(default)
-                    if type_key == "const" and not content:
-                        content = relic_table_text()      # 参考表内容
                     var = tk.StringVar(value=content)
                     kw = dict(height=3, width=22, wrap="word")
                     if plain:   # 窄边框：文本框本身无边框，只留内边距
@@ -950,22 +905,6 @@ class NodeBoard(ttk.Frame):
 
                     txt.bind("<KeyRelease>", _sync)
                     txt.bind("<FocusOut>", _sync)
-                    if spec.get("readonly"):
-                        # 只读但可选可复制：仅放行 Ctrl+C 及导航键
-                        def _ro(e):
-                            if (e.state & 0x4) and e.keysym.lower() in ("c", "a"):
-                                return None
-                            if e.keysym in ("Left", "Right", "Up", "Down",
-                                            "Home", "End", "Prior", "Next",
-                                            "Shift_L", "Shift_R",
-                                            "Control_L", "Control_R"):
-                                return None
-                            return "break"
-
-                        txt.bind("<Key>", _ro)
-                        for seq in ("<<Paste>>", "<<Cut>>", "<<Undo>>"):
-                            txt.bind(seq, lambda e: "break")
-                        txt.configure(insertwidth=0)
                 else:
                     var = tk.StringVar(value=str(default))
                     ttk.Entry(body, textvariable=var).pack(fill="x")
@@ -1020,7 +959,8 @@ class NodeBoard(ttk.Frame):
                                         tags=(nid,))
         node = dict(id=nid, type=type_key, frame=frame, vars=vars_,
                     texts=texts_, out=out_var, win=win, pos=[0, 0], ports={},
-                    size=None, font_size=None, table=table)
+                    size=None, font_size=None, table=table,
+                    ttl=ttl, lf=lf)      # ttl/lf 供选中高亮使用
         self.nodes[nid] = node
         if table is not None:
             table.nid = nid            # 表格内容变化后自动重新套用字号/尺寸
@@ -1075,6 +1015,80 @@ class NodeBoard(ttk.Frame):
         """该卡片当前的输入端口数（加法卡可动态增加）。"""
         spec = NODE_TYPES[self.nodes[nid]["type"]]
         return int(self.nodes[nid].get("inputs", spec["inputs"]))
+
+    # ------------------------------------------------------------------
+    # 多选（Shift 点选）与对齐
+    # ------------------------------------------------------------------
+    def _sel_bg(self):
+        try:
+            return ttk.Style().lookup("TFrame", "background") or BG
+        except tk.TclError:
+            return BG
+
+    def toggle_select(self, nid: str) -> None:
+        if nid in self.selection:
+            self.selection.discard(nid)
+        else:
+            self.selection.add(nid)
+        self._paint_selection()
+
+    def clear_selection(self) -> None:
+        self.selection.clear()
+        self._paint_selection()
+
+    def _paint_selection(self) -> None:
+        for nid, n in self.nodes.items():
+            on = nid in self.selection
+            ttl = n.get("ttl")
+            if ttl is not None:
+                try:
+                    ttl.configure(background="#cfe2ff" if on else self._sel_bg())
+                except tk.TclError:
+                    pass
+            outer = n.get("lf")
+            if isinstance(outer, tk.Frame):
+                try:
+                    outer.configure(
+                        highlightbackground="#0b57d0" if on else "#c3ccd6",
+                        highlightcolor="#0b57d0" if on else "#c3ccd6")
+                except tk.TclError:
+                    pass
+        if hasattr(self, "sel_var"):
+            self.sel_var.set("已选 %d 张（Shift 点选）" % len(self.selection))
+
+    def align_selected(self, mode: str) -> bool:
+        """对齐选中的卡片：left / top / hcenter / vcenter。"""
+        ids = [nid for nid in self.nodes if nid in self.selection]
+        if len(ids) < 2:
+            return False
+        boxes = {nid: (self.nodes[nid]["pos"][0], self.nodes[nid]["pos"][1],
+                       *self._base_size(nid)) for nid in ids}
+        lefts = [b[0] for b in boxes.values()]
+        tops = [b[1] for b in boxes.values()]
+        rights = [b[0] + b[2] for b in boxes.values()]
+        bottoms = [b[1] + b[3] for b in boxes.values()]
+        if mode == "left":
+            tx = min(lefts)
+        elif mode == "top":
+            ty = min(tops)
+        elif mode == "hcenter":
+            cx = (min(lefts) + max(rights)) / 2.0
+        elif mode == "vcenter":
+            cy = (min(tops) + max(bottoms)) / 2.0
+        else:
+            return False
+        for nid, (x, y, w, h) in boxes.items():
+            if mode == "left":
+                self.move_node(nid, tx, y)
+            elif mode == "top":
+                self.move_node(nid, x, ty)
+            elif mode == "hcenter":
+                self.move_node(nid, cx - w / 2.0, y)
+            else:
+                self.move_node(nid, x, cy - h / 2.0)
+        self.draw_all()
+        self._notify()
+        return True
 
     def add_input(self, nid: str, delta: int = 1) -> None:
         """增加（或减少）卡片入度，加法卡专用。"""
@@ -1135,6 +1149,7 @@ class NodeBoard(ttk.Frame):
     def remove_node(self, nid: str) -> None:
         if nid not in self.nodes:
             return
+        self.selection.discard(nid)
         self.links = [l for l in self.links
                       if l["src"] != nid and l["dst"] != nid]
         self.canvas.delete(nid)
@@ -1468,6 +1483,7 @@ class NodeBoard(ttk.Frame):
                     outline="#1b4", tags=("port", "out:%s" % nid))
                 n["ports"]["out"] = (x + w, oy, item)
         for l in self.links:
+            l.pop("items", None)                 # 旧图元已被删除
             self._draw_link(l)
         self._apply_link_styles()
         self._update_scrollregion()
@@ -1490,21 +1506,13 @@ class NodeBoard(ttk.Frame):
         size = max(6, int(round(base * z)))
 
         def walk(w):
-            if isinstance(w, ttk.Treeview):      # 表格用 style 控制字体/行高
-                try:
-                    ttk.Style().configure(
-                        "Relic.Treeview", font=(fam, size),
-                        rowheight=max(18, int(size * 2.2)))
-                except tk.TclError:
-                    pass
-            else:
-                fam_w = getattr(w, "_mono_family", fam)
-                fspec = (fam_w, size, "bold") if getattr(w, "_bold", False) \
-                    else (fam_w, size)
-                try:
-                    w.configure(font=fspec)
-                except tk.TclError:
-                    pass
+            fam_w = getattr(w, "_mono_family", fam)
+            fspec = (fam_w, size, "bold") if getattr(w, "_bold", False) \
+                else (fam_w, size)
+            try:
+                w.configure(font=fspec)
+            except tk.TclError:
+                pass
             for c in w.winfo_children():
                 walk(c)
 
@@ -1685,21 +1693,6 @@ class NodeBoard(ttk.Frame):
                 out.append(p)
         return out
 
-    def _bezier_path(self, sp, dp, steps: int = 28):
-        """平滑 S 曲线（空间不足时的兜底，保证有弧度、不退化为直角）。"""
-        x1, y1 = sp[0], sp[1]
-        x2, y2 = dp[0], dp[1]
-        dx = max(40.0 * self.zoom, min(220.0 * self.zoom, abs(x2 - x1) * 0.5))
-        c1x, c1y = x1 + dx, y1
-        c2x, c2y = x2 - dx, y2
-        pts = []
-        for i in range(steps + 1):
-            t = i / steps
-            mt = 1 - t
-            x = (mt ** 3) * x1 + 3 * mt * mt * t * c1x + 3 * mt * t * t * c2x + (t ** 3) * x2
-            y = (mt ** 3) * y1 + 3 * mt * mt * t * c1y + 3 * mt * t * t * c2y + (t ** 3) * y2
-            pts.extend((x, y))
-        return pts
 
     def _round_corners(self, pts, radius: float = 12.0, steps: int = 6):
         """把折线的直角拐点替换成圆角（二次贝塞尔采样）。"""
@@ -1731,13 +1724,6 @@ class NodeBoard(ttk.Frame):
         """连线路径：正交走线 + 圆角拐弯。"""
         return self._round_corners(self._route_points(sp, dp))
 
-    def _op_symbol(self, dst_id: str) -> str:
-        t = self.nodes[dst_id]["type"]
-        if t == "add":
-            return "＋"
-        if t == "result":
-            return "★"
-        return "×"
 
     def _draw_link(self, l) -> None:
         sp = self.nodes[l["src"]]["ports"].get("out")
@@ -1870,6 +1856,9 @@ class NodeBoard(ttk.Frame):
             self._notify()
 
     def _start_node_drag(self, nid, event):
+        if getattr(event, "state", 0) & 0x0001:      # Shift：多选而不是拖动
+            self.toggle_select(nid)
+            return
         self._drag_node = nid
         sx, sy = self._screen_pos(nid)
         self._drag_off = (self._cx(event) - sx, self._cy(event) - sy)
@@ -1913,6 +1902,8 @@ class NodeBoard(ttk.Frame):
     def _notify(self):
         if self._loading:
             return
+        if not self._restoring:
+            self.dirty = True          # 有改动未保存
         if self.on_change:
             self.on_change()
         self._schedule_history()
@@ -1963,6 +1954,7 @@ class NodeBoard(ttk.Frame):
             return False
         self._redo.append(self._last_state)
         self._restore_state(self._undo.pop())
+        self.dirty = True
         return True
 
     def redo(self) -> bool:
@@ -1971,6 +1963,7 @@ class NodeBoard(ttk.Frame):
             return False
         self._undo.append(self._last_state)
         self._restore_state(self._redo.pop())
+        self.dirty = True
         return True
 
     # ------------------------------------------------------------------
@@ -1981,14 +1974,15 @@ class NodeBoard(ttk.Frame):
         nodes = []
         for nid, n in self.nodes.items():
             fields = {k: v.get() for k, v in n["vars"].items()}
-            nodes.append(dict(
+            item = dict(
                 id=nid, type=n["type"],
                 pos=[float(n["pos"][0]), float(n["pos"][1])],
                 size=(list(n["size"]) if n.get("size") else None),
                 font_size=n.get("font_size"),
                 inputs=int(n.get("inputs", NODE_TYPES[n["type"]]["inputs"])),
                 fields=fields,
-            ))
+            )
+            nodes.append(item)
         links = [dict(src=l["src"], dst=l["dst"], port=int(l["port"]))
                  for l in self.links]
         return dict(version=1, app="GenshinDamageCalc", zoom=self.zoom,
