@@ -30,7 +30,31 @@
 
 需要 **Python 3.11+** 与 **Node.js 20+（含 pnpm）**。
 
-### 1. 装依赖
+### 0. 最省事：双击 `launcher.bat`
+
+双击后出现菜单，按数字选择：
+
+```
+[1] 启动服务（并打开浏览器）   ← 日常用这个
+[2] 关闭服务
+[3] 开发模式（前端热更新，需 Node）
+[4] 退出
+```
+
+首次运行它会自己补齐缺的东西：没有 `web\dist` 就自动安装依赖并构建前端；系统 Python 缺 fastapi/uvicorn 就先装好（必要时自动建 `.venv`）。之后再双击就是秒开。
+
+也可以带参数直接调用（不弹菜单）：
+
+```bat
+launcher.bat                :: 菜单
+launcher.bat 9000           :: 用 9000 端口启动
+launcher.bat stop           :: 关闭默认端口(8777)上的服务
+launcher.bat stop 9000      :: 关闭 9000 端口上的服务
+launcher.bat dev            :: 开发模式：后端 + Vite（前端热更新）
+launcher.bat 8777 --reload  :: 端口后面的参数原样转给 main.py
+```
+
+### 1. 手动装依赖
 
 ```bash
 pip install -r requirements.txt      # fastapi / uvicorn（含测试用的 httpx、pytest）
@@ -68,6 +92,7 @@ cd web && pnpm typecheck             # 前端类型检查
 ### 5. 其它
 
 ```bash
+launcher.bat dev                     # = 后端 + Vite 前端热更新
 python main.py --reload              # 后端代码热重载（开发用）
 cd web && pnpm preview               # 单独预览前端构建产物
 ```
@@ -78,6 +103,7 @@ cd web && pnpm preview               # 单独预览前端构建产物
 
 ```
 DpsCalculate/
+├── launcher.bat                # 启动器：启动 / 关闭 / 开发模式（依赖自愈）
 ├── main.py                     # 启动入口：拉起 uvicorn 并打开浏览器
 ├── server/                     # Web 后端
 │   ├── app.py                  # FastAPI 应用：/api/schema /api/evaluate /api/report + 静态托管

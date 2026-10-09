@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.2.0",
   "type": "module",
+  "packageManager": "pnpm@11.22.0",
   "description": "原神伤害计算器 · Web 前端（Vite + React + TypeScript + React Flow）",
   "scripts": {
     "dev": "vite",
