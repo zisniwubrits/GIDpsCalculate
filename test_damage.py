@@ -98,6 +98,16 @@ class TestAggravate(unittest.TestCase):
             places=2,
         )
 
+    def test_mastery_term_is_1200(self):
+        """精通项锁定为 5×EM/(EM+1200)（已确认口径，勿改成 +2000）。"""
+        for em in (0, 50, 100, 200, 500, 1000, 2000):
+            self.assertAlmostEqual(
+                damage.aggravate_value("超激化", em, level=90),
+                1202.81 * 1.15 * (1 + 5 * em / (em + 1200)),
+                places=6,
+                msg="EM=%s" % em,
+            )
+
     def test_spread_bigger(self):
         self.assertGreater(
             damage.aggravate_value("蔓激化", 100, level=90),

@@ -92,4 +92,7 @@ git commit -m "feat: 简述这个功能"
 
 - 通用伤害：<https://ellen.rth1.xyz/原神产球及附着/index.html>
 - 月 / 星等进阶：<https://yuhuazhe.cn/zlk/gongshi.html>
-- 两处跨源差异（已在代码注释中标注）：激化 EM 分母 ellen `+1200` vs 羽化哲 `+2000`；扩散倍率 `0.6` vs `0.65`。
+- 两处跨源差异：
+  - **激化精通项已定为 `5×EM/(EM+1200)`**（ellen 口径，用户已确认，勿改成 +2000）；由 `test_damage.py::test_mastery_term_is_1200` 锁定。
+    手动搭激化链时「×精通增益」卡片填 k=5 / 分母=1200；星月与剧变仍用 +2000。
+  - 扩散倍率 ellen `0.6` vs 羽化哲 `0.65`：当前沿用 `0.6`。

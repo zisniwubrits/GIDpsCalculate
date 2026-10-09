@@ -777,13 +777,13 @@
         },
         {
           "key": "k",
-          "label": "精通系数k",
+          "label": "精通系数k（星月6/剧变16/激化5）",
           "default": "6",
           "kind": "num"
         },
         {
           "key": "denom",
-          "label": "分母",
+          "label": "分母（星月·剧变2000/激化1200）",
           "default": "2000",
           "kind": "num"
         },

@@ -300,7 +300,6 @@ def _f_base_boost(get, ins):
 def _f_em_gain(get, ins):
     return "精通增益 ×%s" % fmt_num(1 + _em_term(get) + _pct(get("bonus")))
 
-
 def _f_star_coeff(get, ins):
     return "星超导系数 ×%s" % fmt_num(star_rate(get))
 
@@ -462,8 +461,8 @@ NODE_TYPES: dict = {
                     group="星月部件", inputs=1, compute=_t_em_gain,
                     factor=_f_em_gain, fields=[
         _F("em", "元素精通", "0"),
-        _F("k", "精通系数k", "6"),
-        _F("denom", "分母", "2000"),
+        _F("k", "精通系数k（星月6/剧变16/激化5）", "6"),
+        _F("denom", "分母（星月·剧变2000/激化1200）", "2000"),
         _F("bonus", "增伤%", "0", "pct"),
     ]),
     "star_coeff": dict(title="星超导系数 ×", label="星超导系数", group="星月部件",
