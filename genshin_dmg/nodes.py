@@ -476,9 +476,12 @@ NODE_TYPES: dict = {
         _F("title", "标题", "计算卡", "text"),
         _F("expr", "表达式", "1+1", "textbox"),
     ]),
+    # 纯文本卡片：无端口、可拖动、右键可调字号；仅作标注，不参与计算
+    # bare=True：这张卡「就是一块便签」，前端不画字段标签、不给输入框加边框与内边距，
+    #            文字直接铺满卡片内区（只作用于界面，不影响计算）
     "text": dict(title="文本", label="文本", group="工具", inputs=0, compute=_t_text,
                  isolated=True, no_output=True, resizable=True, wide_fields=True,
-                 font_menu=True, fields=[
+                 font_menu=True, bare=True, fields=[
         _F("content", "内容", "在此输入文本", "textbox"),
     ]),
     "var": dict(title="变量", label="变量", group="工具", inputs=0, compute=_t_text,
@@ -583,6 +586,7 @@ def node_schema(type_key: str) -> dict:
         no_output=bool(spec.get("no_output")),
         resizable=bool(spec.get("resizable")),
         wide_fields=bool(spec.get("wide_fields")),
+        bare=bool(spec.get("bare")),
         plain=bool(spec.get("plain")),
         copyable=bool(spec.get("copyable")),
         font_menu=bool(spec.get("font_menu")),

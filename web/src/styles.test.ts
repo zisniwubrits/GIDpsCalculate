@@ -25,7 +25,8 @@ function loadStyles(): string {
   throw new Error(`找不到 styles.css，试过：${candidates.join(" , ")}`);
 }
 
-const css = loadStyles();
+/** 去掉注释后再匹配，否则形如 `/* … *\/\n.selector {` 的规则会漏掉。 */
+const css = loadStyles().replace(/\/\*[\s\S]*?\*\//g, "");
 
 /** 取出某个选择器的规则体；选择器要写成 `.card`、`.card-body.bare` 这种精确形式。 */
 function ruleBody(selector: string): string {
@@ -46,5 +47,18 @@ describe("卡片尺寸", () => {
     const body = ruleBody(".card-body");
     expect(body).toMatch(/overflow:\s*auto/);
     expect(body).toMatch(/min-height:\s*0/);
+  });
+});
+
+describe("文本卡片（便签式）", () => {
+  it("内边距比普通卡片小", () => {
+    expect(ruleBody(".card-body-bare")).toMatch(/padding:\s*2px\s+4px/);
+  });
+
+  it("去掉输入框边框，并让文本框不再抢右下角的缩放手柄", () => {
+    const body = ruleBody(".f-bare");
+    expect(body).toMatch(/border:\s*none/);
+    expect(body).toMatch(/background:\s*transparent/);
+    expect(body).toMatch(/resize:\s*none/);
   });
 });

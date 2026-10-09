@@ -32,11 +32,15 @@ function FieldControl({
   field,
   value,
   onChange,
+  bare = false,
 }: {
   field: FieldSpec;
   value: FieldValue;
   onChange: (v: FieldValue) => void;
+  /** 便签式卡片：不画标签、控件不带边框（由 schema 的 bare 字段决定） */
+  bare?: boolean;
 }) {
+  const label = bare ? null : <span className="f-label">{field.label}</span>;
   switch (field.kind) {
     case "check":
       return (
@@ -55,7 +59,7 @@ function FieldControl({
       const list = options.includes(current) || !current ? options : [current, ...options];
       return (
         <>
-          <span className="f-label">{field.label}</span>
+          {label}
           <select
             className="f-input"
             value={current}
@@ -74,11 +78,11 @@ function FieldControl({
     case "textbox":
       return (
         <>
-          <span className="f-label">{field.label}</span>
+          {label}
           <textarea
-            className="f-input f-area"
+            className={`f-input f-area${bare ? " f-bare" : ""}`}
             value={String(value ?? "")}
-            rows={field.key === "content" ? 4 : 3}
+            rows={bare ? undefined : field.key === "content" ? 4 : 3}
             spellCheck={false}
             onChange={(e) => onChange(e.target.value)}
           />
@@ -130,7 +134,7 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
       : spec.title;
 
   const body = (
-    <div className="card-body">
+    <div className={`card-body${spec.bare ? " card-body-bare" : ""}`}>
       {spec.table && table ? (
         <DataTable
           header={table.header}
@@ -140,8 +144,13 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
         />
       ) : null}
       {spec.fields.map((f) => (
-        <div className="f-row" key={f.key}>
-          <FieldControl field={f} value={node.fields[f.key]} onChange={(v) => onField(f.key, v)} />
+        <div className={`f-row${spec.bare ? " f-row-bare" : ""}`} key={f.key}>
+          <FieldControl
+            field={f}
+            value={node.fields[f.key]}
+            onChange={(v) => onField(f.key, v)}
+            bare={spec.bare}
+          />
         </div>
       ))}
     </div>

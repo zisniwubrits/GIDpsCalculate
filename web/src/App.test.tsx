@@ -402,6 +402,26 @@ describe("App 集成（假后端 + 真 schema）", () => {
     );
   });
 
+  it("文本卡片是便签样式：不显示字段标签、输入框无边框，且仍可编辑", async () => {
+    const user = userEvent.setup();
+    await renderApp();
+    await addCard(user, "text");
+
+    const card = await screen.findByTestId("card-n1");
+    // 字段标签「内容」不再显示（这正是原来那层多余边框的来源）
+    expect(within(card).queryByText("内容")).not.toBeInTheDocument();
+    // 标题栏仍在，拖动/删除的入口不变
+    expect(within(card).getByText("文本")).toBeInTheDocument();
+    expect(within(card).getByTitle("删除卡片")).toBeInTheDocument();
+
+    const area = within(card).getByRole("textbox");
+    expect(area.tagName).toBe("TEXTAREA");
+    expect(area).toHaveClass("f-bare");
+
+    await user.type(area, "便签内容");
+    await waitFor(() => expect(lastBody?.nodes[0].fields.content).toContain("便签内容"));
+  });
+
   it("变量表卡片显示后端返回的行", async () => {
     const user = userEvent.setup();
     await renderApp();

@@ -28,6 +28,8 @@ export interface NodeTypeSpec {
   no_output: boolean;
   resizable: boolean;
   wide_fields: boolean;
+  /** 便签式卡片：不画字段标签、输入框不带边框与内边距（见 genshin_dmg/nodes.py 的 text 卡） */
+  bare: boolean;
   plain: boolean;
   copyable: boolean;
   font_menu: boolean;
