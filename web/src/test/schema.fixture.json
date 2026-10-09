@@ -158,7 +158,6 @@
         "stat_flat": "0",
         "multiplier": "200"
       },
-      "variadic": false,
       "isolated": false,
       "no_output": false,
       "resizable": false,
@@ -190,7 +189,6 @@
       "defaults": {
         "dmg_net": "46.6"
       },
-      "variadic": false,
       "isolated": false,
       "no_output": false,
       "resizable": false,
@@ -222,7 +220,6 @@
       "defaults": {
         "resistance": "10"
       },
-      "variadic": false,
       "isolated": false,
       "no_output": false,
       "resizable": false,
@@ -275,7 +272,6 @@
         "def_reduction": "0",
         "ignore_def": "0"
       },
-      "variadic": false,
       "isolated": false,
       "no_output": false,
       "resizable": false,
@@ -314,7 +310,6 @@
         "crit_rate": "50",
         "crit_damage": "100"
       },
-      "variadic": false,
       "isolated": false,
       "no_output": false,
       "resizable": false,
@@ -374,7 +369,6 @@
         "amp_bonus": "0",
         "shield": false
       },
-      "variadic": false,
       "isolated": false,
       "no_output": false,
       "resizable": false,
@@ -406,7 +400,6 @@
       "defaults": {
         "boost": "0"
       },
-      "variadic": false,
       "isolated": false,
       "no_output": false,
       "resizable": false,
@@ -429,7 +422,6 @@
       "inputs": 2,
       "fields": [],
       "defaults": {},
-      "variadic": true,
       "isolated": false,
       "no_output": false,
       "resizable": false,
@@ -486,7 +478,6 @@
         "bonus": "0",
         "level": "90"
       },
-      "variadic": false,
       "isolated": false,
       "no_output": false,
       "resizable": false,
@@ -550,7 +541,6 @@
         "bonus": "0",
         "level": "90"
       },
-      "variadic": false,
       "isolated": false,
       "no_output": false,
       "resizable": false,
@@ -589,7 +579,6 @@
         "em": "0",
         "shield_strength": "0"
       },
-      "variadic": false,
       "isolated": false,
       "no_output": false,
       "resizable": false,
@@ -635,7 +624,6 @@
         "stat_big": "0",
         "stat_flat": "0"
       },
-      "variadic": false,
       "isolated": false,
       "no_output": false,
       "resizable": false,
@@ -667,7 +655,6 @@
       "defaults": {
         "level": "90"
       },
-      "variadic": false,
       "isolated": false,
       "no_output": false,
       "resizable": false,
@@ -699,7 +686,6 @@
       "defaults": {
         "coeff": "1"
       },
-      "variadic": false,
       "isolated": false,
       "no_output": false,
       "resizable": false,
@@ -731,7 +717,6 @@
       "defaults": {
         "multiplier": "200"
       },
-      "variadic": false,
       "isolated": false,
       "no_output": false,
       "resizable": false,
@@ -763,7 +748,6 @@
       "defaults": {
         "base_boost": "0"
       },
-      "variadic": false,
       "isolated": false,
       "no_output": false,
       "resizable": false,
@@ -816,7 +800,6 @@
         "denom": "2000",
         "bonus": "0"
       },
-      "variadic": false,
       "isolated": false,
       "no_output": false,
       "resizable": false,
@@ -848,7 +831,6 @@
       "defaults": {
         "hits": "0"
       },
-      "variadic": false,
       "isolated": false,
       "no_output": false,
       "resizable": false,
@@ -887,7 +869,6 @@
         "title": "计算卡",
         "expr": "1+1"
       },
-      "variadic": false,
       "isolated": true,
       "no_output": false,
       "resizable": true,
@@ -919,7 +900,6 @@
       "defaults": {
         "content": "在此输入文本"
       },
-      "variadic": false,
       "isolated": true,
       "no_output": true,
       "resizable": true,
@@ -951,7 +931,6 @@
       "defaults": {
         "defs": "攻击力 = 1000\n倍率 = 200\n基础伤害 = 攻击力 * 倍率"
       },
-      "variadic": false,
       "isolated": true,
       "no_output": false,
       "resizable": true,
@@ -983,7 +962,6 @@
       "defaults": {
         "content": ""
       },
-      "variadic": false,
       "isolated": true,
       "no_output": true,
       "resizable": true,
@@ -1006,7 +984,6 @@
       "inputs": 0,
       "fields": [],
       "defaults": {},
-      "variadic": false,
       "isolated": true,
       "no_output": true,
       "resizable": true,
@@ -1052,7 +1029,6 @@
         "var_cr": "",
         "var_ex": ""
       },
-      "variadic": false,
       "isolated": false,
       "no_output": false,
       "resizable": false,

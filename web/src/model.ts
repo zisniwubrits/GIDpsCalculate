@@ -7,7 +7,6 @@ import type { CardNode, Fields, GraphJSON, GraphLinkJSON, PresetItem, Schema } f
 
 export const ZOOM_MIN = 0.25;
 export const ZOOM_MAX = 2.5;
-export const MAX_INPUTS = 12;
 
 /**
  * 卡片只有「标题栏」能拖动（用户明确要求：只能拖标题栏，标题栏大小不动）。
@@ -247,20 +246,6 @@ export function connect(
   return [...kept, { src, dst, port }];
 }
 
-/** 变更加法卡片的输入端口数；减少时清掉多余连线。 */
-export function setInputs(
-  node: CardNode,
-  value: number,
-  schema: Schema,
-): { node: CardNode; droppedPorts: number[] } {
-  const spec = schema.nodeTypes[node.type];
-  if (!spec.variadic) return { node, droppedPorts: [] };
-  const next = Math.max(1, Math.min(MAX_INPUTS, value));
-  const dropped: number[] = [];
-  for (let p = next; p < node.inputs; p += 1) dropped.push(p);
-  return { node: { ...node, inputs: next }, droppedPorts: dropped };
-}
-
 /** 节点 + 连线 → 工程 JSON（与后端 / 旧版 tkinter 完全兼容）。 */
 export function graphToJSON(
   nodes: CardNode[],
@@ -318,10 +303,9 @@ export function jsonToGraph(
       if (v === undefined || v === null) continue;
       fields[f.key] = typeof v === "boolean" ? v : String(v);
     }
-    const rawInputs = Number((nd as { inputs?: unknown }).inputs);
-    const inputs = spec.variadic && Number.isFinite(rawInputs)
-      ? Math.max(1, Math.min(MAX_INPUTS, rawInputs))
-      : spec.inputs;
+    // 端口数完全由卡片类型决定：旧存档里写过的 inputs 一律忽略（历史上只有加法卡片能改，
+    // 且扩出来的端口实际连不上，见 genshin_dmg/nodes.py 里 add 卡的注释）。
+    const inputs = spec.inputs;
     const rawFont = Number((nd as { font_size?: unknown }).font_size);
     nodes.push({
       id,
@@ -334,13 +318,17 @@ export function jsonToGraph(
     });
   });
   const links: GraphLinkJSON[] = [];
+  const byId = new Map(nodes.map((n) => [n.id, n]));
   const rawLinks = Array.isArray(raw.links) ? raw.links : [];
   for (const l of rawLinks) {
     const src = String((l as { src?: unknown })?.src ?? "");
     const dst = String((l as { dst?: unknown })?.dst ?? "");
     if (!ids.has(src) || !ids.has(dst) || src === dst) continue;
     const port = Number((l as { port?: unknown })?.port ?? 0);
-    if (!Number.isFinite(port) || port < 0 || port >= MAX_INPUTS) continue;
+    // 端口号必须落在目标卡片真实的输入端口范围内（旧存档里多余的端口会被丢弃）
+    const target = byId.get(dst);
+    const maxPort = target ? target.inputs : 0;
+    if (!Number.isFinite(port) || port < 0 || port >= maxPort) continue;
     links.push({ src, dst, port });
   }
   const zoomRaw = Number(raw.zoom);

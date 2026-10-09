@@ -3,7 +3,7 @@
 
 每张卡片 = 一个节点：
 
-* ``inputs``：输入端口数（加法卡片 ``variadic``，端口数可 1~12）。
+* ``inputs``：输入端口数（固定值；加法合并卡片为 2）。
 * ``fields``：参数定义 ``{key, label, default, kind, options?}``，
   ``kind`` ∈ ``num / pct / combo / check / text / textbox``。
 * ``compute(get, ins) -> (未暴击, 暴击, 期望)``，``get`` 取原始字段值，``ins`` 是上游三元组列表。
@@ -412,8 +412,11 @@ NODE_TYPES: dict = {
                   inputs=1, compute=_t_boost, factor=_f_boost, fields=[
         _F("boost", "擢升%", "0", "pct"),
     ]),
+    # 加法合并：固定 2 路输入（曾经支持点 ＋ 扩展到 12 路，但新增的 Handle 没有通知
+    # React Flow 重算端口边界（updateNodeInternals），第 3 个端口实际连不上；
+    # 与其修一个没人用的扩展，不如按用户决定固定为 2 路 —— 要合并更多就串两张。
     "add": dict(title="＋加法合并", label="＋加法", group="直伤乘区",
-                inputs=2, compute=_t_add, variadic=True, fields=[]),
+                inputs=2, compute=_t_add, fields=[]),
     # ---- 反应源 ----
     "aggravate": dict(title="激化值(源)", label="激化值", group="反应源",
                       inputs=0, compute=_t_aggravate, fields=[
@@ -581,7 +584,6 @@ def node_schema(type_key: str) -> dict:
         inputs=int(spec["inputs"]),
         fields=field_specs(type_key),
         defaults=defaults_of(type_key),
-        variadic=bool(spec.get("variadic")),
         isolated=bool(spec.get("isolated")),
         no_output=bool(spec.get("no_output")),
         resizable=bool(spec.get("resizable")),

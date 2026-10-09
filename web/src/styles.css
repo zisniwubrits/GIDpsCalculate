@@ -295,7 +295,6 @@ textarea:focus {
   text-overflow: ellipsis;
 }
 
-.card-mini,
 .card-x {
   padding: 0 5px;
   line-height: 16px;
@@ -304,7 +303,6 @@ textarea:focus {
   color: var(--muted);
 }
 
-.card-mini:hover,
 .card-x:hover {
   background: #fff;
 }

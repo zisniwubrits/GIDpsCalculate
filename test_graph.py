@@ -331,10 +331,13 @@ class TestGraphStructure(unittest.TestCase):
 
         self.assertAlmostEqual(v[0], g.node_output("a1")[0] + g.node_output("a2")[0])
 
-    def test_variadic_inputs_clamped(self):
-        self.assertEqual(GraphNode("s", "add", inputs=99).inputs, 12)
-        self.assertEqual(GraphNode("s", "add", inputs=0).inputs, 1)
-        # 非 variadic 卡片忽略输入的端口数设置
+    def test_input_count_comes_from_card_type(self):
+        """端口数由卡片类型决定：加法卡固定 2 路，不接受运行时扩展（已去掉该能力）。"""
+        self.assertEqual(nd.NODE_TYPES["add"]["inputs"], 2)
+        self.assertNotIn("variadic", nd.NODE_TYPES["add"])
+        # 旧存档里写什么端口数都按类型归一化
+        self.assertEqual(GraphNode("s", "add", inputs=99).inputs, 2)
+        self.assertEqual(GraphNode("s", "add", inputs=0).inputs, 2)
         self.assertEqual(GraphNode("d", "dmg", inputs=7).inputs, 1)
 
     def test_expression_fields_accepted(self):
@@ -409,6 +412,12 @@ class TestSchemaForFrontend(unittest.TestCase):
         """bare 是「便签式卡片」的界面提示，目前只有「文本」卡用它。"""
         bare = [k for k, v in self.s["nodeTypes"].items() if v["bare"]]
         self.assertEqual(bare, ["text"])
+
+    def test_schema_has_no_variadic_flag(self):
+        """不再向前端暴露 variadic：加法卡固定 2 路输入，已去掉运行时扩展能力。"""
+        for key, spec in self.s["nodeTypes"].items():
+            self.assertNotIn("variadic", spec, key)
+        self.assertEqual(self.s["nodeTypes"]["add"]["inputs"], 2)
 
     def test_combo_options_present(self):
         amp = self.s["nodeTypes"]["amp"]

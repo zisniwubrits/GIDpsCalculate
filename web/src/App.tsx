@@ -201,22 +201,6 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
     [apply],
   );
 
-  const onInputs = useCallback(
-    (id: string, delta: number) => {
-      apply((s) => {
-        const node = s.nodes.find((n) => n.id === id);
-        if (!node || !schema.nodeTypes[node.type].variadic) return s;
-        const next = Math.max(1, Math.min(12, node.inputs + delta));
-        if (next === node.inputs) return s;
-        return {
-          nodes: s.nodes.map((n) => (n.id === id ? { ...n, inputs: next } : n)),
-          links: s.links.filter((l) => !(l.dst === id && l.port >= next)),
-        };
-      });
-    },
-    [apply, schema],
-  );
-
   const removeLink = useCallback(
     (id: string) => {
       apply((s) => ({ ...s, links: s.links.filter((l) => edgeId(l.src, l.dst, l.port) !== id) }));
@@ -545,7 +529,6 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
           table: tableFor(n, schema, results),
           onField,
           onDelete: removeNode,
-          onInputs,
           onResize,
           onMenu: (id, kind, ev) => setMenu({ id, kind, x: ev.clientX, y: ev.clientY }),
           onCopy,
@@ -567,7 +550,7 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
           dragHandle: CARD_DRAG_HANDLE,
         };
       }),
-    [nodes, schema, results, onField, removeNode, onInputs, onCopy, onResize],
+    [nodes, schema, results, onField, removeNode, onCopy, onResize],
   );
 
   const rfEdges = useMemo<CardRFEdge[]>(

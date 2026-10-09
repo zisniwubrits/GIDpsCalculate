@@ -26,10 +26,7 @@ from genshin_dmg.nodes import (
     node_schema,
 )
 
-__all__ = ["GraphNode", "Link", "Graph", "MAX_INPUTS"]
-
-MAX_INPUTS = 12
-MIN_INPUTS = 1
+__all__ = ["GraphNode", "Link", "Graph"]
 
 
 class GraphError(ValueError):
@@ -68,16 +65,13 @@ class GraphNode:
         return [w, h]
 
     def _norm_inputs(self, value):
-        spec = NODE_TYPES[self.type]
-        if not spec.get("variadic"):
-            return int(spec["inputs"])
-        if value is None:
-            return int(spec["inputs"])
-        try:
-            n = int(value)
-        except (TypeError, ValueError):
-            return int(spec["inputs"])
-        return max(MIN_INPUTS, min(MAX_INPUTS, n))
+        """输入端口数：完全由卡片类型决定（不再支持运行时扩展）。
+
+        旧工程文件里若写了别的端口数（历史上只有加法卡片能改，且实际扩不出可用端口），
+        这里一律按类型定义归一化，避免出现连不上的多余端口。
+        """
+        del value
+        return int(NODE_TYPES[self.type]["inputs"])
 
     def _coerce(self, fields):
         """按字段类型规范化取值：check→bool，text/textbox/combo→str，num/pct→str。"""

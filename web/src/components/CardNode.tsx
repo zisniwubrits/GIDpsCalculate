@@ -18,7 +18,6 @@ export interface CardData extends Record<string, unknown> {
   table: { header: string[]; rows: string[][] } | null;
   onField: (id: string, key: string, value: FieldValue) => void;
   onDelete: (id: string) => void;
-  onInputs: (id: string, delta: number) => void;
   /** 拖动缩放手柄结束后把最终尺寸（含左上角坐标变化）写回模型 */
   onResize: (id: string, size: [number, number], pos: [number, number]) => void;
   onMenu: (id: string, kind: MenuKind, ev: { clientX: number; clientY: number }) => void;
@@ -263,16 +262,6 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
           <span className="card-title" title={spec.title}>
             {title}
           </span>
-          {spec.variadic ? (
-            <button
-              type="button"
-              className="card-mini nodrag"
-              title="增加一个输入端口（最多 12 个）"
-              onClick={() => data.onInputs(id, 1)}
-            >
-              ＋
-            </button>
-          ) : null}
           <button
             type="button"
             className="card-x nodrag"

@@ -20,10 +20,10 @@ export interface NodeTypeSpec {
   title: string;
   label: string;
   group: string;
+  /** 输入端口数（固定值，由后端 schema 决定） */
   inputs: number;
   fields: FieldSpec[];
   defaults: Record<string, string | number | boolean>;
-  variadic: boolean;
   isolated: boolean;
   no_output: boolean;
   resizable: boolean;

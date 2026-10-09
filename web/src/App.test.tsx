@@ -238,7 +238,7 @@ describe("App 集成（假后端 + 真 schema）", () => {
     await waitFor(() => expect(lastBody?.nodes[0].fields.var_nc).toBe(""));
   });
 
-  it("只有标题栏能拖动：dragHandle 选择器能匹配到标题栏，按钮不触发拖动", async () => {
+  it("只有标题栏能拖动：dragHandle 选择器能匹配到标题栏，删除按钮不触发拖动", async () => {
     const user = userEvent.setup();
     await renderApp();
     await user.click(screen.getByTestId("preset-普通直伤"));
@@ -247,13 +247,21 @@ describe("App 集成（假后端 + 真 schema）", () => {
     // dragHandle 是 CSS 选择器：改错类名会让卡片彻底拖不动，所以这里要守住它能匹配到
     expect(card.querySelector(CARD_DRAG_HANDLE)).toBe(card.querySelector(".card-head"));
     expect(card.querySelector(CARD_DRAG_HANDLE)).not.toBeNull();
-    // 标题栏里的按钮标了 nodrag：点 ✕ / ＋ 不会顺手把卡片拖走
+    // 标题栏里的 ✕ 标了 nodrag：点它不会顺手把卡片拖走
     expect(within(card).getByTitle("删除卡片")).toHaveClass("nodrag");
+  });
 
+  it("加法合并卡固定 2 路输入：没有 ＋ 按钮，端口数也不是可变的", async () => {
+    const user = userEvent.setup();
+    await renderApp();
     await addCard(user, "add");
-    const plusButton = await screen.findByTitle(/增加一个输入端口/);
-    expect(plusButton).toHaveClass("nodrag");
-    expect(plusButton.closest(CARD_DRAG_HANDLE)).not.toBeNull(); // 按钮在标题栏里，但标了 nodrag
+
+    const card = await screen.findByTestId("card-n1");
+    expect(within(card).queryByTitle(/增加一个输入端口/)).not.toBeInTheDocument();
+
+    await waitFor(() => expect(lastBody?.nodes[0].inputs).toBe(2));
+    const wrapper = card.parentElement as HTMLElement;
+    expect(wrapper.querySelectorAll(".react-flow__handle.port-in")).toHaveLength(2);
   });
 
   it("✕ 删除卡片会同时清掉相关连线", async () => {
