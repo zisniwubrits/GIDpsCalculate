@@ -1,0 +1,1415 @@
+{
+  "version": 1,
+  "app": "GenshinDamageCalc",
+  "groups": [
+    {
+      "name": "直伤乘区",
+      "items": [
+        {
+          "type": "base",
+          "label": "基础值"
+        },
+        {
+          "type": "dmg",
+          "label": "增伤区"
+        },
+        {
+          "type": "res",
+          "label": "抗性区"
+        },
+        {
+          "type": "def",
+          "label": "防御区"
+        },
+        {
+          "type": "crit",
+          "label": "暴击区"
+        },
+        {
+          "type": "amp",
+          "label": "增幅反应"
+        },
+        {
+          "type": "boost",
+          "label": "擢升"
+        },
+        {
+          "type": "add",
+          "label": "＋加法"
+        }
+      ]
+    },
+    {
+      "name": "反应源",
+      "items": [
+        {
+          "type": "aggravate",
+          "label": "激化值"
+        },
+        {
+          "type": "transform",
+          "label": "剧变反应"
+        },
+        {
+          "type": "crystal",
+          "label": "结晶护盾"
+        }
+      ]
+    },
+    {
+      "name": "星月部件",
+      "items": [
+        {
+          "type": "attr",
+          "label": "属性源"
+        },
+        {
+          "type": "react_base",
+          "label": "基准值源"
+        },
+        {
+          "type": "coeff",
+          "label": "×系数"
+        },
+        {
+          "type": "mult",
+          "label": "×倍率"
+        },
+        {
+          "type": "base_boost",
+          "label": "×基础提升"
+        },
+        {
+          "type": "em_gain",
+          "label": "×精通增益"
+        },
+        {
+          "type": "star_coeff",
+          "label": "星超导系数"
+        }
+      ]
+    },
+    {
+      "name": "工具",
+      "items": [
+        {
+          "type": "calc",
+          "label": "计算卡"
+        },
+        {
+          "type": "text",
+          "label": "文本"
+        },
+        {
+          "type": "var",
+          "label": "变量"
+        },
+        {
+          "type": "const",
+          "label": "理想圣遗物"
+        },
+        {
+          "type": "vartable",
+          "label": "变量表"
+        },
+        {
+          "type": "result",
+          "label": "★结果"
+        }
+      ]
+    }
+  ],
+  "nodeTypes": {
+    "base": {
+      "type": "base",
+      "title": "基础值 (属性×倍率)",
+      "label": "基础值",
+      "group": "直伤乘区",
+      "inputs": 0,
+      "fields": [
+        {
+          "key": "stat_base",
+          "label": "白值",
+          "default": "1000",
+          "kind": "num"
+        },
+        {
+          "key": "stat_big",
+          "label": "大增益%",
+          "default": "0",
+          "kind": "pct"
+        },
+        {
+          "key": "stat_flat",
+          "label": "小增益",
+          "default": "0",
+          "kind": "num"
+        },
+        {
+          "key": "multiplier",
+          "label": "倍率%",
+          "default": "200",
+          "kind": "pct"
+        }
+      ],
+      "defaults": {
+        "stat_base": "1000",
+        "stat_big": "0",
+        "stat_flat": "0",
+        "multiplier": "200"
+      },
+      "variadic": false,
+      "isolated": false,
+      "no_output": false,
+      "resizable": false,
+      "wide_fields": false,
+      "plain": false,
+      "copyable": false,
+      "font_menu": false,
+      "vars_card": false,
+      "ctx_menu": false,
+      "has_factor": false,
+      "table": null,
+      "hidden_fields": []
+    },
+    "dmg": {
+      "type": "dmg",
+      "title": "增伤区 ×",
+      "label": "增伤区",
+      "group": "直伤乘区",
+      "inputs": 1,
+      "fields": [
+        {
+          "key": "dmg_net",
+          "label": "增伤区净%",
+          "default": "46.6",
+          "kind": "pct"
+        }
+      ],
+      "defaults": {
+        "dmg_net": "46.6"
+      },
+      "variadic": false,
+      "isolated": false,
+      "no_output": false,
+      "resizable": false,
+      "wide_fields": false,
+      "plain": false,
+      "copyable": false,
+      "font_menu": false,
+      "vars_card": false,
+      "ctx_menu": false,
+      "has_factor": true,
+      "table": null,
+      "hidden_fields": []
+    },
+    "res": {
+      "type": "res",
+      "title": "抗性区 ×",
+      "label": "抗性区",
+      "group": "直伤乘区",
+      "inputs": 1,
+      "fields": [
+        {
+          "key": "resistance",
+          "label": "敌人抗性%",
+          "default": "10",
+          "kind": "pct"
+        }
+      ],
+      "defaults": {
+        "resistance": "10"
+      },
+      "variadic": false,
+      "isolated": false,
+      "no_output": false,
+      "resizable": false,
+      "wide_fields": false,
+      "plain": false,
+      "copyable": false,
+      "font_menu": false,
+      "vars_card": false,
+      "ctx_menu": false,
+      "has_factor": true,
+      "table": null,
+      "hidden_fields": []
+    },
+    "def": {
+      "type": "def",
+      "title": "防御区 ×",
+      "label": "防御区",
+      "group": "直伤乘区",
+      "inputs": 1,
+      "fields": [
+        {
+          "key": "char_level",
+          "label": "角色等级",
+          "default": "90",
+          "kind": "num"
+        },
+        {
+          "key": "enemy_level",
+          "label": "敌人等级",
+          "default": "90",
+          "kind": "num"
+        },
+        {
+          "key": "def_reduction",
+          "label": "减防%",
+          "default": "0",
+          "kind": "pct"
+        },
+        {
+          "key": "ignore_def",
+          "label": "无视防御%",
+          "default": "0",
+          "kind": "pct"
+        }
+      ],
+      "defaults": {
+        "char_level": "90",
+        "enemy_level": "90",
+        "def_reduction": "0",
+        "ignore_def": "0"
+      },
+      "variadic": false,
+      "isolated": false,
+      "no_output": false,
+      "resizable": false,
+      "wide_fields": false,
+      "plain": false,
+      "copyable": false,
+      "font_menu": false,
+      "vars_card": false,
+      "ctx_menu": false,
+      "has_factor": true,
+      "table": null,
+      "hidden_fields": []
+    },
+    "crit": {
+      "type": "crit",
+      "title": "暴击区 (暴击率/暴伤)",
+      "label": "暴击区",
+      "group": "直伤乘区",
+      "inputs": 1,
+      "fields": [
+        {
+          "key": "crit_rate",
+          "label": "暴击率%",
+          "default": "50",
+          "kind": "pct"
+        },
+        {
+          "key": "crit_damage",
+          "label": "暴击伤害%",
+          "default": "100",
+          "kind": "pct"
+        }
+      ],
+      "defaults": {
+        "crit_rate": "50",
+        "crit_damage": "100"
+      },
+      "variadic": false,
+      "isolated": false,
+      "no_output": false,
+      "resizable": false,
+      "wide_fields": false,
+      "plain": false,
+      "copyable": false,
+      "font_menu": false,
+      "vars_card": false,
+      "ctx_menu": false,
+      "has_factor": true,
+      "table": null,
+      "hidden_fields": []
+    },
+    "amp": {
+      "type": "amp",
+      "title": "增幅反应 ×",
+      "label": "增幅反应",
+      "group": "直伤乘区",
+      "inputs": 1,
+      "fields": [
+        {
+          "key": "formula",
+          "label": "配方",
+          "default": "无",
+          "kind": "combo",
+          "options": [
+            "无",
+            "蒸发·水打火 ×2.0",
+            "融化·火打冰 ×2.0",
+            "蒸发·火打水 ×1.5",
+            "融化·冰打火 ×1.5"
+          ]
+        },
+        {
+          "key": "em",
+          "label": "元素精通",
+          "default": "0",
+          "kind": "num"
+        },
+        {
+          "key": "amp_bonus",
+          "label": "反应增伤%",
+          "default": "0",
+          "kind": "pct"
+        },
+        {
+          "key": "shield",
+          "label": "命中护盾(不计)",
+          "default": false,
+          "kind": "check"
+        }
+      ],
+      "defaults": {
+        "formula": "无",
+        "em": "0",
+        "amp_bonus": "0",
+        "shield": false
+      },
+      "variadic": false,
+      "isolated": false,
+      "no_output": false,
+      "resizable": false,
+      "wide_fields": false,
+      "plain": false,
+      "copyable": false,
+      "font_menu": false,
+      "vars_card": false,
+      "ctx_menu": false,
+      "has_factor": true,
+      "table": null,
+      "hidden_fields": []
+    },
+    "boost": {
+      "type": "boost",
+      "title": "擢升 ×",
+      "label": "擢升",
+      "group": "直伤乘区",
+      "inputs": 1,
+      "fields": [
+        {
+          "key": "boost",
+          "label": "擢升%",
+          "default": "0",
+          "kind": "pct"
+        }
+      ],
+      "defaults": {
+        "boost": "0"
+      },
+      "variadic": false,
+      "isolated": false,
+      "no_output": false,
+      "resizable": false,
+      "wide_fields": false,
+      "plain": false,
+      "copyable": false,
+      "font_menu": false,
+      "vars_card": false,
+      "ctx_menu": false,
+      "has_factor": true,
+      "table": null,
+      "hidden_fields": []
+    },
+    "add": {
+      "type": "add",
+      "title": "＋加法合并",
+      "label": "＋加法",
+      "group": "直伤乘区",
+      "inputs": 2,
+      "fields": [],
+      "defaults": {},
+      "variadic": true,
+      "isolated": false,
+      "no_output": false,
+      "resizable": false,
+      "wide_fields": false,
+      "plain": false,
+      "copyable": false,
+      "font_menu": false,
+      "vars_card": false,
+      "ctx_menu": false,
+      "has_factor": false,
+      "table": null,
+      "hidden_fields": []
+    },
+    "aggravate": {
+      "type": "aggravate",
+      "title": "激化值(源)",
+      "label": "激化值",
+      "group": "反应源",
+      "inputs": 0,
+      "fields": [
+        {
+          "key": "kind",
+          "label": "类型",
+          "default": "超激化",
+          "kind": "combo",
+          "options": [
+            "超激化",
+            "蔓激化"
+          ]
+        },
+        {
+          "key": "em",
+          "label": "元素精通",
+          "default": "0",
+          "kind": "num"
+        },
+        {
+          "key": "bonus",
+          "label": "激化提高%",
+          "default": "0",
+          "kind": "pct"
+        },
+        {
+          "key": "level",
+          "label": "等级",
+          "default": "90",
+          "kind": "num"
+        }
+      ],
+      "defaults": {
+        "kind": "超激化",
+        "em": "0",
+        "bonus": "0",
+        "level": "90"
+      },
+      "variadic": false,
+      "isolated": false,
+      "no_output": false,
+      "resizable": false,
+      "wide_fields": false,
+      "plain": false,
+      "copyable": false,
+      "font_menu": false,
+      "vars_card": false,
+      "ctx_menu": false,
+      "has_factor": false,
+      "table": null,
+      "hidden_fields": []
+    },
+    "transform": {
+      "type": "transform",
+      "title": "剧变反应(源)",
+      "label": "剧变反应",
+      "group": "反应源",
+      "inputs": 0,
+      "fields": [
+        {
+          "key": "reaction",
+          "label": "反应",
+          "default": "超载",
+          "kind": "combo",
+          "options": [
+            "燃烧",
+            "扩散",
+            "超导",
+            "感电",
+            "超载",
+            "碎冰",
+            "绽放",
+            "超绽放",
+            "烈绽放"
+          ]
+        },
+        {
+          "key": "em",
+          "label": "元素精通",
+          "default": "0",
+          "kind": "num"
+        },
+        {
+          "key": "bonus",
+          "label": "反应增伤%",
+          "default": "0",
+          "kind": "pct"
+        },
+        {
+          "key": "level",
+          "label": "等级",
+          "default": "90",
+          "kind": "num"
+        }
+      ],
+      "defaults": {
+        "reaction": "超载",
+        "em": "0",
+        "bonus": "0",
+        "level": "90"
+      },
+      "variadic": false,
+      "isolated": false,
+      "no_output": false,
+      "resizable": false,
+      "wide_fields": false,
+      "plain": false,
+      "copyable": false,
+      "font_menu": false,
+      "vars_card": false,
+      "ctx_menu": false,
+      "has_factor": false,
+      "table": null,
+      "hidden_fields": []
+    },
+    "crystal": {
+      "type": "crystal",
+      "title": "结晶护盾(源)",
+      "label": "结晶护盾",
+      "group": "反应源",
+      "inputs": 0,
+      "fields": [
+        {
+          "key": "em",
+          "label": "元素精通",
+          "default": "0",
+          "kind": "num"
+        },
+        {
+          "key": "shield_strength",
+          "label": "护盾强效%",
+          "default": "0",
+          "kind": "pct"
+        }
+      ],
+      "defaults": {
+        "em": "0",
+        "shield_strength": "0"
+      },
+      "variadic": false,
+      "isolated": false,
+      "no_output": false,
+      "resizable": false,
+      "wide_fields": false,
+      "plain": false,
+      "copyable": false,
+      "font_menu": false,
+      "vars_card": false,
+      "ctx_menu": false,
+      "has_factor": false,
+      "table": null,
+      "hidden_fields": []
+    },
+    "attr": {
+      "type": "attr",
+      "title": "◈ 属性源(白×(1+大)+小)",
+      "label": "属性源",
+      "group": "星月部件",
+      "inputs": 0,
+      "fields": [
+        {
+          "key": "stat_base",
+          "label": "白值",
+          "default": "1000",
+          "kind": "num"
+        },
+        {
+          "key": "stat_big",
+          "label": "大增益%",
+          "default": "0",
+          "kind": "pct"
+        },
+        {
+          "key": "stat_flat",
+          "label": "小增益",
+          "default": "0",
+          "kind": "num"
+        }
+      ],
+      "defaults": {
+        "stat_base": "1000",
+        "stat_big": "0",
+        "stat_flat": "0"
+      },
+      "variadic": false,
+      "isolated": false,
+      "no_output": false,
+      "resizable": false,
+      "wide_fields": false,
+      "plain": false,
+      "copyable": false,
+      "font_menu": false,
+      "vars_card": false,
+      "ctx_menu": false,
+      "has_factor": false,
+      "table": null,
+      "hidden_fields": []
+    },
+    "react_base": {
+      "type": "react_base",
+      "title": "◈ 基准值源(1446.85)",
+      "label": "基准值源",
+      "group": "星月部件",
+      "inputs": 0,
+      "fields": [
+        {
+          "key": "level",
+          "label": "等级",
+          "default": "90",
+          "kind": "num"
+        }
+      ],
+      "defaults": {
+        "level": "90"
+      },
+      "variadic": false,
+      "isolated": false,
+      "no_output": false,
+      "resizable": false,
+      "wide_fields": false,
+      "plain": false,
+      "copyable": false,
+      "font_menu": false,
+      "vars_card": false,
+      "ctx_menu": false,
+      "has_factor": false,
+      "table": null,
+      "hidden_fields": []
+    },
+    "coeff": {
+      "type": "coeff",
+      "title": "× 系数",
+      "label": "×系数",
+      "group": "星月部件",
+      "inputs": 1,
+      "fields": [
+        {
+          "key": "coeff",
+          "label": "系数",
+          "default": "1",
+          "kind": "num"
+        }
+      ],
+      "defaults": {
+        "coeff": "1"
+      },
+      "variadic": false,
+      "isolated": false,
+      "no_output": false,
+      "resizable": false,
+      "wide_fields": false,
+      "plain": false,
+      "copyable": false,
+      "font_menu": false,
+      "vars_card": false,
+      "ctx_menu": false,
+      "has_factor": true,
+      "table": null,
+      "hidden_fields": []
+    },
+    "mult": {
+      "type": "mult",
+      "title": "× 倍率%",
+      "label": "×倍率",
+      "group": "星月部件",
+      "inputs": 1,
+      "fields": [
+        {
+          "key": "multiplier",
+          "label": "倍率%",
+          "default": "200",
+          "kind": "pct"
+        }
+      ],
+      "defaults": {
+        "multiplier": "200"
+      },
+      "variadic": false,
+      "isolated": false,
+      "no_output": false,
+      "resizable": false,
+      "wide_fields": false,
+      "plain": false,
+      "copyable": false,
+      "font_menu": false,
+      "vars_card": false,
+      "ctx_menu": false,
+      "has_factor": true,
+      "table": null,
+      "hidden_fields": []
+    },
+    "base_boost": {
+      "type": "base_boost",
+      "title": "× (1+基础提升%)",
+      "label": "×基础提升",
+      "group": "星月部件",
+      "inputs": 1,
+      "fields": [
+        {
+          "key": "base_boost",
+          "label": "基础提升%",
+          "default": "0",
+          "kind": "pct"
+        }
+      ],
+      "defaults": {
+        "base_boost": "0"
+      },
+      "variadic": false,
+      "isolated": false,
+      "no_output": false,
+      "resizable": false,
+      "wide_fields": false,
+      "plain": false,
+      "copyable": false,
+      "font_menu": false,
+      "vars_card": false,
+      "ctx_menu": false,
+      "has_factor": true,
+      "table": null,
+      "hidden_fields": []
+    },
+    "em_gain": {
+      "type": "em_gain",
+      "title": "× 精通增益(1+k·EM/(EM+den)+增伤%)",
+      "label": "×精通增益",
+      "group": "星月部件",
+      "inputs": 1,
+      "fields": [
+        {
+          "key": "em",
+          "label": "元素精通",
+          "default": "0",
+          "kind": "num"
+        },
+        {
+          "key": "k",
+          "label": "精通系数k",
+          "default": "6",
+          "kind": "num"
+        },
+        {
+          "key": "denom",
+          "label": "分母",
+          "default": "2000",
+          "kind": "num"
+        },
+        {
+          "key": "bonus",
+          "label": "增伤%",
+          "default": "0",
+          "kind": "pct"
+        }
+      ],
+      "defaults": {
+        "em": "0",
+        "k": "6",
+        "denom": "2000",
+        "bonus": "0"
+      },
+      "variadic": false,
+      "isolated": false,
+      "no_output": false,
+      "resizable": false,
+      "wide_fields": false,
+      "plain": false,
+      "copyable": false,
+      "font_menu": false,
+      "vars_card": false,
+      "ctx_menu": false,
+      "has_factor": true,
+      "table": null,
+      "hidden_fields": []
+    },
+    "star_coeff": {
+      "type": "star_coeff",
+      "title": "星超导系数 ×",
+      "label": "星超导系数",
+      "group": "星月部件",
+      "inputs": 1,
+      "fields": [
+        {
+          "key": "hits",
+          "label": "层数",
+          "default": "0",
+          "kind": "num"
+        }
+      ],
+      "defaults": {
+        "hits": "0"
+      },
+      "variadic": false,
+      "isolated": false,
+      "no_output": false,
+      "resizable": false,
+      "wide_fields": false,
+      "plain": false,
+      "copyable": false,
+      "font_menu": false,
+      "vars_card": false,
+      "ctx_menu": false,
+      "has_factor": true,
+      "table": null,
+      "hidden_fields": []
+    },
+    "calc": {
+      "type": "calc",
+      "title": "计算卡",
+      "label": "计算卡",
+      "group": "工具",
+      "inputs": 0,
+      "fields": [
+        {
+          "key": "title",
+          "label": "标题",
+          "default": "计算卡",
+          "kind": "text"
+        },
+        {
+          "key": "expr",
+          "label": "表达式",
+          "default": "1+1",
+          "kind": "textbox"
+        }
+      ],
+      "defaults": {
+        "title": "计算卡",
+        "expr": "1+1"
+      },
+      "variadic": false,
+      "isolated": true,
+      "no_output": false,
+      "resizable": true,
+      "wide_fields": true,
+      "plain": false,
+      "copyable": true,
+      "font_menu": false,
+      "vars_card": false,
+      "ctx_menu": false,
+      "has_factor": false,
+      "table": null,
+      "hidden_fields": []
+    },
+    "text": {
+      "type": "text",
+      "title": "文本",
+      "label": "文本",
+      "group": "工具",
+      "inputs": 0,
+      "fields": [
+        {
+          "key": "content",
+          "label": "内容",
+          "default": "在此输入文本",
+          "kind": "textbox"
+        }
+      ],
+      "defaults": {
+        "content": "在此输入文本"
+      },
+      "variadic": false,
+      "isolated": true,
+      "no_output": true,
+      "resizable": true,
+      "wide_fields": true,
+      "plain": false,
+      "copyable": false,
+      "font_menu": true,
+      "vars_card": false,
+      "ctx_menu": false,
+      "has_factor": false,
+      "table": null,
+      "hidden_fields": []
+    },
+    "var": {
+      "type": "var",
+      "title": "变量",
+      "label": "变量",
+      "group": "工具",
+      "inputs": 0,
+      "fields": [
+        {
+          "key": "defs",
+          "label": "定义",
+          "default": "攻击力 = 1000\n倍率 = 200\n基础伤害 = 攻击力 * 倍率",
+          "kind": "textbox"
+        }
+      ],
+      "defaults": {
+        "defs": "攻击力 = 1000\n倍率 = 200\n基础伤害 = 攻击力 * 倍率"
+      },
+      "variadic": false,
+      "isolated": true,
+      "no_output": false,
+      "resizable": true,
+      "wide_fields": true,
+      "plain": false,
+      "copyable": false,
+      "font_menu": false,
+      "vars_card": true,
+      "ctx_menu": false,
+      "has_factor": false,
+      "table": null,
+      "hidden_fields": []
+    },
+    "const": {
+      "type": "const",
+      "title": "理想圣遗物词条",
+      "label": "理想圣遗物",
+      "group": "工具",
+      "inputs": 0,
+      "fields": [
+        {
+          "key": "content",
+          "label": "内容",
+          "default": "",
+          "kind": "textbox"
+        }
+      ],
+      "defaults": {
+        "content": ""
+      },
+      "variadic": false,
+      "isolated": true,
+      "no_output": true,
+      "resizable": true,
+      "wide_fields": true,
+      "plain": true,
+      "copyable": false,
+      "font_menu": false,
+      "vars_card": false,
+      "ctx_menu": false,
+      "has_factor": false,
+      "table": "relic",
+      "hidden_fields": []
+    },
+    "vartable": {
+      "type": "vartable",
+      "title": "变量表",
+      "label": "变量表",
+      "group": "工具",
+      "inputs": 0,
+      "fields": [],
+      "defaults": {},
+      "variadic": false,
+      "isolated": true,
+      "no_output": true,
+      "resizable": true,
+      "wide_fields": false,
+      "plain": false,
+      "copyable": false,
+      "font_menu": false,
+      "vars_card": false,
+      "ctx_menu": false,
+      "has_factor": false,
+      "table": "vars",
+      "hidden_fields": []
+    },
+    "result": {
+      "type": "result",
+      "title": "★ 结果",
+      "label": "★结果",
+      "group": "工具",
+      "inputs": 1,
+      "fields": [
+        {
+          "key": "var_nc",
+          "label": "未暴击变量",
+          "default": "",
+          "kind": "num"
+        },
+        {
+          "key": "var_cr",
+          "label": "暴击变量",
+          "default": "",
+          "kind": "num"
+        },
+        {
+          "key": "var_ex",
+          "label": "期望变量",
+          "default": "",
+          "kind": "num"
+        }
+      ],
+      "defaults": {
+        "var_nc": "",
+        "var_cr": "",
+        "var_ex": ""
+      },
+      "variadic": false,
+      "isolated": false,
+      "no_output": false,
+      "resizable": false,
+      "wide_fields": false,
+      "plain": false,
+      "copyable": false,
+      "font_menu": false,
+      "vars_card": false,
+      "ctx_menu": true,
+      "has_factor": false,
+      "table": null,
+      "hidden_fields": [
+        "var_nc",
+        "var_cr",
+        "var_ex"
+      ]
+    }
+  },
+  "presets": {
+    "普通直伤": [
+      {
+        "type": "base",
+        "fields": {}
+      },
+      {
+        "type": "dmg",
+        "fields": {}
+      },
+      {
+        "type": "res",
+        "fields": {}
+      },
+      {
+        "type": "def",
+        "fields": {}
+      },
+      {
+        "type": "crit",
+        "fields": {}
+      },
+      {
+        "type": "amp",
+        "fields": {}
+      }
+    ],
+    "月·直伤": [
+      {
+        "type": "attr",
+        "fields": {}
+      },
+      {
+        "type": "coeff",
+        "fields": {
+          "coeff": "3"
+        }
+      },
+      {
+        "type": "mult",
+        "fields": {
+          "multiplier": "200"
+        }
+      },
+      {
+        "type": "base_boost",
+        "fields": {}
+      },
+      {
+        "type": "em_gain",
+        "fields": {
+          "k": "6",
+          "denom": "2000"
+        }
+      },
+      {
+        "type": "res",
+        "fields": {}
+      },
+      {
+        "type": "crit",
+        "fields": {}
+      },
+      {
+        "type": "boost",
+        "fields": {}
+      }
+    ],
+    "月·反应": [
+      {
+        "type": "react_base",
+        "fields": {}
+      },
+      {
+        "type": "coeff",
+        "fields": {
+          "coeff": "1.8"
+        }
+      },
+      {
+        "type": "base_boost",
+        "fields": {}
+      },
+      {
+        "type": "em_gain",
+        "fields": {
+          "k": "6",
+          "denom": "2000"
+        }
+      },
+      {
+        "type": "res",
+        "fields": {}
+      },
+      {
+        "type": "crit",
+        "fields": {}
+      },
+      {
+        "type": "boost",
+        "fields": {}
+      }
+    ],
+    "星·超导": [
+      {
+        "type": "attr",
+        "fields": {}
+      },
+      {
+        "type": "star_coeff",
+        "fields": {
+          "hits": "0"
+        }
+      },
+      {
+        "type": "mult",
+        "fields": {
+          "multiplier": "200"
+        }
+      },
+      {
+        "type": "base_boost",
+        "fields": {}
+      },
+      {
+        "type": "em_gain",
+        "fields": {
+          "k": "6",
+          "denom": "2000"
+        }
+      },
+      {
+        "type": "res",
+        "fields": {}
+      },
+      {
+        "type": "crit",
+        "fields": {}
+      },
+      {
+        "type": "boost",
+        "fields": {}
+      }
+    ],
+    "星·扩散": [
+      {
+        "type": "react_base",
+        "fields": {}
+      },
+      {
+        "type": "coeff",
+        "fields": {
+          "coeff": "0.75"
+        }
+      },
+      {
+        "type": "base_boost",
+        "fields": {}
+      },
+      {
+        "type": "em_gain",
+        "fields": {
+          "k": "6",
+          "denom": "2000"
+        }
+      },
+      {
+        "type": "res",
+        "fields": {}
+      },
+      {
+        "type": "crit",
+        "fields": {}
+      },
+      {
+        "type": "boost",
+        "fields": {}
+      }
+    ],
+    "星·扩散直伤": [
+      {
+        "type": "attr",
+        "fields": {}
+      },
+      {
+        "type": "coeff",
+        "fields": {
+          "coeff": "1"
+        }
+      },
+      {
+        "type": "mult",
+        "fields": {
+          "multiplier": "200"
+        }
+      },
+      {
+        "type": "base_boost",
+        "fields": {}
+      },
+      {
+        "type": "em_gain",
+        "fields": {
+          "k": "6",
+          "denom": "2000"
+        }
+      },
+      {
+        "type": "res",
+        "fields": {}
+      },
+      {
+        "type": "crit",
+        "fields": {}
+      },
+      {
+        "type": "boost",
+        "fields": {}
+      }
+    ],
+    "剧变反应": [
+      {
+        "type": "react_base",
+        "fields": {}
+      },
+      {
+        "type": "coeff",
+        "fields": {
+          "coeff": "2.75"
+        }
+      },
+      {
+        "type": "em_gain",
+        "fields": {
+          "k": "16",
+          "denom": "2000"
+        }
+      },
+      {
+        "type": "res",
+        "fields": {}
+      }
+    ],
+    "激化值": [
+      {
+        "type": "react_base",
+        "fields": {}
+      },
+      {
+        "type": "coeff",
+        "fields": {
+          "coeff": "1.15"
+        }
+      },
+      {
+        "type": "em_gain",
+        "fields": {
+          "k": "5",
+          "denom": "1200",
+          "bonus": "0"
+        }
+      }
+    ]
+  },
+  "tables": {
+    "relic": {
+      "header": [
+        "属性",
+        "强化区间",
+        "最高区间",
+        "平均值"
+      ],
+      "rows": [
+        [
+          "暴击率（%）",
+          "2.72/3.11/3.50/3.89",
+          "16.32~23.34",
+          "3.305"
+        ],
+        [
+          "暴击伤害（%）",
+          "5.44/6.22/6.99/7.77",
+          "32.64~46.62",
+          "6.605"
+        ],
+        [
+          "固定攻击力",
+          "13.62/15.56/17.51/19.45",
+          "81.72~116.70",
+          "16.535"
+        ],
+        [
+          "百分比攻击力（%）",
+          "4.08/4.66/5.25/5.83",
+          "24.48~34.98",
+          "4.955"
+        ],
+        [
+          "固定生命值",
+          "209.13/239.00/268.88/298.75",
+          "1254.78~1792.50",
+          "253.94"
+        ],
+        [
+          "百分比生命值（%）",
+          "4.08/4.66/5.25/5.83",
+          "24.48~34.98",
+          "4.955"
+        ],
+        [
+          "固定防御力",
+          "16.20/18.52/20.83/23.15",
+          "97.20~138.90",
+          "19.675"
+        ],
+        [
+          "百分比防御力（%）",
+          "5.10/5.83/6.56/7.29",
+          "30.60~43.74",
+          "6.195"
+        ],
+        [
+          "元素精通",
+          "16.32/18.65/20.98/23.31",
+          "97.92~139.86",
+          "19.815"
+        ],
+        [
+          "元素充能效率（%）",
+          "4.53/5.18/5.83/6.48",
+          "27.18~38.88",
+          "5.505"
+        ]
+      ]
+    },
+    "vars": {
+      "header": [
+        "变量",
+        "值"
+      ]
+    }
+  },
+  "resultVarFields": [
+    {
+      "key": "var_nc",
+      "label": "未暴击变量"
+    },
+    {
+      "key": "var_cr",
+      "label": "暴击变量"
+    },
+    {
+      "key": "var_ex",
+      "label": "期望变量"
+    }
+  ],
+  "zoom": {
+    "min": 0.25,
+    "max": 2.5,
+    "step": 1.15
+  },
+  "history": {
+    "max": 80
+  }
+}
