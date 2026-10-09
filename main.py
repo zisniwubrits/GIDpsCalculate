@@ -2,8 +2,8 @@
 """原神伤害计算器 —— 启动入口（Web 后端 + 静态托管）。
 
 用法：
-    python main.py                  # 启动后端并打开浏览器（127.0.0.1:8000）
-    python main.py --port 9000      # 换端口
+    python main.py                  # 启动后端并打开浏览器（127.0.0.1:8777）
+    python main.py --port 9000      # 换端口（前端开发时用 DSH_API 指向它）
     python main.py --reload         # 开发时热重载
     python main.py --no-browser     # 不自动打开浏览器
 
@@ -13,7 +13,7 @@
     pnpm dev        # 打开 http://127.0.0.1:5173 ，/api 已代理到本后端
 
 生产构建（由后端直接托管）：
-    cd web && pnpm build        # 产物在 web/dist，然后刷新 http://127.0.0.1:8000
+    cd web && pnpm build        # 产物在 web/dist，然后刷新 http://127.0.0.1:8777
 """
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ import threading
 import webbrowser
 
 DEFAULT_HOST = "127.0.0.1"
-DEFAULT_PORT = 8000
+DEFAULT_PORT = 8777
 
 
 def _open_browser_later(url: str, delay: float = 1.2) -> None:
