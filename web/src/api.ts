@@ -52,17 +52,53 @@ export function evaluateGraph(
   return postJSON<EvaluateResult>("/api/evaluate", graph, signal);
 }
 
-/** 生成可读文本报告（导出结果用）。 */
-export function buildReport(
+/** 当前工程目录（一键保存会写到这里；后端记住，从哪读就往哪存）。 */
+export interface StorageInfo {
+  dir: string;
+  defaultDir: string;
+  configFile: string;
+  exists: boolean;
+}
+
+export function fetchStorage(signal?: AbortSignal): Promise<StorageInfo> {
+  return getJSON<StorageInfo>("/api/storage", signal);
+}
+
+export interface SaveResult {
+  ok: boolean;
+  path: string;
+  dir: string;
+  filename: string;
+}
+
+/** 一键保存工程 JSON：后端直接写文件（覆盖同名），不再走浏览器下载。 */
+export function saveProject(graph: GraphJSON, signal?: AbortSignal): Promise<SaveResult> {
+  return postJSON<SaveResult>("/api/save/project", graph, signal);
+}
+
+/** 导出结果：后端生成报告并写成 <工程名>_<时间戳>.txt，返回文本与路径。 */
+export function saveReport(
   graph: GraphJSON,
-  opts: { title?: string; filename?: string } = {},
+  opts: { title?: string } = {},
   signal?: AbortSignal,
-): Promise<{ ok: boolean; text: string; filename: string }> {
-  return postJSON<{ ok: boolean; text: string; filename: string }>(
-    "/api/report",
-    { ...graph, ...opts },
-    signal,
-  );
+): Promise<SaveResult & { text: string }> {
+  return postJSON<SaveResult & { text: string }>("/api/report", { ...graph, ...opts }, signal);
+}
+
+export interface OpenResult {
+  ok: boolean;
+  /** 用户取消（或没有图形环境）时为 true */
+  cancelled?: boolean;
+  path?: string;
+  dir?: string;
+  graph?: GraphJSON;
+  storage?: StorageInfo;
+  error?: string;
+}
+
+/** 打开工程：后端弹本机原生对话框，读回内容并记住它所在目录。 */
+export function openProject(signal?: AbortSignal): Promise<OpenResult> {
+  return postJSON<OpenResult>("/api/open", {}, signal);
 }
 
 export function health(signal?: AbortSignal): Promise<{

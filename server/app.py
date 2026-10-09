@@ -14,7 +14,10 @@
 ``GET  /api/schema``         卡片类型 / 菜单分组 / 预设 / 参考表（前端单一数据源）
 ``GET  /api/help``           F1 使用教程文本
 ``POST /api/evaluate``       传入整张图（工程 JSON），返回全部节点结果
-``POST /api/report``         传入整张图，返回可读文本报告
+``POST /api/report``         传入整张图，生成文本报告并写到当前工程目录
+``GET  /api/storage``        当前工程目录（记忆目录）
+``POST /api/save/project``   一键保存工程 JSON（覆盖，写回当前工程目录）
+``POST /api/open``           弹本机原生对话框打开工程，并记住其所在目录
 ``GET  /``                   生产构建产物（``web/dist``）；未构建时给出提示页
 ===========================  ==========================================
 """
@@ -23,6 +26,7 @@ from __future__ import annotations
 
 import datetime
 import os
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -30,6 +34,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
 from genshin_dmg import __version__, nodes, report, tutorial
 from genshin_dmg.graph import Graph, GraphError
+from server import dialogs, storage
 
 __all__ = ["app", "create_app", "WEB_DIST"]
 
@@ -126,7 +131,10 @@ def create_app() -> FastAPI:
 
     @app.post("/api/report")
     async def make_report(request: Request):
-        """生成可读文本报告（含结果与节点求值过程）。"""
+        """生成可读文本报告（含结果与节点求值过程）并直接写到「当前工程目录」。
+
+        文件名规则：``<工程名>_<时间戳>.txt``（每次新文件，不覆盖旧报告）。
+        """
         try:
             data = await request.json()
         except Exception as e:
@@ -134,13 +142,73 @@ def create_app() -> FastAPI:
                                 content=dict(ok=False, error="请求体不是合法 JSON：%s" % e))
         try:
             graph = Graph.from_dict(data.get("graph") if isinstance(data, dict) and "graph" in data else data)
+            now = datetime.datetime.now()
             text = report.build_report(
                 graph, title=data.get("title") or report.APP_TITLE,
-                timestamp=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-            name = data.get("filename") or report.default_filename()
+                timestamp=now.strftime("%Y-%m-%d %H:%M:%S"))
+            name = (data.get("name") if isinstance(data, dict) else "") or ""
+            path = storage.report_file(name, now)
+            storage.write_text(path, text)
         except GraphError as e:
             return JSONResponse(status_code=400, content=dict(ok=False, error=str(e)))
-        return dict(ok=True, text=text, filename=name)
+        except OSError as e:
+            return JSONResponse(status_code=400,
+                                content=dict(ok=False, error="写入失败：%s" % e))
+        return dict(ok=True, path=storage.abs_path(path), dir=str(path.parent),
+                    filename=path.name, text=text)
+
+    # ------------------------------------------------------------------
+    # 工程落盘（一键保存 / 打开）
+    # ------------------------------------------------------------------
+    @app.get("/api/storage")
+    def get_storage():
+        """当前工程目录（前端在工具栏显示，便于确认「存哪儿」）。"""
+        return storage.info()
+
+    @app.post("/api/save/project")
+    async def save_project(request: Request):
+        """一键保存工程 JSON：写到「当前工程目录/<工程名>.json」，直接覆盖。
+
+        目录记忆规则见 server/storage.py：打开工程时记住该文件所在目录，从哪读就往哪存；
+        还没记忆目录时落到 private/projects/。
+        """
+        try:
+            data = await request.json()
+        except Exception as e:
+            return JSONResponse(status_code=400,
+                                content=dict(ok=False, error="请求体不是合法 JSON：%s" % e))
+        if not isinstance(data, dict):
+            return JSONResponse(status_code=400,
+                                content=dict(ok=False, error="请求体必须是工程对象"))
+        try:
+            path = storage.project_file(data.get("name"))
+            storage.write_json(path, data)
+        except OSError as e:
+            return JSONResponse(status_code=400,
+                                content=dict(ok=False, error="写入失败：%s" % e))
+        return dict(ok=True, path=storage.abs_path(path), dir=str(path.parent),
+                    filename=path.name)
+
+    @app.post("/api/open")
+    def open_project():
+        """弹本机原生「打开文件」对话框选工程，读回内容并记住它所在目录。
+
+        用户取消（或没有图形环境）时返回 ``ok=False, cancelled=True``，前端静默处理。
+        """
+        try:
+            chosen = dialogs.pick_open_file(storage.current_dir())
+        except Exception as e:                                  # 弹窗异常不该 500
+            return JSONResponse(status_code=200,
+                                content=dict(ok=False, error="打开对话框失败：%s" % e))
+        if not chosen:
+            return dict(ok=False, cancelled=True)
+        try:
+            graph = storage.read_graph(chosen)
+        except ValueError as e:
+            return JSONResponse(status_code=400, content=dict(ok=False, error=str(e)))
+        storage.remember_path(chosen)         # 从哪读就往哪存
+        return dict(ok=True, path=storage.abs_path(chosen), dir=str(Path(chosen).parent),
+                    graph=graph, storage=storage.info())
 
     # ------------------------------------------------------------------
     # 生产构建产物（web/dist）

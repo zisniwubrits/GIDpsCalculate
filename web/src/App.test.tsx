@@ -2,25 +2,26 @@
  * 端到端（jsdom）集成测试：真实 App + 真实 schema，只把后端 fetch 换成本地假实现。
  *
  * 覆盖：schema 驱动渲染、加卡片、改字段触发重算、预设、删除、撤销/重做、
- * 结果变量弹窗、导出工程 / 结果、未保存标记、F1 教程、localStorage 自动保存。
+ * 结果变量弹窗、一键保存 / 打开工程（走后端写文件）、未保存标记、F1 教程、
+ * localStorage 自动保存。
  */
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
-import { downloadText, pickTextFile } from "./download";
 import { CARD_DRAG_HANDLE } from "./model";
 import type { EvaluateResult, GraphJSON, Schema } from "./types";
 import fixture from "./test/schema.fixture.json";
 
-vi.mock("./download", () => ({
-  downloadText: vi.fn(),
-  pickTextFile: vi.fn(async () => null),
-}));
-
 const schema = fixture as unknown as Schema;
-const mockedDownload = vi.mocked(downloadText);
-const mockedPick = vi.mocked(pickTextFile);
+
+/** 假后端的落地目录与「打开工程」返回内容（用例里可改） */
+const fakeBackend = {
+  dir: "E:\\WorkStation\\GI\\DpsCalculate\\private\\projects",
+  open: null as null | { ok: boolean; cancelled?: boolean; graph?: GraphJSON; dir?: string; path?: string },
+  reportPath: "",
+  savePath: "",
+};
 
 const jsonResponse = (data: unknown) =>
   new Response(JSON.stringify(data), {
@@ -29,6 +30,8 @@ const jsonResponse = (data: unknown) =>
   });
 
 let lastBody: GraphJSON | null = null;
+/** 保存/导出请求的载荷（一键保存与导出结果共用） */
+let savedBody: GraphJSON | null = null;
 
 /** 假后端：按请求里的图回一份结构完整的求值结果。 */
 function evaluateStub(body: GraphJSON): EvaluateResult {
@@ -72,6 +75,9 @@ function evaluateStub(body: GraphJSON): EvaluateResult {
 
 function installFetch() {
   lastBody = null;
+  savedBody = null;
+  fakeBackend.reportPath = `${fakeBackend.dir}\\雷神_20261010_120000.txt`;
+  fakeBackend.savePath = `${fakeBackend.dir}\\雷神.json`;
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     if (url.includes("/api/schema")) return jsonResponse(schema);
@@ -80,13 +86,42 @@ function installFetch() {
         text: "【基本概念】\n· 每张卡片 = 一个乘区节点",
         sections: ["基本概念"],
       });
+    if (url.includes("/api/storage"))
+      return jsonResponse({
+        dir: fakeBackend.dir,
+        defaultDir: fakeBackend.dir,
+        configFile: "private/save_config.json",
+        exists: true,
+      });
+    if (url.includes("/api/save/project")) {
+      savedBody = JSON.parse(String(init?.body ?? "{}")) as GraphJSON;
+      return jsonResponse({
+        ok: true,
+        path: fakeBackend.savePath,
+        dir: fakeBackend.dir,
+        filename: "雷神.json",
+      });
+    }
+    if (url.includes("/api/open")) {
+      return jsonResponse(
+        fakeBackend.open ?? { ok: false, cancelled: true },
+      );
+    }
+    if (url.includes("/api/report")) {
+      savedBody = JSON.parse(String(init?.body ?? "{}")) as GraphJSON;
+      return jsonResponse({
+        ok: true,
+        path: fakeBackend.reportPath,
+        dir: fakeBackend.dir,
+        filename: "雷神_20261010_120000.txt",
+        text: "报告正文",
+      });
+    }
     if (url.includes("/api/evaluate")) {
       const body = JSON.parse(String(init?.body ?? "{}")) as GraphJSON;
       lastBody = body;
       return jsonResponse(evaluateStub(body));
     }
-    if (url.includes("/api/report"))
-      return jsonResponse({ ok: true, text: "报告正文", filename: "直伤伤害_1.txt" });
     return new Response("not found", { status: 404 });
   }) as unknown as typeof fetch;
 }
@@ -103,9 +138,8 @@ const addCard = async (user: ReturnType<typeof userEvent.setup>, type: string) =
 describe("App 集成（假后端 + 真 schema）", () => {
   beforeEach(() => {
     window.localStorage.clear();
+    fakeBackend.open = null;
     installFetch();
-    mockedDownload.mockClear();
-    mockedPick.mockClear();
   });
 
   afterEach(() => {
@@ -290,7 +324,7 @@ describe("App 集成（假后端 + 真 schema）", () => {
     await waitFor(() => expect(screen.getByTestId("card-n1")).toBeInTheDocument());
   });
 
-  it("未保存标记：初始已保存，改动后未保存，导出工程后恢复已保存", async () => {
+  it("未保存标记：初始已保存，改动后未保存，一键保存后恢复已保存", async () => {
     const user = userEvent.setup();
     await renderApp();
     expect(screen.getByTestId("status")).toBeInTheDocument();
@@ -301,31 +335,89 @@ describe("App 集成（假后端 + 真 schema）", () => {
 
     await user.click(screen.getByRole("button", { name: "保存工程…" }));
     await waitFor(() => expect(screen.getByText("○ 已保存")).toBeInTheDocument());
-    expect(mockedDownload).toHaveBeenCalled();
   });
 
-  it("保存工程导出的 JSON 与后端工程格式一致", async () => {
+  it("一键保存把工程 JSON 交给后端写文件（不再走浏览器下载）", async () => {
     const user = userEvent.setup();
     await renderApp();
     await user.click(screen.getByTestId("preset-剧变反应"));
     await user.click(screen.getByRole("button", { name: "保存工程…" }));
 
-    const [filename, text] = mockedDownload.mock.calls.at(-1) as [string, string];
-    expect(filename).toBe("伤害工程.json");
-    const parsed = JSON.parse(text) as GraphJSON;
-    expect(parsed.app).toBe("GenshinDamageCalc");
-    expect(parsed.version).toBe(1);
-    expect(parsed.nodes).toHaveLength(schema.presets["剧变反应"].length);
-    expect(parsed.nodes[0]).toHaveProperty("pos");
-    expect(parsed.links.length).toBeGreaterThan(0);
+    await waitFor(() => expect(savedBody).not.toBeNull());
+    const sent = savedBody as unknown as GraphJSON;
+    expect(sent.app).toBe("GenshinDamageCalc");
+    expect(sent.version).toBe(1);
+    expect(sent.nodes).toHaveLength(schema.presets["剧变反应"].length);
+    expect(sent.nodes[0]).toHaveProperty("pos");
+    expect(sent.links.length).toBeGreaterThan(0);
+
+    // 落地路径以提示形式给出，方便确认「存哪了」
+    await waitFor(() =>
+      expect(screen.getByText(new RegExp("已保存到"))).toHaveTextContent("雷神.json"),
+    );
   });
 
-  it("导出结果调用 /api/report 并下载返回的文本", async () => {
+  it("工具栏显示后端记住的保存目录", async () => {
+    await renderApp();
+    await waitFor(() =>
+      expect(screen.getByTestId("save-dir")).toHaveTextContent("private\\projects"),
+    );
+  });
+
+  it("导出结果由后端写成 txt，并显示落地路径", async () => {
     const user = userEvent.setup();
     await renderApp();
     await user.click(screen.getByRole("button", { name: "导出结果…" }));
 
-    await waitFor(() => expect(mockedDownload).toHaveBeenCalledWith("直伤伤害_1.txt", "报告正文"));
+    await waitFor(() =>
+      expect(screen.getByText(/已导出报告/)).toHaveTextContent("雷神_20261010_120000.txt"),
+    );
+    expect(savedBody).not.toBeNull();
+  });
+
+  it("打开工程走后端原生对话框：载入卡片并记住所在目录", async () => {
+    const user = userEvent.setup();
+    const opened = {
+      ok: true,
+      path: "E:\\别处\\旧工程.json",
+      dir: "E:\\别处",
+      graph: {
+        version: 1,
+        app: "GenshinDamageCalc",
+        zoom: 1,
+        name: "旧工程",
+        nodes: [
+          {
+            id: "n1",
+            type: "base",
+            pos: [40, 60],
+            size: null,
+            font_size: null,
+            inputs: 0,
+            fields: { stat_base: "1200", multiplier: "150" },
+          },
+        ],
+        links: [],
+      } as GraphJSON,
+    };
+    fakeBackend.open = opened;
+
+    await renderApp();
+    await user.click(screen.getByRole("button", { name: "打开工程…" }));
+
+    await waitFor(() => expect(screen.getByTestId("project-name")).toHaveValue("旧工程"));
+    expect(await screen.findByTestId("card-n1")).toBeInTheDocument();
+    expect(screen.getByTestId("save-dir")).toHaveTextContent("E:\\别处");
+  });
+
+  it("打开工程被取消时静默处理（不报错、不改画布）", async () => {
+    const user = userEvent.setup();
+    fakeBackend.open = { ok: false, cancelled: true };
+    await renderApp();
+
+    await user.click(screen.getByRole("button", { name: "打开工程…" }));
+    await waitFor(() => expect(screen.queryByText(/打开失败/)).not.toBeInTheDocument());
+    expect(screen.getByText("画布是空的")).toBeInTheDocument();
   });
 
   it("F1 打开教程并显示后端返回的文本", async () => {

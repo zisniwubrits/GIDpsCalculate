@@ -9,12 +9,16 @@
 import json
 import os
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest import mock
 
 from fastapi.testclient import TestClient
 
 from genshin_dmg import nodes as nd
 from genshin_dmg import report, tutorial
 from genshin_dmg.graph import Graph, GraphNode
+from server import dialogs, storage
 from server.app import create_app
 
 client = TestClient(create_app())
@@ -33,6 +37,34 @@ def sample_graph(with_crit=True, name="测试工程"):
     g.add(GraphNode("n3", "result", pos=(720, 60)))
     g.connect(src, "n3")
     return g.to_dict()
+
+
+class StorageIsolated(unittest.TestCase):
+    """把工程目录与配置文件重定向到临时目录。
+
+    凡是会**写文件**的接口测试都必须继承它 —— 否则测试会往工作区的
+    private/projects/ 里扔真实文件（早期真发生过一次）。
+    """
+
+    def setUp(self):
+        self._tmp = TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        self._old_dir = storage.DEFAULT_DIR
+        self._old_cfg = storage.CONFIG_PATH
+        storage.DEFAULT_DIR = self.root / "projects"
+        storage.CONFIG_PATH = self.root / "save_config.json"
+        self.addCleanup(self._restore)
+
+    def _restore(self):
+        storage.DEFAULT_DIR = self._old_dir
+        storage.CONFIG_PATH = self._old_cfg
+        self._tmp.cleanup()
+
+    def stub_dialog(self, path):
+        """把原生打开对话框换成返回固定路径（测试里绝不真的弹窗）。"""
+        patcher = mock.patch.object(dialogs, "pick_open_file", lambda *a, **k: path)
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
 
 class TestApiBasics(unittest.TestCase):
@@ -220,12 +252,15 @@ class TestEvaluateEndpoint(unittest.TestCase):
         self.assertEqual(names_b, {"B"})
 
 
-class TestReportEndpoint(unittest.TestCase):
+class TestReportEndpoint(StorageIsolated):
+    """导出结果：生成报告 + 直接落盘（所以要隔离到临时目录，别写进工作区）。"""
+
     def test_report_contains_inputs_and_result(self):
         r = client.post("/api/report", json=sample_graph())
         body = r.json()
         self.assertTrue(body["ok"])
         self.assertTrue(body["filename"].endswith(".txt"))
+        self.assertTrue(Path(body["path"]).is_file())
         text = body["text"]
         for token in ("原神 · 直伤伤害计算", "【节点卡片】", "【连线】",
                       "【结果】", "未暴击伤害", "期望伤害",
@@ -238,11 +273,10 @@ class TestReportEndpoint(unittest.TestCase):
         text = client.post("/api/report", json=data).json()["text"]
         self.assertNotIn("e+", text.lower())
 
-    def test_report_custom_title_and_filename(self):
+    def test_report_custom_title_kept_in_text(self):
         body = client.post("/api/report", json=dict(
-            graph=sample_graph(), title="我的配队", filename="a.txt")).json()
+            graph=sample_graph(), title="我的配队")).json()
         self.assertIn("我的配队", body["text"])
-        self.assertEqual(body["filename"], "a.txt")
 
     def test_report_without_result_card(self):
         data = sample_graph()
@@ -300,6 +334,109 @@ class TestTutorial(unittest.TestCase):
     def test_tutorial_json_serializable(self):
         json.dumps(dict(text=tutorial.HELP_TEXT, sections=tutorial.SECTIONS),
                    ensure_ascii=False)
+
+
+class TestStorageApi(StorageIsolated):
+    """一键保存 / 打开 / 记忆目录的接口测试。"""
+
+    def test_storage_info_reports_default_dir(self):
+        body = client.get("/api/storage").json()
+        self.assertEqual(body["dir"], str((self.root / "projects").resolve()))
+        self.assertEqual(body["defaultDir"], str((self.root / "projects").resolve()))
+        self.assertFalse(body["exists"])
+
+    def test_save_project_writes_file_and_creates_dir(self):
+        data = sample_graph(name="雷神")
+        r = client.post("/api/save/project", json=data)
+        body = r.json()
+
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(body["ok"])
+        self.assertEqual(body["filename"], "雷神.json")
+        path = Path(body["path"])
+        self.assertTrue(path.is_file())
+        self.assertEqual(path.parent, (self.root / "projects").resolve())
+        # 中文不转义、缩进 2（人工可读、可手工编辑）
+        text = path.read_text(encoding="utf-8")
+        self.assertIn("雷神", text)
+        self.assertIn("\n  ", text)
+        self.assertEqual(json.loads(text)["app"], "GenshinDamageCalc")
+
+    def test_save_project_overwrites_in_place(self):
+        """一键保存是 Ctrl+S 语义：同名直接覆盖，不会越存越多。"""
+        first = client.post("/api/save/project", json=sample_graph(name="雷神")).json()
+        second = client.post(
+            "/api/save/project",
+            json=sample_graph(name="雷神", with_crit=False),
+        ).json()
+
+        self.assertEqual(first["path"], second["path"])
+        files = list((self.root / "projects").iterdir())
+        self.assertEqual([f.name for f in files], ["雷神.json"])
+
+    def test_save_project_without_name_uses_fallback(self):
+        body = client.post("/api/save/project", json=sample_graph(name="")).json()
+        self.assertEqual(body["filename"], "伤害工程.json")
+
+    def test_save_project_sanitizes_dangerous_name(self):
+        """名字里带路径分隔符也只能落在当前目录里（写不出 projects/ 之外）。"""
+        body = client.post("/api/save/project", json=sample_graph(name="../../逃逸")).json()
+        path = Path(body["path"])
+        self.assertEqual(path.parent, (self.root / "projects").resolve())
+        self.assertNotIn("/", path.name)
+        self.assertNotIn("\\", path.name)
+
+    def test_save_report_writes_txt_next_to_project(self):
+        r = client.post("/api/report", json=sample_graph(name="雷神"))
+        body = r.json()
+
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(body["ok"])
+        self.assertRegex(body["filename"], r"^雷神_\d{8}_\d{6}\.txt$")
+        path = Path(body["path"])
+        self.assertEqual(path.parent, (self.root / "projects").resolve())
+        text = path.read_text(encoding="utf-8")
+        self.assertIn("【结果】", text)
+        self.assertIn("未暴击伤害", text)
+
+    def test_open_project_remembers_directory_and_saves_back(self):
+        """核心行为：从哪读就往哪存。"""
+        source = self.root / "别处的工程" / "旧工程.json"
+        source.parent.mkdir(parents=True)
+        source.write_text(json.dumps(sample_graph(name="旧工程"), ensure_ascii=False),
+                          encoding="utf-8")
+        self.stub_dialog(source)
+
+        opened = client.post("/api/open").json()
+        self.assertTrue(opened["ok"])
+        self.assertEqual(opened["graph"]["name"], "旧工程")
+        self.assertEqual(opened["dir"], str(source.parent.resolve()))
+        self.assertEqual(opened["storage"]["dir"], str(source.parent.resolve()))
+
+        saved = client.post("/api/save/project", json=sample_graph(name="旧工程")).json()
+        self.assertEqual(Path(saved["path"]).parent, source.parent.resolve())
+        self.assertTrue((source.parent / "旧工程.json").is_file())
+        # 默认目录里不应该多出东西
+        self.assertFalse((self.root / "projects").exists())
+
+    def test_open_project_cancelled_is_not_an_error(self):
+        self.stub_dialog("")
+        body = client.post("/api/open").json()
+        self.assertEqual(body, {"ok": False, "cancelled": True})
+
+    def test_open_project_with_broken_file(self):
+        bad = self.root / "坏工程.json"
+        bad.write_text("{不是 json", encoding="utf-8")
+        self.stub_dialog(bad)
+
+        r = client.post("/api/open")
+        self.assertEqual(r.status_code, 400)
+        self.assertFalse(r.json()["ok"])
+
+    def test_open_project_when_dialog_unavailable(self):
+        """没有图形环境（对话框子进程跑不起来）时返回 None → 当作用户取消。"""
+        self.stub_dialog(None)
+        self.assertEqual(client.post("/api/open").json(), {"ok": False, "cancelled": True})
 
 
 if __name__ == "__main__":

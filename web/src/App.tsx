@@ -19,7 +19,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { buildReport } from "./api";
+import { fetchStorage, openProject, saveProject, saveReport } from "./api";
 import { copyText } from "./clipboard";
 import CardNode, { type CardData, type CardRFNode, type MenuKind } from "./components/CardNode";
 import CardEdge, { type CardRFEdge } from "./components/CardEdge";
@@ -27,7 +27,6 @@ import ContextMenu, { type MenuItem } from "./components/ContextMenu";
 import { HelpDialog, ResultVarsDialog } from "./components/Dialogs";
 import Sidebar from "./components/Sidebar";
 import Toolbar from "./components/Toolbar";
-import { downloadText, pickTextFile } from "./download";
 import {
   CARD_DRAG_HANDLE,
   addPreset,
@@ -105,6 +104,8 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
   const history = useGraphHistory(initial.state);
   const { nodes, links } = history.state;
   const [name, setName] = useState(initial.name);
+  /** 一键保存的落地目录（后端记忆，打开/保存后同步） */
+  const [saveDir, setSaveDir] = useState("");
   const [savedZoom, setSavedZoom] = useState(initial.zoom);
   const [dirty, setDirty] = useState(false);
   const [menu, setMenu] = useState<{ id: string; kind: MenuKind; x: number; y: number } | null>(
@@ -174,6 +175,15 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
   }, [dirty]);
+
+  // 启动时问一次后端：一键保存会存到哪个目录
+  useEffect(() => {
+    const ctrl = new AbortController();
+    fetchStorage(ctrl.signal)
+      .then((s) => setSaveDir(s.dir))
+      .catch(() => undefined);
+    return () => ctrl.abort();
+  }, []);
 
   // -- 画布操作 -----------------------------------------------------------
   const apply = history.apply;
@@ -336,25 +346,34 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
     [links, nodes],
   );
 
-  // -- 文件操作 -----------------------------------------------------------
-  const doSave = useCallback(() => {
-    const base = name.trim() || "伤害工程";
-    downloadText(`${base}.json`, JSON.stringify(graphJSON, null, 2), "application/json");
-    setDirty(false);
-    setToast(`已导出 ${base}.json`);
-  }, [graphJSON, name]);
+  // -- 文件操作（走后端写文件：一键保存、记忆目录）-------------------------
+  const doSave = useCallback(async () => {
+    try {
+      const res = await saveProject(graphJSON);
+      setSaveDir(res.dir);
+      setDirty(false);
+      setToast(`已保存到 ${res.path}`);
+    } catch (e) {
+      setToast(`保存失败：${(e as Error).message}`);
+    }
+  }, [graphJSON]);
 
   const doOpen = useCallback(async () => {
-    const text = await pickTextFile();
-    if (text === null) return;
     try {
-      const parsed = jsonToGraph(JSON.parse(text) as unknown, schema);
+      const res = await openProject();
+      if (res.cancelled) return;                  // 用户取消：静默
+      if (!res.ok || !res.graph) {
+        setToast(`打开失败：${res.error ?? "未知错误"}`);
+        return;
+      }
+      const parsed = jsonToGraph(res.graph, schema);
       history.reset({ nodes: parsed.nodes, links: parsed.links });
       setName(parsed.name);
       setSavedZoom(parsed.zoom);
       rf.setViewport({ x: 0, y: 0, zoom: parsed.zoom });
+      if (res.dir) setSaveDir(res.dir);           // 从哪读就往哪存
       setDirty(false);
-      setToast(`已打开工程（${parsed.nodes.length} 张卡片）`);
+      setToast(`已打开 ${res.path}（${parsed.nodes.length} 张卡片）`);
     } catch (e) {
       setToast(`打开失败：${(e as Error).message}`);
     }
@@ -362,9 +381,9 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
 
   const doExport = useCallback(async () => {
     try {
-      const res = await buildReport(graphJSON, { title: name.trim() || undefined });
-      downloadText(res.filename, res.text);
-      setToast(`已导出 ${res.filename}`);
+      const res = await saveReport(graphJSON, { title: name.trim() || undefined });
+      setSaveDir(res.dir);
+      setToast(`已导出报告 ${res.path}`);
     } catch (e) {
       setToast(`导出失败：${(e as Error).message}`);
     }
@@ -598,6 +617,7 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
       <Toolbar
         name={name}
         onName={setName}
+        saveDir={saveDir}
         dirty={dirty}
         canUndo={history.canUndo}
         canRedo={history.canRedo}

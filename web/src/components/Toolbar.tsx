@@ -1,7 +1,9 @@
-/** 顶部工具栏：工程名、撤销/重做、文件操作、缩放、帮助与状态提示。 */
+/** 顶部工具栏：工程名、保存目录、撤销/重做、文件操作、缩放、帮助与状态提示。 */
 export interface ToolbarProps {
   name: string;
   onName: (v: string) => void;
+  /** 一键保存的落地目录（后端记忆，点保存直接写到这里） */
+  saveDir: string;
   dirty: boolean;
   canUndo: boolean;
   canRedo: boolean;
@@ -37,6 +39,11 @@ export default function Toolbar(props: ToolbarProps) {
         <span className={`tb-dirty${props.dirty ? " on" : ""}`} title="是否有未保存到文件的修改">
           {props.dirty ? "● 未保存" : "○ 已保存"}
         </span>
+        {props.saveDir ? (
+          <span className="tb-dir" title={`一键保存会写到这里：${props.saveDir}`} data-testid="save-dir">
+            保存到：{props.saveDir}
+          </span>
+        ) : null}
       </div>
 
       <div className="tb-mid">

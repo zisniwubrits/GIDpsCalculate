@@ -169,6 +169,16 @@ textarea:focus {
   color: var(--warn);
 }
 
+/* 一键保存的落地目录：太长就省略，完整路径放 title 里 */
+.tb-dir {
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--muted);
+}
+
 .tb-sep {
   width: 1px;
   height: 18px;
