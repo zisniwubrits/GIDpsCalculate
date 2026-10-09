@@ -350,6 +350,38 @@ describe("App 集成（假后端 + 真 schema）", () => {
     expect(screen.getByDisplayValue("1200")).toBeInTheDocument();
   });
 
+  it("存档里的卡片尺寸会真正落到节点容器上（宽高都要生效）", async () => {
+    window.localStorage.setItem(
+      "genshin-dmg-calc:project:v1",
+      JSON.stringify({
+        graph: {
+          version: 1,
+          app: "GenshinDamageCalc",
+          zoom: 1,
+          name: "带尺寸的工程",
+          nodes: [
+            {
+              id: "n1",
+              type: "text",
+              pos: [40, 60],
+              size: [320, 220],
+              font_size: null,
+              inputs: 0,
+              fields: { content: "便签" },
+            },
+          ],
+          links: [],
+        },
+      }),
+    );
+    await renderApp();
+
+    const card = await screen.findByTestId("card-n1");
+    const wrapper = card.parentElement as HTMLElement;
+    expect(wrapper.style.width).toBe("320px");
+    expect(wrapper.style.height).toBe("220px");
+  });
+
   it("计算结果中的警告会显示在顶部状态栏", async () => {
     await renderApp();
     await waitFor(() =>

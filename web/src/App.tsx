@@ -289,14 +289,16 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
             next = next.map((n) => (n.id === ch.id ? { ...n, selected: ch.selected } : n));
           } else if (ch.type === "dimensions" && ch.dimensions) {
             const dim = ch.dimensions;
-            const resizing = Boolean(ch.resizing);
+            // resizing / setAttributes 都是「用户在缩放」的信号；挂载时的首次测量
+            // 两者都没有，此时只记 measured，不能当成用户设定尺寸。
+            const byResize = Boolean(ch.resizing) || Boolean(ch.setAttributes);
             next = next.map((n) =>
               n.id === ch.id
                 ? {
                     ...n,
                     measured: { width: dim.width, height: dim.height },
-                    resizing,
-                    size: resizing ? [dim.width, dim.height] : n.size,
+                    resizing: byResize,
+                    size: byResize ? [dim.width, dim.height] : n.size,
                   }
                 : n,
             );
@@ -402,6 +404,19 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
         ...s,
         nodes: s.nodes.map((n) =>
           n.id === id ? { ...n, font_size: value && value > 0 ? value : null } : n,
+        ),
+      }));
+    },
+    [apply],
+  );
+
+  /** 缩放结束：把最终尺寸与左上角坐标写回模型（拖动缩放是界面行为，不进求值载荷）。 */
+  const onResize = useCallback(
+    (id: string, size: [number, number], pos: [number, number]) => {
+      apply((s) => ({
+        ...s,
+        nodes: s.nodes.map((n) =>
+          n.id === id ? { ...n, size, pos, resizing: false } : n,
         ),
       }));
     },
@@ -530,6 +545,7 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
           onField,
           onDelete: removeNode,
           onInputs,
+          onResize,
           onMenu: (id, kind, ev) => setMenu({ id, kind, x: ev.clientX, y: ev.clientY }),
           onCopy,
         };
@@ -548,7 +564,7 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
           measured: n.measured,
         };
       }),
-    [nodes, schema, results, onField, removeNode, onInputs, onCopy],
+    [nodes, schema, results, onField, removeNode, onInputs, onCopy, onResize],
   );
 
   const rfEdges = useMemo<CardRFEdge[]>(

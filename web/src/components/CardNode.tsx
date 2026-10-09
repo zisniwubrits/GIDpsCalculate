@@ -19,6 +19,8 @@ export interface CardData extends Record<string, unknown> {
   onField: (id: string, key: string, value: FieldValue) => void;
   onDelete: (id: string) => void;
   onInputs: (id: string, delta: number) => void;
+  /** 拖动缩放手柄结束后把最终尺寸（含左上角坐标变化）写回模型 */
+  onResize: (id: string, size: [number, number], pos: [number, number]) => void;
   onMenu: (id: string, kind: MenuKind, ev: { clientX: number; clientY: number }) => void;
   onCopy: (id: string) => void;
 }
@@ -221,6 +223,15 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
         minHeight={90}
         lineClassName="resize-line"
         handleClassName="resize-handle"
+        onResizeEnd={(_event, params) => {
+          // 显式把最终尺寸写回模型：否则卡片高度只存在于 React Flow 内部，
+          // 下一次重渲染会用旧尺寸覆盖回去，表现为「纵向缩放不动」。
+          data.onResize(
+            id,
+            [Math.round(params.width), Math.round(params.height)],
+            [Math.round(params.x), Math.round(params.y)],
+          );
+        }}
       />
       <div
         className={`card${selected ? " card-sel" : ""}${node.type === "result" ? " card-result" : ""}`}
