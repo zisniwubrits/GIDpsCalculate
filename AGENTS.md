@@ -88,28 +88,21 @@ git commit -m "feat: 简述这个功能"
   PowerShell `$env:DSH_API="http://127.0.0.1:9000"; pnpm dev`。
 - 生产：`cd web && pnpm build` → `web/dist`，由 `python main.py` 直接托管。
 
-### 启动器编码（改 `launcher.bat` 前必读）
+### 启动器（`launcher.bat`）：必须纯 ASCII，界面文案用英文
 
-`launcher.bat` 必须是 **GBK 编码 + CRLF**，不能存成 UTF-8。
+cmd.exe 按「读文件那一刻的控制台代码页」解析批处理。中文 Windows 双击时是 936(ANSI)，
+文件里只要出现非 ASCII（中文）字节就会解析错位 —— `echo ` 前缀被上一行吃掉，
+菜单行被当成命令执行：`'[4]' is not recognized as an internal or external command`。
 
-原因：cmd.exe 按「读文件那一刻的控制台代码页」解析批处理。中文 Windows 双击时是 936(ANSI)，
-UTF-8 的中文行会被当 GBK 解析造成字节错位，`echo ` 前缀被上一行吃掉，
-菜单行被当成命令执行（`'[4]' is not recognized`）。实测：起始代码页 936 时 UTF-8 版 3/3 报错、GBK 版 0/3。
+实测（同内容只改编码，各跑 3 次）：起始代码页 936 时 UTF-8 中文版 **3/3 报错**，纯 ASCII 版 **0/3**。
 
-用编辑器/AI 工具改它时：
+因此：
 
-```powershell
-$p = 'launcher.bat'
-# 1) 先转成 UTF-8 便于阅读和编辑
-[IO.File]::WriteAllText($p, [IO.File]::ReadAllText($p, [Text.Encoding]::GetEncoding(936)),
-                        (New-Object Text.UTF8Encoding($false)))
-# 2) …用工具改内容…
-# 3) 再转回 GBK + CRLF
-$t = [IO.File]::ReadAllText($p) -replace "`r`n", "`n" -replace "`n", "`r`n"
-[IO.File]::WriteAllText($p, $t, [Text.Encoding]::GetEncoding(936))
-```
+- 文件**只含 ASCII**（`rem` 注释、`echo` 文案全部英文），行尾 **CRLF**，无 BOM；
+- 不要加 `chcp`（会改掉用户控制台代码页，纯 ASCII 下没有必要）；
+- 中文本地化留给 README 与网页界面，命令行只保留英文。
 
-`test_launcher.py` 会守住这条约束（GBK / CRLF / chcp 936 / 无 BOM / 默认端口与 main.py 一致）。
+`test_launcher.py` 会守住这些约束（纯 ASCII / CRLF / 无 BOM / 无 chcp / 包管理器顺序 / 默认端口与 main.py 一致）。
 
 ## 6. 公式来源
 

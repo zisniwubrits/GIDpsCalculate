@@ -32,13 +32,15 @@
 
 ### 0. 最省事：双击 `launcher.bat`
 
-双击后出现菜单，按数字选择：
+双击后出现菜单（命令行界面是英文，避免批处理中文在中文 Windows 下解析出错）：
 
 ```
-[1] 启动服务（并打开浏览器）   ← 日常用这个
-[2] 关闭服务
-[3] 开发模式（前端热更新，需 Node）
-[4] 退出
+  Genshin Damage Calculator  (Web)
+    [1] Start server   (and open the browser)   ← 日常用这个
+    [2] Stop server
+    [3] Dev mode       (Vite HMR, needs Node)
+    [4] Quit
+    Choice [1]:
 ```
 
 首次运行它会自己补齐缺的东西：没有 `web\dist` 就自动安装依赖并构建前端；系统 Python 缺 fastapi/uvicorn 就先装好（必要时自动建 `.venv`）。之后再双击就是秒开。
