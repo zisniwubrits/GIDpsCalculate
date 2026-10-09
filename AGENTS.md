@@ -45,7 +45,7 @@ git commit -m "feat: 简述这个功能"
 | `web/src/model.ts` | 画布模型纯函数（落位、对齐、预设、JSON 往返）——业务规则放这里，方便单测 |
 | `web/src/components/` | 卡片、连线、表格、右键菜单、弹窗、侧栏、工具栏 |
 | `web/src/state/` | 撤销重做、后端请求、localStorage 持久化 |
-| `test_damage.py` / `test_graph.py` / `test_server.py` | 后端测试（`python -m pytest`） |
+| `test_damage.py` / `test_graph.py` / `test_server.py` / `test_launcher.py` | 后端与启动器测试（`python -m pytest`） |
 | `web/src/**/*.test.ts(x)` | 前端测试（`pnpm test`） |
 | `private/` | 个人存档与笔记，**已被 .gitignore 忽略，不要提交** |
 
@@ -87,6 +87,29 @@ git commit -m "feat: 简述这个功能"
 - 前端开发服务器 5173，Vite 已把 `/api` 代理到 8777；后端换端口时用环境变量：
   PowerShell `$env:DSH_API="http://127.0.0.1:9000"; pnpm dev`。
 - 生产：`cd web && pnpm build` → `web/dist`，由 `python main.py` 直接托管。
+
+### 启动器编码（改 `launcher.bat` 前必读）
+
+`launcher.bat` 必须是 **GBK 编码 + CRLF**，不能存成 UTF-8。
+
+原因：cmd.exe 按「读文件那一刻的控制台代码页」解析批处理。中文 Windows 双击时是 936(ANSI)，
+UTF-8 的中文行会被当 GBK 解析造成字节错位，`echo ` 前缀被上一行吃掉，
+菜单行被当成命令执行（`'[4]' is not recognized`）。实测：起始代码页 936 时 UTF-8 版 3/3 报错、GBK 版 0/3。
+
+用编辑器/AI 工具改它时：
+
+```powershell
+$p = 'launcher.bat'
+# 1) 先转成 UTF-8 便于阅读和编辑
+[IO.File]::WriteAllText($p, [IO.File]::ReadAllText($p, [Text.Encoding]::GetEncoding(936)),
+                        (New-Object Text.UTF8Encoding($false)))
+# 2) …用工具改内容…
+# 3) 再转回 GBK + CRLF
+$t = [IO.File]::ReadAllText($p) -replace "`r`n", "`n" -replace "`n", "`r`n"
+[IO.File]::WriteAllText($p, $t, [Text.Encoding]::GetEncoding(936))
+```
+
+`test_launcher.py` 会守住这条约束（GBK / CRLF / chcp 936 / 无 BOM / 默认端口与 main.py 一致）。
 
 ## 6. 公式来源
 

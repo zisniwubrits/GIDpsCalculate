@@ -1,29 +1,29 @@
 @echo off
-chcp 65001 >nul
+chcp 936 >nul
 setlocal EnableExtensions
 
 rem ===========================================================================
-rem  åŸç¥ä¼¤å®³è®¡ç®—å™¨ï¼ˆWeb ç‰ˆï¼‰â€”â€” æœ¬åœ°å¯åŠ¨ / å…³é—­
+rem  Ô­ÉñÉËº¦¼ÆËãÆ÷£¨Web °æ£©¡ª¡ª ±¾µØÆô¶¯ / ¹Ø±Õ
 rem
-rem  åŒå‡»è¿è¡Œ            â†’ å‡ºç°èœå•ï¼ˆå¯åŠ¨ / å…³é—­ / å¼€å‘æ¨¡å¼ / é€€å‡ºï¼‰
-rem  launcher.bat 9000        â†’ ç›´æ¥ç”¨ 9000 ç«¯å£å¯åŠ¨
-rem  launcher.bat stop        â†’ å…³é—­é»˜è®¤ç«¯å£ï¼ˆ8777ï¼‰ä¸Šçš„æœåŠ¡
-rem  launcher.bat stop 9000   â†’ å…³é—­ 9000 ç«¯å£ä¸Šçš„æœåŠ¡
-rem  launcher.bat dev         â†’ å¼€å‘æ¨¡å¼ï¼šåç«¯ + Viteï¼ˆå‰ç«¯çƒ­æ›´æ–°ï¼Œéœ€ Nodeï¼‰
+rem  Ë«»÷ÔËĞĞ            ¡ú ³öÏÖ²Ëµ¥£¨Æô¶¯ / ¹Ø±Õ / ¿ª·¢Ä£Ê½ / ÍË³ö£©
+rem  launcher.bat 9000        ¡ú Ö±½ÓÓÃ 9000 ¶Ë¿ÚÆô¶¯
+rem  launcher.bat stop        ¡ú ¹Ø±ÕÄ¬ÈÏ¶Ë¿Ú£¨8777£©ÉÏµÄ·şÎñ
+rem  launcher.bat stop 9000   ¡ú ¹Ø±Õ 9000 ¶Ë¿ÚÉÏµÄ·şÎñ
+rem  launcher.bat dev         ¡ú ¿ª·¢Ä£Ê½£ººó¶Ë + Vite£¨Ç°¶ËÈÈ¸üĞÂ£¬Ğè Node£©
 rem  launcher.bat 8777 --reload
-rem                            â†’ ç«¯å£åé¢çš„å‚æ•°åŸæ ·è½¬ç»™ main.py
-rem                              ï¼ˆå¸¸ç”¨ï¼š--reload åç«¯çƒ­é‡è½½ / --no-browser ä¸å¼€æµè§ˆå™¨ï¼‰
+rem                            ¡ú ¶Ë¿ÚºóÃæµÄ²ÎÊıÔ­Ñù×ª¸ø main.py
+rem                              £¨³£ÓÃ£º--reload ºó¶ËÈÈÖØÔØ / --no-browser ²»¿ªä¯ÀÀÆ÷£©
 rem
-rem  é¦–æ¬¡å¯åŠ¨ä¼šè‡ªåŠ¨è¡¥é½ï¼ˆéƒ½åœ¨ .gitignore ä¸­ï¼Œæ–°å…‹éš†çš„ä»“åº“æ²¡æœ‰ï¼‰ï¼š
-rem    web\dist\     å‰ç«¯æ„å»ºäº§ç‰©  â†’ è‡ªåŠ¨ install + build
-rem    åç«¯ä¾èµ–      fastapi/uvicorn â†’ ä¼˜å…ˆç”¨å·²è£…å¥½çš„ pythonï¼Œç¼ºäº†æ‰å»º .venv å¹¶å®‰è£…
+rem  Ê×´ÎÆô¶¯»á×Ô¶¯²¹Æë£¨¶¼ÔÚ .gitignore ÖĞ£¬ĞÂ¿ËÂ¡µÄ²Ö¿âÃ»ÓĞ£©£º
+rem    web\dist\     Ç°¶Ë¹¹½¨²úÎï  ¡ú ×Ô¶¯ install + build
+rem    ºó¶ËÒÀÀµ      fastapi/uvicorn ¡ú ÓÅÏÈÓÃÒÑ×°ºÃµÄ python£¬È±ÁË²Å½¨ .venv ²¢°²×°
 rem ===========================================================================
 
 set "ROOT=%~dp0"
 set "PY=python"
 set "VENV_PY=%ROOT%.venv\Scripts\python.exe"
 
-rem ---- è§£æå‚æ•°ï¼šstop [ç«¯å£] / dev [ç«¯å£] / [ç«¯å£] [é¢å¤–å‚æ•°] / æ— å‚èµ°èœå• ----
+rem ---- ½âÎö²ÎÊı£ºstop [¶Ë¿Ú] / dev [¶Ë¿Ú] / [¶Ë¿Ú] [¶îÍâ²ÎÊı] / ÎŞ²Î×ß²Ëµ¥ ----
 set "ACTION=%~1"
 set "PORT=%~2"
 set "FLAG=%~3"
@@ -31,8 +31,8 @@ set "FLAG=%~3"
 if /i "%ACTION%"=="stop" goto :resolve_port
 if /i "%ACTION%"=="dev" goto :resolve_port
 if "%ACTION%"=="" goto :resolve_port
-rem ç¬¬ä¸€ä¸ªå‚æ•°æ—¢ä¸æ˜¯ stop/dev ä¹Ÿä¸æ˜¯ç©º â†’ å½“ä½œç«¯å£å·ï¼Œç›´æ¥å¯åŠ¨
-rem ï¼ˆæ³¨æ„å¿…é¡»æ˜¾å¼è®¾æˆ startï¼Œæ¸…ç©ºä¼šæ‰è¿›ä¸‹é¢çš„èœå•åˆ†æ”¯ï¼Œè„šæœ¬è°ƒç”¨æ—¶ä¼šæŒ‚ä½ï¼‰
+rem µÚÒ»¸ö²ÎÊı¼È²»ÊÇ stop/dev Ò²²»ÊÇ¿Õ ¡ú µ±×÷¶Ë¿ÚºÅ£¬Ö±½ÓÆô¶¯
+rem £¨×¢Òâ±ØĞëÏÔÊ½Éè³É start£¬Çå¿Õ»áµô½øÏÂÃæµÄ²Ëµ¥·ÖÖ§£¬½Å±¾µ÷ÓÃÊ±»á¹Ò×¡£©
 set "PORT=%~1"
 set "FLAG=%~2"
 set "ACTION=start"
@@ -41,7 +41,7 @@ set "ACTION=start"
 if "%PORT%"=="" set "PORT=8777"
 set "URL=http://127.0.0.1:%PORT%"
 set "DEV_URL=http://127.0.0.1:5173"
-title åŸç¥ä¼¤å®³è®¡ç®—å™¨ (%PORT%)
+title Ô­ÉñÉËº¦¼ÆËãÆ÷ (%PORT%)
 
 if not defined ACTION call :menu
 
@@ -51,31 +51,31 @@ if /i "%ACTION%"=="dev" goto :dev
 goto :start
 
 rem ===========================================================================
-rem  èœå•ï¼ˆåŒå‡»æ—¶ç”¨ï¼‰
+rem  ²Ëµ¥£¨Ë«»÷Ê±ÓÃ£©
 rem ===========================================================================
 :menu
 set "FROM_MENU=1"
 cls
 echo.
-echo   åŸç¥ä¼¤å®³è®¡ç®—å™¨ï¼ˆWeb ç‰ˆï¼‰
+echo   Ô­ÉñÉËº¦¼ÆËãÆ÷£¨Web °æ£©
 echo   ------------------------------------------------------------
-echo     é¡¹ç›®ç›®å½•ï¼š%ROOT%
-echo     ç«¯å£ã€€ã€€ï¼š%PORT%
+echo     ÏîÄ¿Ä¿Â¼£º%ROOT%
+echo     ¶Ë¿Ú¡¡¡¡£º%PORT%
 echo.
-echo     [1] å¯åŠ¨æœåŠ¡ï¼ˆå¹¶æ‰“å¼€æµè§ˆå™¨ï¼‰
-echo     [2] å…³é—­æœåŠ¡
-echo     [3] å¼€å‘æ¨¡å¼ï¼ˆå‰ç«¯çƒ­æ›´æ–°ï¼Œéœ€ Nodeï¼‰
-echo     [4] é€€å‡º
+echo     [1] Æô¶¯·şÎñ£¨²¢´ò¿ªä¯ÀÀÆ÷£©
+echo     [2] ¹Ø±Õ·şÎñ
+echo     [3] ¿ª·¢Ä£Ê½£¨Ç°¶ËÈÈ¸üĞÂ£¬Ğè Node£©
+echo     [4] ÍË³ö
 echo.
 set "SEL="
-set /p "SEL=   è¯·é€‰æ‹© [1]: "
+set /p "SEL=   ÇëÑ¡Ôñ [1]: "
 if "%SEL%"=="" goto :menu_start
 if "%SEL%"=="1" goto :menu_start
 if "%SEL%"=="2" goto :menu_stop
 if "%SEL%"=="3" goto :menu_dev
 if "%SEL%"=="4" goto :menu_quit
 echo.
-echo    æ— æ•ˆè¾“å…¥ã€‚
+echo    ÎŞĞ§ÊäÈë¡£
 ping -n 2 127.0.0.1 >nul
 goto :menu
 
@@ -96,42 +96,42 @@ set "ACTION=quit"
 goto :eof
 
 rem ===========================================================================
-rem  å…³é—­æœåŠ¡
+rem  ¹Ø±Õ·şÎñ
 rem ===========================================================================
 :stop
 cls
 echo.
-echo   æ­£åœ¨å…³é—­ %URL% ä¸Šçš„æœåŠ¡...
+echo   ÕıÔÚ¹Ø±Õ %URL% ÉÏµÄ·şÎñ...
 set "FOUND="
 for /f "tokens=5" %%p in ('netstat -ano ^| findstr "LISTENING" ^| findstr /C:":%PORT% "') do (
     set "FOUND=1"
-    echo     ç»“æŸè¿›ç¨‹ PID %%p
+    echo     ½áÊø½ø³Ì PID %%p
     taskkill /PID %%p /T /F >nul 2>nul
 )
 if not defined FOUND (
-    echo     æ²¡æœ‰æ‰¾åˆ°ç›‘å¬ %PORT% ç«¯å£çš„æœåŠ¡ã€‚
+    echo     Ã»ÓĞÕÒµ½¼àÌı %PORT% ¶Ë¿ÚµÄ·şÎñ¡£
 ) else (
     echo.
-    echo   æœåŠ¡å·²å…³é—­ã€‚
+    echo   ·şÎñÒÑ¹Ø±Õ¡£
 )
 echo.
 if defined FROM_MENU pause
 exit /b 0
 
 rem ===========================================================================
-rem  å¯åŠ¨æœåŠ¡
+rem  Æô¶¯·şÎñ
 rem ===========================================================================
 :start
 cls
 echo.
-echo   åŸç¥ä¼¤å®³è®¡ç®—å™¨ â€”â€” æœ¬åœ°å¯åŠ¨å™¨
-echo   é¡¹ç›®ç›®å½•ï¼š%ROOT%
+echo   Ô­ÉñÉËº¦¼ÆËãÆ÷ ¡ª¡ª ±¾µØÆô¶¯Æ÷
+echo   ÏîÄ¿Ä¿Â¼£º%ROOT%
 echo.
 
-rem ---- å·²ç»åœ¨è·‘äº†ï¼Ÿç›´æ¥å¼€æµè§ˆå™¨ ------------------------------------
+rem ---- ÒÑ¾­ÔÚÅÜÁË£¿Ö±½Ó¿ªä¯ÀÀÆ÷ ------------------------------------
 netstat -ano | findstr "LISTENING" | findstr /C:":%PORT% " >nul 2>nul
 if not errorlevel 1 (
-    echo   æœåŠ¡å·²åœ¨ %URL% è¿è¡Œï¼Œç›´æ¥æ‰“å¼€æµè§ˆå™¨ã€‚
+    echo   ·şÎñÒÑÔÚ %URL% ÔËĞĞ£¬Ö±½Ó´ò¿ªä¯ÀÀÆ÷¡£
     start "" "%URL%"
     ping -n 2 127.0.0.1 >nul
     if defined FROM_MENU pause
@@ -141,29 +141,29 @@ if not errorlevel 1 (
 call :ensure_python
 if errorlevel 1 goto :fail
 
-rem ---- å‰ç«¯æ„å»ºäº§ç‰© ------------------------------------------------
-rem è¿™é‡Œåˆ»æ„ç”¨ goto è€Œä¸æ˜¯ if(...) å—ï¼šæ‰¹å¤„ç†ä¼šæŠŠæ•´ä¸ªæ‹¬å·å—ä¸€æ¬¡æ€§è§£æï¼Œ
-rem å—å†…çš„ %PKG% ä¼šåœ¨èµ‹å€¼å‰è¢«å±•å¼€æˆç©ºä¸²ï¼Œå¯¼è‡´ call æŠ¥é”™ã€‚ç”¨ goto é¿å¼€ã€‚
+rem ---- Ç°¶Ë¹¹½¨²úÎï ------------------------------------------------
+rem ÕâÀï¿ÌÒâÓÃ goto ¶ø²»ÊÇ if(...) ¿é£ºÅú´¦Àí»á°ÑÕû¸öÀ¨ºÅ¿éÒ»´ÎĞÔ½âÎö£¬
+rem ¿éÄÚµÄ %PKG% »áÔÚ¸³ÖµÇ°±»Õ¹¿ª³É¿Õ´®£¬µ¼ÖÂ call ±¨´í¡£ÓÃ goto ±Ü¿ª¡£
 if exist "%ROOT%web\dist\index.html" goto :frontend_ready
 
-echo   [1/2] æœªæ‰¾åˆ°å‰ç«¯æ„å»ºäº§ç‰© web\distï¼Œæ­£åœ¨æ„å»º...
+echo   [1/2] Î´ÕÒµ½Ç°¶Ë¹¹½¨²úÎï web\dist£¬ÕıÔÚ¹¹½¨...
 call :pick_pkg
 if not defined PKG goto :no_pkg
-echo   ä½¿ç”¨åŒ…ç®¡ç†å™¨ï¼š%PKG%
+echo   Ê¹ÓÃ°ü¹ÜÀíÆ÷£º%PKG%
 pushd "%ROOT%web"
 call %PKG% install
 if errorlevel 1 (popd & goto :fail)
 call %PKG% build
 if errorlevel 1 (popd & goto :fail)
 popd
-echo   å‰ç«¯æ„å»ºå®Œæˆã€‚
+echo   Ç°¶Ë¹¹½¨Íê³É¡£
 echo.
 goto :frontend_ready
 
 :no_pkg
 echo.
-echo   [é”™è¯¯] æ‰¾ä¸åˆ°å¯ç”¨çš„åŒ…ç®¡ç†å™¨ï¼ˆpnpm / corepack pnpm / npm éƒ½ä¸å¯ç”¨ï¼‰ã€‚
-echo          è¯·å…ˆå®‰è£… Node.js 20+ï¼Œç„¶åæ‰‹åŠ¨æ„å»ºä¸€æ¬¡ï¼š
+echo   [´íÎó] ÕÒ²»µ½¿ÉÓÃµÄ°ü¹ÜÀíÆ÷£¨pnpm / corepack pnpm / npm ¶¼²»¿ÉÓÃ£©¡£
+echo          ÇëÏÈ°²×° Node.js 20+£¬È»ºóÊÖ¶¯¹¹½¨Ò»´Î£º
 echo              cd web
 echo              pnpm install
 echo              pnpm build
@@ -173,29 +173,29 @@ exit /b 1
 
 :frontend_ready
 
-rem ---- å¯åŠ¨ --------------------------------------------------------
+rem ---- Æô¶¯ --------------------------------------------------------
 pushd "%ROOT%"
-echo   æ­£åœ¨å¯åŠ¨æœåŠ¡ï¼š%URL%
+echo   ÕıÔÚÆô¶¯·şÎñ£º%URL%
 echo.
-echo   æµè§ˆå™¨ä¼šè‡ªåŠ¨æ‰“å¼€ï¼ˆæƒ³è‡ªå·±æ§åˆ¶å°±ç”¨ --no-browser å‚æ•°ï¼‰ã€‚
-echo   å…³é—­æœåŠ¡ï¼šæŒ‰ Ctrl+Cï¼Œæˆ–åŒå‡» launcher.bat åé€‰ [2]ã€‚
+echo   ä¯ÀÀÆ÷»á×Ô¶¯´ò¿ª£¨Ïë×Ô¼º¿ØÖÆ¾ÍÓÃ --no-browser ²ÎÊı£©¡£
+echo   ¹Ø±Õ·şÎñ£º°´ Ctrl+C£¬»òË«»÷ launcher.bat ºóÑ¡ [2]¡£
 echo.
 "%PY%" "%ROOT%main.py" --port %PORT% %FLAG%
 
 echo.
-echo   æœåŠ¡å·²åœæ­¢ã€‚
+echo   ·şÎñÒÑÍ£Ö¹¡£
 if defined FROM_MENU pause
 popd
 exit /b 0
 
 rem ===========================================================================
-rem  å¼€å‘æ¨¡å¼ï¼šåç«¯ + Viteï¼ˆæ”¹å‰ç«¯ä»£ç å³æ—¶ç”Ÿæ•ˆï¼‰
+rem  ¿ª·¢Ä£Ê½£ººó¶Ë + Vite£¨¸ÄÇ°¶Ë´úÂë¼´Ê±ÉúĞ§£©
 rem ===========================================================================
 :dev
 cls
 echo.
-echo   åŸç¥ä¼¤å®³è®¡ç®—å™¨ â€”â€” å¼€å‘æ¨¡å¼
-echo   åç«¯ï¼š%URL%    å‰ç«¯ï¼š%DEV_URL%
+echo   Ô­ÉñÉËº¦¼ÆËãÆ÷ ¡ª¡ª ¿ª·¢Ä£Ê½
+echo   ºó¶Ë£º%URL%    Ç°¶Ë£º%DEV_URL%
 echo.
 
 call :ensure_python
@@ -204,7 +204,7 @@ call :pick_pkg
 if not defined PKG goto :no_pkg
 
 if exist "%ROOT%web\node_modules" goto :dev_deps_ready
-echo   æœªæ‰¾åˆ° web\node_modulesï¼Œæ­£åœ¨å®‰è£…å‰ç«¯ä¾èµ–...
+echo   Î´ÕÒµ½ web\node_modules£¬ÕıÔÚ°²×°Ç°¶ËÒÀÀµ...
 pushd "%ROOT%web"
 call %PKG% install
 if errorlevel 1 (popd & goto :fail)
@@ -213,40 +213,40 @@ popd
 :dev_deps_ready
 netstat -ano | findstr "LISTENING" | findstr /C:":%PORT% " >nul 2>nul
 if not errorlevel 1 goto :dev_frontend
-echo   åœ¨åå°çª—å£å¯åŠ¨åç«¯ï¼ˆ%URL%ï¼‰...
-start "åŸç¥ä¼¤å®³è®¡ç®—å™¨ Â· åç«¯" /min cmd /c ""%PY%" "%ROOT%main.py" --no-browser --port %PORT%"
+echo   ÔÚºóÌ¨´°¿ÚÆô¶¯ºó¶Ë£¨%URL%£©...
+start "Ô­ÉñÉËº¦¼ÆËãÆ÷ ¡¤ ºó¶Ë" /min cmd /c ""%PY%" "%ROOT%main.py" --no-browser --port %PORT%"
 ping -n 3 127.0.0.1 >nul
 
 :dev_frontend
-echo   å¯åŠ¨å‰ç«¯å¼€å‘æœåŠ¡å™¨ï¼ˆ%DEV_URL%ï¼‰ï¼ŒæŒ‰ Ctrl+C ç»“æŸã€‚
+echo   Æô¶¯Ç°¶Ë¿ª·¢·şÎñÆ÷£¨%DEV_URL%£©£¬°´ Ctrl+C ½áÊø¡£
 echo.
 pushd "%ROOT%web"
 call %PKG% dev
 popd
 echo.
-echo   å‰ç«¯å·²åœæ­¢ã€‚è‹¥åå°è¿˜ç•™ç€åç«¯çª—å£ï¼Œå…³æ‰å®ƒæˆ–æ‰§è¡Œï¼šlauncher.bat stop %PORT%
+echo   Ç°¶ËÒÑÍ£Ö¹¡£ÈôºóÌ¨»¹Áô×Åºó¶Ë´°¿Ú£¬¹ØµôËü»òÖ´ĞĞ£ºlauncher.bat stop %PORT%
 if defined FROM_MENU pause
 exit /b 0
 
 rem ===========================================================================
-rem  å­è¿‡ç¨‹ï¼šå‡†å¤‡ Pythonï¼ˆä¼˜å…ˆç°æˆçš„ï¼Œç¼ºä¾èµ–æ‰å»º .venvï¼‰
+rem  ×Ó¹ı³Ì£º×¼±¸ Python£¨ÓÅÏÈÏÖ³ÉµÄ£¬È±ÒÀÀµ²Å½¨ .venv£©
 rem ===========================================================================
 :ensure_python
 if exist "%VENV_PY%" goto :use_venv
 where python >nul 2>nul
 if errorlevel 1 goto :no_python
-rem ç³»ç»Ÿ python å·²ç»è£…äº†åç«¯ä¾èµ– â†’ ç›´æ¥ç”¨ï¼Œçœæ‰å»ºè™šæ‹Ÿç¯å¢ƒçš„æ—¶é—´
+rem ÏµÍ³ python ÒÑ¾­×°ÁËºó¶ËÒÀÀµ ¡ú Ö±½ÓÓÃ£¬Ê¡µô½¨ĞéÄâ»·¾³µÄÊ±¼ä
 python -c "import fastapi, uvicorn" >nul 2>nul
 if not errorlevel 1 goto :ensure_python_check
 
-echo   [1/2] ç³»ç»Ÿ Python ç¼ºå°‘åç«¯ä¾èµ–ï¼Œæ­£åœ¨åˆ›å»º .venv å¹¶å®‰è£…...
+echo   [1/2] ÏµÍ³ Python È±ÉÙºó¶ËÒÀÀµ£¬ÕıÔÚ´´½¨ .venv ²¢°²×°...
 python -m venv "%ROOT%.venv"
 if errorlevel 1 goto :ensure_python_fail
 set "PY=%VENV_PY%"
 "%PY%" -m pip install --upgrade pip >nul 2>nul
 "%PY%" -m pip install -r "%ROOT%requirements.txt"
 if errorlevel 1 goto :ensure_python_fail
-echo   åç«¯ä¾èµ–å®‰è£…å®Œæˆã€‚
+echo   ºó¶ËÒÀÀµ°²×°Íê³É¡£
 echo.
 goto :ensure_python_check
 
@@ -260,34 +260,34 @@ exit /b 0
 
 :ensure_python_fail
 echo.
-echo   [é”™è¯¯] åç«¯ä¾èµ–ä¸å¯ç”¨ï¼ˆfastapi / uvicornï¼‰ã€‚
-echo          è¯·æ‰‹åŠ¨æ‰§è¡Œï¼špython -m pip install -r requirements.txt
+echo   [´íÎó] ºó¶ËÒÀÀµ²»¿ÉÓÃ£¨fastapi / uvicorn£©¡£
+echo          ÇëÊÖ¶¯Ö´ĞĞ£ºpython -m pip install -r requirements.txt
 echo.
 exit /b 1
 
 :no_python
 echo.
-echo   [é”™è¯¯] æ‰¾ä¸åˆ° python å‘½ä»¤ã€‚
-echo          è¯·å…ˆå®‰è£… Python 3.11+ å¹¶å‹¾é€‰ "Add to PATH"ã€‚
+echo   [´íÎó] ÕÒ²»µ½ python ÃüÁî¡£
+echo          ÇëÏÈ°²×° Python 3.11+ ²¢¹´Ñ¡ "Add to PATH"¡£
 echo.
 exit /b 1
 
 :fail
 echo.
-echo   [é”™è¯¯] åˆå§‹åŒ–å¤±è´¥ï¼Œè¯·æŸ¥çœ‹ä¸Šé¢çš„è¾“å‡ºã€‚
+echo   [´íÎó] ³õÊ¼»¯Ê§°Ü£¬Çë²é¿´ÉÏÃæµÄÊä³ö¡£
 echo.
 if defined FROM_MENU pause
 exit /b 1
 
 rem ===========================================================================
-rem  å­è¿‡ç¨‹ï¼šæ¢æµ‹å¯ç”¨çš„åŒ…ç®¡ç†å™¨ï¼Œç»“æœå†™å…¥ PKG
+rem  ×Ó¹ı³Ì£ºÌ½²â¿ÉÓÃµÄ°ü¹ÜÀíÆ÷£¬½á¹ûĞ´Èë PKG
 rem
-rem  é¡ºåºåˆ»æ„æ˜¯ pnpm â†’ corepack pnpm â†’ npmï¼š
-rem    * æœ¬é¡¹ç›®çš„ pnpm-lock.yaml ç”± pnpm 11 ç”Ÿæˆï¼Œç›´æ¥ç”¨æœ¬æœº pnpm æœ€ç¨³å¦¥ï¼›
-rem    * corepack ä¼šæŒ‰ package.json çš„ packageManager å†³å®šç‰ˆæœ¬ï¼Œä½œä¸ºå…œåº•
-rem      ï¼ˆè‹¥æœ¬æœº pnpm æ˜¯å shim æˆ–æ²¡è£…ï¼Œå®ƒæ‰ç”Ÿæ•ˆï¼‰ï¼›
-rem    * npm æœ€åå…œåº•ï¼ˆä¼šå¿½ç•¥ pnpm-lock.yamlï¼Œå¦å¤–ç”Ÿæˆ package-lock.jsonï¼‰ã€‚
-rem  æ”¾æ–‡ä»¶æœ«å°¾æ˜¯ä¸ºäº†ä¸è¢«ä¸»æµç¨‹é¡ºåºæ‰§è¡Œåˆ°ï¼ˆç”¨ call :pick_pkg æ˜¾å¼è°ƒç”¨ï¼‰ã€‚
+rem  Ë³Ğò¿ÌÒâÊÇ pnpm ¡ú corepack pnpm ¡ú npm£º
+rem    * ±¾ÏîÄ¿µÄ pnpm-lock.yaml ÓÉ pnpm 11 Éú³É£¬Ö±½ÓÓÃ±¾»ú pnpm ×îÎÈÍ×£»
+rem    * corepack »á°´ package.json µÄ packageManager ¾ö¶¨°æ±¾£¬×÷Îª¶µµ×
+rem      £¨Èô±¾»ú pnpm ÊÇ»µ shim »òÃ»×°£¬Ëü²ÅÉúĞ§£©£»
+rem    * npm ×îºó¶µµ×£¨»áºöÂÔ pnpm-lock.yaml£¬ÁíÍâÉú³É package-lock.json£©¡£
+rem  ·ÅÎÄ¼şÄ©Î²ÊÇÎªÁË²»±»Ö÷Á÷³ÌË³ĞòÖ´ĞĞµ½£¨ÓÃ call :pick_pkg ÏÔÊ½µ÷ÓÃ£©¡£
 rem ===========================================================================
 :pick_pkg
 set "PKG="
