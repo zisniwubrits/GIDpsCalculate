@@ -266,7 +266,7 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
           {spec.variadic ? (
             <button
               type="button"
-              className="card-mini"
+              className="card-mini nodrag"
               title="增加一个输入端口（最多 12 个）"
               onClick={() => data.onInputs(id, 1)}
             >
@@ -275,7 +275,7 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
           ) : null}
           <button
             type="button"
-            className="card-x"
+            className="card-x nodrag"
             title="删除卡片"
             onClick={() => data.onDelete(id)}
           >

@@ -9,6 +9,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { downloadText, pickTextFile } from "./download";
+import { CARD_DRAG_HANDLE } from "./model";
 import type { EvaluateResult, GraphJSON, Schema } from "./types";
 import fixture from "./test/schema.fixture.json";
 
@@ -235,6 +236,24 @@ describe("App 集成（假后端 + 真 schema）", () => {
       }),
     );
     await waitFor(() => expect(lastBody?.nodes[0].fields.var_nc).toBe(""));
+  });
+
+  it("只有标题栏能拖动：dragHandle 选择器能匹配到标题栏，按钮不触发拖动", async () => {
+    const user = userEvent.setup();
+    await renderApp();
+    await user.click(screen.getByTestId("preset-普通直伤"));
+    const card = await screen.findByTestId("card-n1");
+
+    // dragHandle 是 CSS 选择器：改错类名会让卡片彻底拖不动，所以这里要守住它能匹配到
+    expect(card.querySelector(CARD_DRAG_HANDLE)).toBe(card.querySelector(".card-head"));
+    expect(card.querySelector(CARD_DRAG_HANDLE)).not.toBeNull();
+    // 标题栏里的按钮标了 nodrag：点 ✕ / ＋ 不会顺手把卡片拖走
+    expect(within(card).getByTitle("删除卡片")).toHaveClass("nodrag");
+
+    await addCard(user, "add");
+    const plusButton = await screen.findByTitle(/增加一个输入端口/);
+    expect(plusButton).toHaveClass("nodrag");
+    expect(plusButton.closest(CARD_DRAG_HANDLE)).not.toBeNull(); // 按钮在标题栏里，但标了 nodrag
   });
 
   it("✕ 删除卡片会同时清掉相关连线", async () => {

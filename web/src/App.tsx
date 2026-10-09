@@ -29,6 +29,7 @@ import Sidebar from "./components/Sidebar";
 import Toolbar from "./components/Toolbar";
 import { downloadText, pickTextFile } from "./download";
 import {
+  CARD_DRAG_HANDLE,
   addPreset,
   alignPositions,
   connect,
@@ -562,6 +563,8 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
           style,
           selected: Boolean(n.selected),
           measured: n.measured,
+          // 只有标题栏能拖动（见 model.ts 的说明）
+          dragHandle: CARD_DRAG_HANDLE,
         };
       }),
     [nodes, schema, results, onField, removeNode, onInputs, onCopy, onResize],

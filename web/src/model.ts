@@ -9,6 +9,15 @@ export const ZOOM_MIN = 0.25;
 export const ZOOM_MAX = 2.5;
 export const MAX_INPUTS = 12;
 
+/**
+ * 卡片只有「标题栏」能拖动（用户明确要求：只能拖标题栏，标题栏大小不动）。
+ *
+ * 这是 React Flow 的 `node.dragHandle` 选择器：必须能匹配到卡片里的标题栏元素
+ * （CardNode 里的 `.card-head`），否则卡片会彻底拖不动。
+ * 标题栏里的按钮另有 `nodrag` 类，点它们不会进入拖动。
+ */
+export const CARD_DRAG_HANDLE = ".card-head";
+
 /** 卡片未测量前的估算尺寸（用于落位与对齐）。 */
 export const EST_W = 300;
 export const EST_H = 210;
