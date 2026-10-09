@@ -321,7 +321,7 @@ class Graph:
         spec = NODE_TYPES[node.type]
         info = dict(type=node.type, title=node.title, factor=None, values=None,
                     isTriple=False, display="", error=None, rows=None,
-                    varsText=None, boundNames=[])
+                    varsText=None, boundNames=[], plain="", plainTriple=[])
         if node.type == "vartable":
             info["rows"] = self.variable_rows()
             return info
@@ -341,6 +341,9 @@ class Graph:
             return info
         values = dict(noncrit=float(v[0]), crit=float(v[1]), expected=float(v[2]))
         info["values"] = values
+        # 纯数字字符串：便于前端「复制输出」后直接粘贴到其它输入框
+        info["plain"] = plain_num(v[0])
+        info["plainTriple"] = [plain_num(v[0]), plain_num(v[1]), plain_num(v[2])]
         info["isTriple"] = (abs(v[1] - v[0]) > 1e-9 or abs(v[2] - v[0]) > 1e-9)
         info["factor"] = self.factor_text(nid)
         parts = []

@@ -92,6 +92,18 @@ class TestEvaluateEndpoint(unittest.TestCase):
         self.assertEqual(set(body["nodes"]), {"n1", "n2", "n3"})
         self.assertIn("未暴击", body["nodes"]["n3"]["display"])
 
+    def test_evaluate_returns_plain_numbers_for_copy(self):
+        """每个节点都给出纯数字字符串（无千分位、无科学计数法），供前端复制。"""
+        data = sample_graph()
+        data["nodes"][0]["fields"]["stat_base"] = "1234.5"
+        body = client.post("/api/evaluate", json=data).json()
+        n3 = body["nodes"]["n3"]
+
+        self.assertEqual(n3["plain"], "2469")
+        self.assertEqual(len(n3["plainTriple"]), 3)
+        self.assertTrue(all("e" not in s.lower() for s in n3["plainTriple"]))
+        self.assertEqual(body["nodes"]["n1"]["plain"], "2469")
+
     def test_evaluate_returns_normalized_graph(self):
         data = sample_graph()
         data["nodes"][0]["fields"]["stat_base"] = "500+500"
