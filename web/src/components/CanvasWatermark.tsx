@@ -21,8 +21,8 @@ import { useViewport } from "@xyflow/react";
 export const WATERMARK_FALLBACK = "未命名";
 
 /** 平铺间隔与字号都用画布单位（随缩放一起放大缩小） */
-const TILE_W = 560;
-const TILE_H = 360;
+const TILE_W = 320;
+const TILE_H = 180;
 const FONT = 14;
 /** 倾斜角度：斜放的水印观感 */
 const TILT = -24;
