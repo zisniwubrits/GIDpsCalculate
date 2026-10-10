@@ -407,10 +407,11 @@ textarea:focus {
   min-width: 60px;
 }
 
+/* 多行文本框不单独指定字体：Consolas 之类没有中文字形，中文会被浏览器回退成宋体，
+   与界面其它控件不一致；这里继承 body 的界面字体（见 styles.test.ts 的守卫）。 */
 .f-area {
   resize: vertical;
   line-height: 1.5;
-  font-family: Consolas, "Courier New", monospace;
 }
 
 .f-check {
@@ -564,8 +565,10 @@ textarea:focus {
   background: #cfe2f5;
 }
 
+/* 等宽对齐数字，但中文字形要显式回退到界面字体：Consolas / Courier New 都没有中文字形，
+   否则变量名（常见中文，如「攻击力」）会被浏览器渲染成宋体，与界面其它文字不一致。 */
 .dtable-mono .dtable-cell {
-  font-family: Consolas, "Courier New", monospace;
+  font-family: Consolas, "Courier New", "Microsoft YaHei", "PingFang SC", monospace;
   min-width: 78px;
 }
 

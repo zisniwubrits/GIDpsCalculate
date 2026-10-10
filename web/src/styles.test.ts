@@ -62,3 +62,17 @@ describe("文本卡片（便签式）", () => {
     expect(body).toMatch(/resize:\s*none/);
   });
 });
+
+describe("字体", () => {
+  it("多行文本框不单独指定字体族（否则中文会回退成宋体）", () => {
+    // textarea 靠全局的 `font: inherit` 跟随界面字体；这里再写 font-family 就会
+    // 因为 Consolas 等无中文字形而让中文变成宋体（用户报过这个现象）。
+    expect(ruleBody(".f-area")).not.toMatch(/font-family/);
+  });
+
+  it("等宽表格的字栈里带中文字体，避免中文回退成宋体", () => {
+    const body = ruleBody(".dtable-mono .dtable-cell");
+    expect(body).toMatch(/font-family/);
+    expect(body).toMatch(/Microsoft YaHei/);
+  });
+});
