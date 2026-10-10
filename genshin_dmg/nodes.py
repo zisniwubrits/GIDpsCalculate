@@ -389,7 +389,7 @@ VAR_TABLE_HEADER = ("变量", "值")
 # ---------------------------------------------------------------------------
 NODE_TYPES: dict = {
     # ---- 直伤乘区 ----
-    "base": dict(title="基础值 (属性×倍率)", label="基础值", group="直伤乘区",
+    "base": dict(title="基础值", label="基础值", group="直伤乘区",
                  inputs=0, compute=_t_base, fields=[
         _F("stat_base", "白值", "1000"),
         _F("stat_big", "大增益%", "0", "pct"),
@@ -411,7 +411,7 @@ NODE_TYPES: dict = {
         _F("def_reduction", "减防%", "0", "pct"),
         _F("ignore_def", "无视防御%", "0", "pct"),
     ]),
-    "crit": dict(title="暴击区 (暴击率/暴伤)", label="暴击区", group="直伤乘区",
+    "crit": dict(title="暴击区", label="暴击区", group="直伤乘区",
                  inputs=1, compute=_t_crit, factor=_f_crit, fields=[
         _F("crit_rate", "暴击率%", "50", "pct"),
         _F("crit_damage", "暴击伤害%", "100", "pct"),
@@ -433,33 +433,35 @@ NODE_TYPES: dict = {
     "add": dict(title="加法合并", label="加法", group="直伤乘区",
                 inputs=2, compute=_t_add, fields=[]),
     # ---- 反应源 ----
-    "aggravate": dict(title="激化值(源)", label="激化值", group="反应源",
+    "aggravate": dict(title="激化值", label="激化值", group="反应源",
                       inputs=0, compute=_t_aggravate, fields=[
         _F("kind", "类型", "超激化", "combo", ["超激化", "蔓激化"]),
         _F("em", "元素精通", "0"),
         _F("bonus", "激化提高%", "0", "pct"),
         _F("level", "等级", "90"),
     ]),
-    "transform": dict(title="剧变反应(源)", label="剧变反应", group="反应源",
+    "transform": dict(title="剧变反应", label="剧变反应", group="反应源",
                       inputs=0, compute=_t_transform, fields=[
         _F("reaction", "反应", "超载", "combo", list(damage.TRANSFORM_RATE.keys())),
         _F("em", "元素精通", "0"),
         _F("bonus", "反应增伤%", "0", "pct"),
         _F("level", "等级", "90"),
     ]),
-    "crystal": dict(title="结晶护盾(源)", label="结晶护盾", group="反应源",
+    "crystal": dict(title="结晶护盾", label="结晶护盾", group="反应源",
                     inputs=0, compute=_t_crystal, fields=[
         _F("em", "元素精通", "0"),
         _F("shield_strength", "护盾强效%", "0", "pct"),
     ]),
     # ---- 星/月部件（源由这些自由组合）----
-    "attr": dict(title="◈ 属性源(白×(1+大)+小)", label="属性源", group="星月部件",
+    # 卡片标题保持干净（用户要求）：公式/来源提示不放标题上，
+    # 修法口径与取值提示统一写在 F1 教程的「星月部件」一节。
+    "attr": dict(title="◈ 属性源", label="属性源", group="星月部件",
                  inputs=0, compute=_t_attr, fields=[
         _F("stat_base", "白值", "1000"),
         _F("stat_big", "大增益%", "0", "pct"),
         _F("stat_flat", "小增益", "0"),
     ]),
-    "react_base": dict(title="◈ 基准值源(1446.85)", label="基准值源", group="星月部件",
+    "react_base": dict(title="◈ 基准值源", label="基准值源", group="星月部件",
                        inputs=0, compute=_t_react_base, fields=[
         _F("level", "等级", "90"),
     ]),
@@ -471,16 +473,16 @@ NODE_TYPES: dict = {
                  inputs=1, compute=_t_mult, factor=_f_mult, fields=[
         _F("multiplier", "倍率%", "200", "pct"),
     ]),
-    "base_boost": dict(title="(1+基础提升%)", label="基础提升", group="星月部件",
+    "base_boost": dict(title="基础提升", label="基础提升", group="星月部件",
                        inputs=1, compute=_t_base_boost, factor=_f_base_boost, fields=[
         _F("base_boost", "基础提升%", "0", "pct"),
     ]),
-    "em_gain": dict(title="精通增益(1+k·EM/(EM+den)+增伤%)", label="精通增益",
+    "em_gain": dict(title="精通增益", label="精通增益",
                     group="星月部件", inputs=1, compute=_t_em_gain,
                     factor=_f_em_gain, fields=[
         _F("em", "元素精通", "0"),
-        _F("k", "精通系数k（星月6/剧变16/激化5）", "6"),
-        _F("denom", "分母（星月·剧变2000/激化1200）", "2000"),
+        _F("k", "系数 k", "6"),
+        _F("denom", "分母", "2000"),
         _F("bonus", "增伤%", "0", "pct"),
     ]),
     "star_coeff": dict(title="星超导系数", label="星超导系数", group="星月部件",

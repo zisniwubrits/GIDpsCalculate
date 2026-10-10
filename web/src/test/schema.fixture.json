@@ -126,7 +126,7 @@
   "nodeTypes": {
     "base": {
       "type": "base",
-      "title": "基础值 (属性×倍率)",
+      "title": "基础值",
       "label": "基础值",
       "group": "直伤乘区",
       "inputs": 0,
@@ -296,7 +296,7 @@
     },
     "crit": {
       "type": "crit",
-      "title": "暴击区 (暴击率/暴伤)",
+      "title": "暴击区",
       "label": "暴击区",
       "group": "直伤乘区",
       "inputs": 1,
@@ -450,7 +450,7 @@
     },
     "aggravate": {
       "type": "aggravate",
-      "title": "激化值(源)",
+      "title": "激化值",
       "label": "激化值",
       "group": "反应源",
       "inputs": 0,
@@ -507,7 +507,7 @@
     },
     "transform": {
       "type": "transform",
-      "title": "剧变反应(源)",
+      "title": "剧变反应",
       "label": "剧变反应",
       "group": "反应源",
       "inputs": 0,
@@ -571,7 +571,7 @@
     },
     "crystal": {
       "type": "crystal",
-      "title": "结晶护盾(源)",
+      "title": "结晶护盾",
       "label": "结晶护盾",
       "group": "反应源",
       "inputs": 0,
@@ -610,7 +610,7 @@
     },
     "attr": {
       "type": "attr",
-      "title": "◈ 属性源(白×(1+大)+小)",
+      "title": "◈ 属性源",
       "label": "属性源",
       "group": "星月部件",
       "inputs": 0,
@@ -656,7 +656,7 @@
     },
     "react_base": {
       "type": "react_base",
-      "title": "◈ 基准值源(1446.85)",
+      "title": "◈ 基准值源",
       "label": "基准值源",
       "group": "星月部件",
       "inputs": 0,
@@ -752,7 +752,7 @@
     },
     "base_boost": {
       "type": "base_boost",
-      "title": "(1+基础提升%)",
+      "title": "基础提升",
       "label": "基础提升",
       "group": "星月部件",
       "inputs": 1,
@@ -784,7 +784,7 @@
     },
     "em_gain": {
       "type": "em_gain",
-      "title": "精通增益(1+k·EM/(EM+den)+增伤%)",
+      "title": "精通增益",
       "label": "精通增益",
       "group": "星月部件",
       "inputs": 1,
@@ -797,13 +797,13 @@
         },
         {
           "key": "k",
-          "label": "精通系数k（星月6/剧变16/激化5）",
+          "label": "系数 k",
           "default": "6",
           "kind": "num"
         },
         {
           "key": "denom",
-          "label": "分母（星月·剧变2000/激化1200）",
+          "label": "分母",
           "default": "2000",
           "kind": "num"
         },

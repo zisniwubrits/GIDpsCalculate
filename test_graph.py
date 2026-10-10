@@ -228,7 +228,11 @@ class TestResultDisplay(unittest.TestCase):
 
 
 class TestCardTitles(unittest.TestCase):
-    """卡片标题 / 菜单名不再带装饰性的 ＋/×（公式括号内的内容保持原样）。"""
+    """卡片标题保持干净：不带装饰性 ＋/×，也不带括号里的公式/来源提示。
+
+    提示文本（k 与分母的取值、属性源/基准值源的定义）统一写在 F1 教程里，
+    所以这里反过来断言「标题里不出现括号提示」——谁都别再往上加。
+    """
 
     def test_titles_and_labels_have_no_operator_markers(self):
         for key, spec in nd.NODE_TYPES.items():
@@ -239,17 +243,37 @@ class TestCardTitles(unittest.TestCase):
                 self.assertFalse(text.rstrip().endswith("×"),
                                  "%s 的标题/菜单名仍以 × 结尾：%s" % (key, text))
 
+    def test_titles_have_no_parenthetical_hints(self):
+        """标题里不再挂括号提示（公式/来源/单位说明都搬到 F1 教程）。"""
+        for key, spec in nd.NODE_TYPES.items():
+            title = spec["title"]
+            self.assertNotRegex(
+                title, r"[（(].*[)）]",
+                "%s 的标题仍带括号提示：%s" % (key, title))
+
     def test_specific_titles(self):
-        """典型卡片的新标题：去掉装饰性符号，括号里的公式保留。"""
+        """典型卡片标题，逐个钉住（改名时能立刻发现）。"""
+        self.assertEqual(nd.NODE_TYPES["base"]["title"], "基础值")
+        self.assertEqual(nd.NODE_TYPES["crit"]["title"], "暴击区")
         self.assertEqual(nd.NODE_TYPES["dmg"]["title"], "增伤区")
         self.assertEqual(nd.NODE_TYPES["star_coeff"]["title"], "星超导系数")
         self.assertEqual(nd.NODE_TYPES["add"]["title"], "加法合并")
         self.assertEqual(nd.NODE_TYPES["coeff"]["title"], "系数")
+        self.assertEqual(nd.NODE_TYPES["attr"]["title"], "◈ 属性源")
+        self.assertEqual(nd.NODE_TYPES["react_base"]["title"], "◈ 基准值源")
+        self.assertEqual(nd.NODE_TYPES["base_boost"]["title"], "基础提升")
+        self.assertEqual(nd.NODE_TYPES["em_gain"]["title"], "精通增益")
+        self.assertEqual(nd.NODE_TYPES["aggravate"]["title"], "激化值")
+        self.assertEqual(nd.NODE_TYPES["transform"]["title"], "剧变反应")
+        self.assertEqual(nd.NODE_TYPES["crystal"]["title"], "结晶护盾")
         self.assertEqual(nd.NODE_TYPES["add"]["label"], "加法")
         self.assertEqual(nd.NODE_TYPES["em_gain"]["label"], "精通增益")
-        # 括号里的公式是说明文字，保留 ×
-        self.assertEqual(nd.NODE_TYPES["base"]["title"], "基础值 (属性×倍率)")
-        self.assertEqual(nd.NODE_TYPES["attr"]["title"], "◈ 属性源(白×(1+大)+小)")
+
+    def test_em_gain_field_labels_are_short(self):
+        """精通增益卡的两个输入框提示词要短（取值口径见 F1 教程，不写在标签上）。"""
+        labels = {f["key"]: f["label"] for f in nd.NODE_TYPES["em_gain"]["fields"]}
+        self.assertEqual(labels["k"], "系数 k")
+        self.assertEqual(labels["denom"], "分母")
 
 
 class TestFactorDisplay(unittest.TestCase):
