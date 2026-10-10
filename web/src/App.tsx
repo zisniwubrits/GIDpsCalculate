@@ -23,6 +23,7 @@ import { fetchStorage, health, openProject, saveProject, saveReport } from "./ap
 import { copyText } from "./clipboard";
 import CardNode, { type CardData, type CardRFNode, type MenuKind } from "./components/CardNode";
 import CardEdge, { type CardRFEdge } from "./components/CardEdge";
+import CanvasWatermark from "./components/CanvasWatermark";
 import ContextMenu, { type MenuItem } from "./components/ContextMenu";
 import { HelpDialog, ResultVarsDialog } from "./components/Dialogs";
 import Sidebar from "./components/Sidebar";
@@ -715,6 +716,7 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
             proOptions={{ hideAttribution: true }}
           >
             <Background gap={18} size={1} color="#dfe6ee" />
+            <CanvasWatermark name={name} />
             <Controls showInteractive={false} position="bottom-right" />
           </ReactFlow>
           {nodes.length === 0 ? (

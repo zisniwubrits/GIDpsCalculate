@@ -118,3 +118,29 @@ describe("表格：列宽对齐 + 表头吸顶 + 填满卡片", () => {
     expect(body).toMatch(/text-overflow:\s*ellipsis/);
   });
 });
+
+describe("画布水印", () => {
+  it("铺满画布、不吃鼠标事件", () => {
+    const body = ruleBody(".canvas-watermark");
+    expect(body).toMatch(/position:\s*absolute/);
+    expect(body).toMatch(/inset:\s*0/);
+    expect(body).toMatch(/pointer-events:\s*none/);
+  });
+
+  it("层级在卡片之下但**不能用负数**（负数会被 .canvas 背景盖住而看不见）", () => {
+    // `.react-flow` 自身没有 position、也不是层叠上下文：负 z-index 会掉到根
+    // 层叠上下文最底层，被 .canvas 的背景盖掉。React Flow 的点阵能用 -1 是因为
+    // 它在 .react-flow__pane（z-index:1）这个独立层叠上下文内部 —— 我们不能照抄。
+    const body = ruleBody(".canvas-watermark");
+    expect(body).toMatch(/z-index:\s*0/);
+    expect(body).not.toMatch(/z-index:\s*-/);
+  });
+
+  it("水印文字很浅（浅浅的底纹），颜色与透明度写在 .wm-text 上", () => {
+    const body = ruleBody(".canvas-watermark .wm-text");
+    expect(body).toMatch(/fill:\s*#/);
+    expect(body).toMatch(/fill-opacity:\s*0\.\d+/);
+    // 字号由组件按画布单位给出，样式里不写死，免得两处打架
+    expect(body).not.toMatch(/font-size/);
+  });
+});

@@ -673,4 +673,38 @@ describe("App 集成（假后端 + 真 schema）", () => {
     // 工程里也不该再存 content 字段
     await waitFor(() => expect(lastBody?.nodes[0].fields).toEqual({}));
   });
+
+  it("水印显示工程名，并与工程名输入框实时同步", async () => {
+    const user = userEvent.setup();
+    await renderApp();
+    const wm = screen.getByTestId("canvas-watermark");
+
+    // 还没命名 → 显示「未命名」（用户确认过）
+    expect(wm).toHaveAttribute("data-label", "未命名");
+
+    await user.type(screen.getByTestId("project-name"), "雷神");
+    await waitFor(() => expect(wm).toHaveAttribute("data-label", "雷神"));
+
+    // 清空后回到占位字样
+    await user.clear(screen.getByTestId("project-name"));
+    await waitFor(() => expect(wm).toHaveAttribute("data-label", "未命名"));
+  });
+
+  it("水印贴在画布平面上：位于 React Flow 根容器内、按视口做平移缩放、斜放", async () => {
+    await renderApp();
+    const wm = screen.getByTestId("canvas-watermark");
+
+    // children 落在 .react-flow 根里（不在 viewport 内），所以层级由 z-index 决定
+    expect(wm.closest(".react-flow")).not.toBeNull();
+    expect(wm.closest(".react-flow__viewport")).toBeNull();
+
+    // 平铺图案跟着视口变换：translate(x,y) scale(zoom) rotate(斜角)
+    const pattern = wm.querySelector("pattern");
+    const transform = pattern?.getAttribute("patternTransform") ?? "";
+    expect(transform).toMatch(/^translate\(-?\d+(\.\d+)?,-?\d+(\.\d+)?\) scale\([\d.]+\) rotate\(-24\)$/);
+    // 平铺间隔按画布单位给，字号也是画布单位（随缩放一起变）
+    expect(pattern).toHaveAttribute("patternUnits", "userSpaceOnUse");
+    expect(Number(pattern?.getAttribute("width"))).toBeGreaterThan(100);
+    expect(wm.querySelector("text")).toHaveTextContent("未命名");
+  });
 });

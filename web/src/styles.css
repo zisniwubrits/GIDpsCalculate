@@ -106,6 +106,29 @@ textarea:focus {
   background: var(--bg);
 }
 
+/* 画布水印（工程名）：贴在画布平面上，跟随平移与缩放。
+   z-index 用 0 而不是负数（这点很容易踩）：`.react-flow` 自身没有 position、
+   也不是层叠上下文，若给负数就会跑到根层叠上下文的最底层，被 `.canvas` 自己的
+   背景盖住而完全看不见。React Flow 的点阵之所以能用 -1，是因为它在
+   `.react-flow__pane`（z-index:1，独立层叠上下文）内部。
+   用 0 → 排在 `.canvas` 背景之后、`.react-flow__renderer`（z-index:4，卡片与连线
+   都在里面）之前，也就是「所有卡片之下」。
+   pointer-events: none 保证不挡画布拖动、框选与连线。 */
+.canvas-watermark {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.canvas-watermark .wm-text {
+  fill: #8fa6bd;
+  fill-opacity: 0.16;
+  letter-spacing: 1px;
+  /* 字号由组件按画布单位给出（随缩放变化），这里只管颜色与字形 */
+  font-family: inherit;
+}
+
 .canvas-empty {
   position: absolute;
   inset: 0;
