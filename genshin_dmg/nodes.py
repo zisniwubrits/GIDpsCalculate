@@ -381,15 +381,15 @@ NODE_TYPES: dict = {
         _F("stat_flat", "小增益", "0"),
         _F("multiplier", "倍率%", "200", "pct"),
     ]),
-    "dmg": dict(title="增伤区 ×", label="增伤区", group="直伤乘区",
+    "dmg": dict(title="增伤区", label="增伤区", group="直伤乘区",
                 inputs=1, compute=_t_dmg, factor=_f_dmg, fields=[
         _F("dmg_net", "增伤区净%", "46.6", "pct"),
     ]),
-    "res": dict(title="抗性区 ×", label="抗性区", group="直伤乘区",
+    "res": dict(title="抗性区", label="抗性区", group="直伤乘区",
                 inputs=1, compute=_t_res, factor=_f_res, fields=[
         _F("resistance", "敌人抗性%", "10", "pct"),
     ]),
-    "def": dict(title="防御区 ×", label="防御区", group="直伤乘区",
+    "def": dict(title="防御区", label="防御区", group="直伤乘区",
                 inputs=1, compute=_t_def, factor=_f_def, fields=[
         _F("char_level", "角色等级", "90"),
         _F("enemy_level", "敌人等级", "90"),
@@ -401,21 +401,21 @@ NODE_TYPES: dict = {
         _F("crit_rate", "暴击率%", "50", "pct"),
         _F("crit_damage", "暴击伤害%", "100", "pct"),
     ]),
-    "amp": dict(title="增幅反应 ×", label="增幅反应", group="直伤乘区",
+    "amp": dict(title="增幅反应", label="增幅反应", group="直伤乘区",
                 inputs=1, compute=_t_amp, factor=_f_amp, fields=[
         _F("formula", "配方", "无", "combo", AMP_OPTIONS),
         _F("em", "元素精通", "0"),
         _F("amp_bonus", "反应增伤%", "0", "pct"),
         _F("shield", "命中护盾(不计)", False, "check"),
     ]),
-    "boost": dict(title="擢升 ×", label="擢升", group="直伤乘区",
+    "boost": dict(title="擢升", label="擢升", group="直伤乘区",
                   inputs=1, compute=_t_boost, factor=_f_boost, fields=[
         _F("boost", "擢升%", "0", "pct"),
     ]),
     # 加法合并：固定 2 路输入（曾经支持点 ＋ 扩展到 12 路，但新增的 Handle 没有通知
     # React Flow 重算端口边界（updateNodeInternals），第 3 个端口实际连不上；
     # 与其修一个没人用的扩展，不如按用户决定固定为 2 路 —— 要合并更多就串两张。
-    "add": dict(title="＋加法合并", label="＋加法", group="直伤乘区",
+    "add": dict(title="加法合并", label="加法", group="直伤乘区",
                 inputs=2, compute=_t_add, fields=[]),
     # ---- 反应源 ----
     "aggravate": dict(title="激化值(源)", label="激化值", group="反应源",
@@ -448,19 +448,19 @@ NODE_TYPES: dict = {
                        inputs=0, compute=_t_react_base, fields=[
         _F("level", "等级", "90"),
     ]),
-    "coeff": dict(title="× 系数", label="×系数", group="星月部件",
+    "coeff": dict(title="系数", label="系数", group="星月部件",
                   inputs=1, compute=_t_coeff, factor=_f_coeff, fields=[
         _F("coeff", "系数", "1"),
     ]),
-    "mult": dict(title="× 倍率%", label="×倍率", group="星月部件",
+    "mult": dict(title="倍率%", label="倍率", group="星月部件",
                  inputs=1, compute=_t_mult, factor=_f_mult, fields=[
         _F("multiplier", "倍率%", "200", "pct"),
     ]),
-    "base_boost": dict(title="× (1+基础提升%)", label="×基础提升", group="星月部件",
+    "base_boost": dict(title="(1+基础提升%)", label="基础提升", group="星月部件",
                        inputs=1, compute=_t_base_boost, factor=_f_base_boost, fields=[
         _F("base_boost", "基础提升%", "0", "pct"),
     ]),
-    "em_gain": dict(title="× 精通增益(1+k·EM/(EM+den)+增伤%)", label="×精通增益",
+    "em_gain": dict(title="精通增益(1+k·EM/(EM+den)+增伤%)", label="精通增益",
                     group="星月部件", inputs=1, compute=_t_em_gain,
                     factor=_f_em_gain, fields=[
         _F("em", "元素精通", "0"),
@@ -468,7 +468,7 @@ NODE_TYPES: dict = {
         _F("denom", "分母（星月·剧变2000/激化1200）", "2000"),
         _F("bonus", "增伤%", "0", "pct"),
     ]),
-    "star_coeff": dict(title="星超导系数 ×", label="星超导系数", group="星月部件",
+    "star_coeff": dict(title="星超导系数", label="星超导系数", group="星月部件",
                        inputs=1, compute=_t_star_coeff, factor=_f_star_coeff, fields=[
         _F("hits", "层数", "0"),
     ]),

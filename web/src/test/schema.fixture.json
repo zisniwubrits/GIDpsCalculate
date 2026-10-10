@@ -35,7 +35,7 @@
         },
         {
           "type": "add",
-          "label": "＋加法"
+          "label": "加法"
         }
       ]
     },
@@ -69,19 +69,19 @@
         },
         {
           "type": "coeff",
-          "label": "×系数"
+          "label": "系数"
         },
         {
           "type": "mult",
-          "label": "×倍率"
+          "label": "倍率"
         },
         {
           "type": "base_boost",
-          "label": "×基础提升"
+          "label": "基础提升"
         },
         {
           "type": "em_gain",
-          "label": "×精通增益"
+          "label": "精通增益"
         },
         {
           "type": "star_coeff",
@@ -174,7 +174,7 @@
     },
     "dmg": {
       "type": "dmg",
-      "title": "增伤区 ×",
+      "title": "增伤区",
       "label": "增伤区",
       "group": "直伤乘区",
       "inputs": 1,
@@ -205,7 +205,7 @@
     },
     "res": {
       "type": "res",
-      "title": "抗性区 ×",
+      "title": "抗性区",
       "label": "抗性区",
       "group": "直伤乘区",
       "inputs": 1,
@@ -236,7 +236,7 @@
     },
     "def": {
       "type": "def",
-      "title": "防御区 ×",
+      "title": "防御区",
       "label": "防御区",
       "group": "直伤乘区",
       "inputs": 1,
@@ -326,7 +326,7 @@
     },
     "amp": {
       "type": "amp",
-      "title": "增幅反应 ×",
+      "title": "增幅反应",
       "label": "增幅反应",
       "group": "直伤乘区",
       "inputs": 1,
@@ -385,7 +385,7 @@
     },
     "boost": {
       "type": "boost",
-      "title": "擢升 ×",
+      "title": "擢升",
       "label": "擢升",
       "group": "直伤乘区",
       "inputs": 1,
@@ -416,8 +416,8 @@
     },
     "add": {
       "type": "add",
-      "title": "＋加法合并",
-      "label": "＋加法",
+      "title": "加法合并",
+      "label": "加法",
       "group": "直伤乘区",
       "inputs": 2,
       "fields": [],
@@ -671,8 +671,8 @@
     },
     "coeff": {
       "type": "coeff",
-      "title": "× 系数",
-      "label": "×系数",
+      "title": "系数",
+      "label": "系数",
       "group": "星月部件",
       "inputs": 1,
       "fields": [
@@ -702,8 +702,8 @@
     },
     "mult": {
       "type": "mult",
-      "title": "× 倍率%",
-      "label": "×倍率",
+      "title": "倍率%",
+      "label": "倍率",
       "group": "星月部件",
       "inputs": 1,
       "fields": [
@@ -733,8 +733,8 @@
     },
     "base_boost": {
       "type": "base_boost",
-      "title": "× (1+基础提升%)",
-      "label": "×基础提升",
+      "title": "(1+基础提升%)",
+      "label": "基础提升",
       "group": "星月部件",
       "inputs": 1,
       "fields": [
@@ -764,8 +764,8 @@
     },
     "em_gain": {
       "type": "em_gain",
-      "title": "× 精通增益(1+k·EM/(EM+den)+增伤%)",
-      "label": "×精通增益",
+      "title": "精通增益(1+k·EM/(EM+den)+增伤%)",
+      "label": "精通增益",
       "group": "星月部件",
       "inputs": 1,
       "fields": [
@@ -816,7 +816,7 @@
     },
     "star_coeff": {
       "type": "star_coeff",
-      "title": "星超导系数 ×",
+      "title": "星超导系数",
       "label": "星超导系数",
       "group": "星月部件",
       "inputs": 1,

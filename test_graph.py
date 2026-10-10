@@ -227,6 +227,31 @@ class TestResultDisplay(unittest.TestCase):
         self.assertTrue(any("暴击区" in w for w in g.evaluate()["warnings"]))
 
 
+class TestCardTitles(unittest.TestCase):
+    """卡片标题 / 菜单名不再带装饰性的 ＋/×（公式括号内的内容保持原样）。"""
+
+    def test_titles_and_labels_have_no_operator_markers(self):
+        for key, spec in nd.NODE_TYPES.items():
+            for text in (spec["title"], spec["label"]):
+                self.assertNotIn("＋", text, "%s 的标题/菜单名仍带 ＋：%s" % (key, text))
+                self.assertFalse(text.startswith("×"),
+                                 "%s 的标题/菜单名仍以 × 开头：%s" % (key, text))
+                self.assertFalse(text.rstrip().endswith("×"),
+                                 "%s 的标题/菜单名仍以 × 结尾：%s" % (key, text))
+
+    def test_specific_titles(self):
+        """典型卡片的新标题：去掉装饰性符号，括号里的公式保留。"""
+        self.assertEqual(nd.NODE_TYPES["dmg"]["title"], "增伤区")
+        self.assertEqual(nd.NODE_TYPES["star_coeff"]["title"], "星超导系数")
+        self.assertEqual(nd.NODE_TYPES["add"]["title"], "加法合并")
+        self.assertEqual(nd.NODE_TYPES["coeff"]["title"], "系数")
+        self.assertEqual(nd.NODE_TYPES["add"]["label"], "加法")
+        self.assertEqual(nd.NODE_TYPES["em_gain"]["label"], "精通增益")
+        # 括号里的公式是说明文字，保留 ×
+        self.assertEqual(nd.NODE_TYPES["base"]["title"], "基础值 (属性×倍率)")
+        self.assertEqual(nd.NODE_TYPES["attr"]["title"], "◈ 属性源(白×(1+大)+小)")
+
+
 class TestFactorDisplay(unittest.TestCase):
     def test_every_factor_uses_times_sign(self):
         """所有「本卡系数」的数字都带 × 号（如 暴击系数 ×2.630）。"""
