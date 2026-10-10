@@ -4,6 +4,8 @@ export interface ToolbarProps {
   onName: (v: string) => void;
   /** 一键保存的落地目录（后端记忆，点保存直接写到这里） */
   saveDir: string;
+  /** 前端产物过期提示（非空时在工具栏显示一条警告） */
+  staleHint?: string;
   dirty: boolean;
   canUndo: boolean;
   canRedo: boolean;
@@ -85,6 +87,11 @@ export default function Toolbar(props: ToolbarProps) {
         <span className={`tb-status st-${status.kind}`} data-testid="status">
           {status.text}
         </span>
+        {props.staleHint ? (
+          <span className="tb-stale" title={props.staleHint} data-testid="stale-hint">
+            ⚠ 前端产物过期
+          </span>
+        ) : null}
         <button type="button" className="tb-help" onClick={props.onHelp} title="F1">
           教程 (F1)
         </button>

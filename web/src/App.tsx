@@ -19,7 +19,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { fetchStorage, openProject, saveProject, saveReport } from "./api";
+import { fetchStorage, health, openProject, saveProject, saveReport } from "./api";
 import { copyText } from "./clipboard";
 import CardNode, { type CardData, type CardRFNode, type MenuKind } from "./components/CardNode";
 import CardEdge, { type CardRFEdge } from "./components/CardEdge";
@@ -106,6 +106,8 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
   const [name, setName] = useState(initial.name);
   /** 一键保存的落地目录（后端记忆，打开/保存后同步） */
   const [saveDir, setSaveDir] = useState("");
+  /** 前端产物过期的提示文案（后端 /api/health 判定，空串表示正常） */
+  const [staleHint, setStaleHint] = useState("");
   const [savedZoom, setSavedZoom] = useState(initial.zoom);
   const [dirty, setDirty] = useState(false);
   const [menu, setMenu] = useState<{ id: string; kind: MenuKind; x: number; y: number } | null>(
@@ -181,6 +183,23 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
     const ctrl = new AbortController();
     fetchStorage(ctrl.signal)
       .then((s) => setSaveDir(s.dir))
+      .catch(() => undefined);
+    return () => ctrl.abort();
+  }, []);
+
+  // 前端产物过期提示：后端会比对 web/dist 与 web/src 的时间
+  // （注意：这条提示本身要新 bundle 才看得到，所以 launcher 与启动日志也会提醒）
+  useEffect(() => {
+    const ctrl = new AbortController();
+    health(ctrl.signal)
+      .then((h) => {
+        if (!h.webStale) return;
+        setStaleHint(
+          h.webBuilt
+            ? `前端产物过期（${h.webBuildTime ?? "未知"}）：浏览器用的是旧界面，请重建 → cd web && pnpm build`
+            : "还没有前端构建产物：请执行 cd web && pnpm build",
+        );
+      })
       .catch(() => undefined);
     return () => ctrl.abort();
   }, []);
@@ -618,6 +637,7 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
         name={name}
         onName={setName}
         saveDir={saveDir}
+        staleHint={staleHint}
         dirty={dirty}
         canUndo={history.canUndo}
         canRedo={history.canRedo}

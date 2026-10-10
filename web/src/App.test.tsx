@@ -21,6 +21,8 @@ const fakeBackend = {
   open: null as null | { ok: boolean; cancelled?: boolean; graph?: GraphJSON; dir?: string; path?: string },
   reportPath: "",
   savePath: "",
+  /** /api/health 报的“前端产物过期”状态 */
+  webStale: false,
 };
 
 const jsonResponse = (data: unknown) =>
@@ -80,6 +82,16 @@ function installFetch() {
   fakeBackend.savePath = `${fakeBackend.dir}\\雷神.json`;
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
+    if (url.includes("/api/health"))
+      return jsonResponse({
+        ok: true,
+        version: "0.1.0",
+        webBuilt: true,
+        webStale: fakeBackend.webStale,
+        webBuildTime: "2026-10-10 01:30:20",
+        webSourceTime: "2026-10-10 01:29:55",
+        webReason: fakeBackend.webStale ? "前端源码比构建产物新" : "产物是最新的",
+      });
     if (url.includes("/api/schema")) return jsonResponse(schema);
     if (url.includes("/api/help"))
       return jsonResponse({
@@ -139,6 +151,7 @@ describe("App 集成（假后端 + 真 schema）", () => {
   beforeEach(() => {
     window.localStorage.clear();
     fakeBackend.open = null;
+    fakeBackend.webStale = false;
     installFetch();
   });
 
@@ -362,6 +375,21 @@ describe("App 集成（假后端 + 真 schema）", () => {
     await waitFor(() =>
       expect(screen.getByTestId("save-dir")).toHaveTextContent("private\\projects"),
     );
+  });
+
+  it("后端报告前端产物过期时，工具栏给出重建提示", async () => {
+    fakeBackend.webStale = true;
+    await renderApp();
+
+    const hint = await screen.findByTestId("stale-hint");
+    expect(hint).toHaveTextContent("前端产物过期");
+    expect(hint.getAttribute("title")).toContain("pnpm build");
+  });
+
+  it("产物是最新时不显示过期提示", async () => {
+    await renderApp();
+    await waitFor(() => expect(screen.getByTestId("save-dir")).toBeInTheDocument());
+    expect(screen.queryByTestId("stale-hint")).not.toBeInTheDocument();
   });
 
   it("导出结果由后端写成 txt，并显示落地路径", async () => {

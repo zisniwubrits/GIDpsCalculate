@@ -12,7 +12,8 @@ rem                          -> extra args after the port are passed to main.py
 rem                             (--reload backend hot reload / --no-browser)
 rem
 rem  First run fills in what a fresh clone is missing (both are gitignored):
-rem     web\dist\    frontend build   -> install + build automatically
+rem     web\dist\    frontend build   -> rebuilt automatically when missing **or
+rem                                      older than web\src** (see the note below)
 rem     fastapi/uvicorn backend deps  -> reuse the installed python, else make .venv
 rem
 rem  NOTE: keep this file PURE ASCII and CRLF. cmd.exe parses batch files using
@@ -150,9 +151,18 @@ rem ---- frontend build -------------------------------------------------------
 rem Use goto instead of an if(...) block on purpose: cmd parses a whole block at
 rem once, so %PKG% would expand to an empty string before it is set, and
 rem `call %PKG% build` would fail with "'build' is not recognized".
-if exist "%ROOT%web\dist\index.html" goto :frontend_ready
+rem
+rem Checking only whether web\dist\index.html exists is not enough: after a
+rem `git pull` the old dist is still there, so the backend keeps serving the
+rem OLD ui (APIs fine, features missing - very hard to notice).
+rem The staleness rule lives in Python so launcher / health / main.py agree.
+pushd "%ROOT%"
+"%PY%" -m server.build_check >nul 2>nul
+set "STALE=%errorlevel%"
+popd
+if "%STALE%"=="0" goto :frontend_ready
 
-echo   [1/2] web\dist not found, building the frontend ...
+echo   [1/2] web\dist is missing or older than web\src, building the frontend ...
 call :pick_pkg
 if not defined PKG goto :no_pkg
 echo   package manager: %PKG%

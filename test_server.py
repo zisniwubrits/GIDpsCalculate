@@ -336,6 +336,87 @@ class TestTutorial(unittest.TestCase):
                    ensure_ascii=False)
 
 
+class TestFrontendStaleness(unittest.TestCase):
+    """前端产物过期的判定要能从接口看到（否则界面缺功能时无从下手）。
+
+    这里的临时目录要**照真实层级**搭：`<web>/dist/index.html` + `<web>/src/...`。
+    （早先只用 web/dist 当参数、fixture 也没有 src，结果漏掉了「层级传错 →
+    产物明明在却报未构建」这个 bug。）
+    """
+
+    def make_web(self, web_stale: bool):
+        """造一个前端目录：dist 存在，src 按需比 dist 新。"""
+        tmp = TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        web = Path(tmp.name) / "web"
+        (web / "dist" / "assets").mkdir(parents=True)
+        (web / "src").mkdir(parents=True)
+        (web / "dist" / "index.html").write_text("<html>ok</html>", encoding="utf-8")
+        (web / "dist" / "assets" / "index-abc.js").write_text("1", encoding="utf-8")
+        (web / "src" / "App.tsx").write_text("// app", encoding="utf-8")
+        if web_stale:
+            os.utime(web / "src" / "App.tsx", (2_000_000_000, 2_000_000_000))
+            os.utime(web / "dist" / "index.html", (1_000_000_000, 1_000_000_000))
+        else:
+            os.utime(web / "src" / "App.tsx", (1_000_000_000, 1_000_000_000))
+            os.utime(web / "dist" / "index.html", (2_000_000_000, 2_000_000_000))
+
+        patcher = mock.patch("server.app.WEB_DIST", str(web / "dist"))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        return web
+
+    def test_health_reports_staleness_fields(self):
+        body = client.get("/api/health").json()
+        for key in ("webBuilt", "webStale", "webBuildTime", "webSourceTime", "webReason"):
+            self.assertIn(key, body)
+
+    def test_health_sees_existing_build(self):
+        """产物存在就必须报 built=True（层级传错的话这里会红）。"""
+        self.make_web(web_stale=False)
+        body = client.get("/api/health").json()
+
+        self.assertTrue(body["webBuilt"])
+        self.assertFalse(body["webStale"])
+        self.assertEqual(body["webReason"], "产物是最新的")
+        self.assertRegex(body["webBuildTime"], r"^\d{4}-\d{2}-\d{2} ")
+
+    def test_health_flags_stale_build(self):
+        self.make_web(web_stale=True)
+        body = client.get("/api/health").json()
+
+        self.assertTrue(body["webBuilt"])
+        self.assertTrue(body["webStale"])
+        self.assertEqual(body["webReason"], "前端源码比构建产物新")
+
+    def test_index_html_is_not_cached_but_assets_are(self):
+        """index.html 必须 no-cache：它是入口，缓存住就等于一直用旧 bundle。"""
+        self.make_web(web_stale=False)
+
+        index = client.get("/")
+        self.assertEqual(index.status_code, 200)
+        self.assertIn("no-cache", index.headers.get("cache-control", ""))
+
+        asset = client.get("/assets/index-abc.js")
+        self.assertEqual(asset.status_code, 200)
+        self.assertIn("immutable", asset.headers.get("cache-control", ""))
+
+        # 未命中的前端路由回落 index.html，同样不能缓存
+        spa = client.get("/some/route")
+        self.assertEqual(spa.status_code, 200)
+        self.assertIn("no-cache", spa.headers.get("cache-control", ""))
+
+    def test_index_falls_back_when_dist_missing(self):
+        with TemporaryDirectory() as tmp:
+            patcher = mock.patch("server.app.WEB_DIST", tmp)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+            r = client.get("/")
+            self.assertEqual(r.status_code, 200)
+            self.assertIn("后端已启动", r.text)
+
+
 class TestStorageApi(StorageIsolated):
     """一键保存 / 打开 / 记忆目录的接口测试。"""
 

@@ -75,6 +75,13 @@ class TestLauncher(unittest.TestCase):
         self.assertLess(pnpm, corepack)
         self.assertLess(corepack, npm)
 
+    def test_frontend_staleness_checked_by_python(self):
+        """不能只判断 dist 是否存在：git pull 后旧产物会被一直沿用（界面缺功能）。"""
+        text = self.raw.decode("ascii")
+        self.assertIn("server.build_check", text)
+        self.assertNotIn('if exist "%ROOT%web\\dist\\index.html"', text)
+        self.assertIn("older than web\\src", text)
+
     def test_default_port_matches_backend(self):
         """启动器默认端口要和 main.py 的默认端口一致。"""
         self.assertIn("8777", self.raw.decode("ascii"))

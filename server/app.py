@@ -34,7 +34,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
 from genshin_dmg import __version__, nodes, report, tutorial
 from genshin_dmg.graph import Graph, GraphError
-from server import dialogs, storage
+from server import build_check, dialogs, storage
 
 __all__ = ["app", "create_app", "WEB_DIST"]
 
@@ -94,8 +94,16 @@ def create_app() -> FastAPI:
     # ------------------------------------------------------------------
     @app.get("/api/health")
     def health():
+        """健康检查 + 前端产物是否过期（前端据此在界面上提示「请重建」）。
+
+        注意用 ``status_for_dist``：这里只拿得到 ``web/dist``，
+        直接传给 ``status`` 会被当成前端工程目录而误报「还没有构建产物」。
+        """
+        web = build_check.status_for_dist(WEB_DIST)
         return dict(ok=True, app="GenshinDamageCalc", version=__version__,
-                    webBuilt=os.path.isfile(os.path.join(WEB_DIST, "index.html")))
+                    webBuilt=web["built"], webStale=web["stale"],
+                    webBuildTime=web["buildTime"], webSourceTime=web["sourceTime"],
+                    webReason=web["reason"])
 
     @app.get("/api/schema")
     def get_schema():
@@ -212,12 +220,20 @@ def create_app() -> FastAPI:
 
     # ------------------------------------------------------------------
     # 生产构建产物（web/dist）
+    #
+    # 缓存策略（很重要）：
+    #   * index.html 必须 **no-cache**：它是入口，重建后若被浏览器缓存住，
+    #     就会继续引用旧的带 hash 的 bundle —— 表现同样是「界面缺功能」；
+    #   * /assets/* 文件名带内容 hash，可以放心长缓存（immutable）。
     # ------------------------------------------------------------------
+    _INDEX_HEADERS = {"Cache-Control": "no-cache, must-revalidate"}
+    _ASSET_HEADERS = {"Cache-Control": "public, max-age=31536000, immutable"}
+
     @app.get("/", response_class=HTMLResponse)
     def index():
         page = os.path.join(WEB_DIST, "index.html")
         if os.path.isfile(page):
-            return FileResponse(page, media_type="text/html")
+            return FileResponse(page, media_type="text/html", headers=_INDEX_HEADERS)
         return HTMLResponse(_FALLBACK_HTML)
 
     @app.get("/{path:path}")
@@ -227,10 +243,11 @@ def create_app() -> FastAPI:
             return JSONResponse(status_code=404, content=dict(ok=False, error="未知接口"))
         full = os.path.normpath(os.path.join(WEB_DIST, path))
         if full.startswith(WEB_DIST) and os.path.isfile(full):
-            return FileResponse(full)
+            headers = _ASSET_HEADERS if path.startswith("assets/") else None
+            return FileResponse(full, headers=headers)
         page = os.path.join(WEB_DIST, "index.html")
         if os.path.isfile(page):
-            return FileResponse(page, media_type="text/html")
+            return FileResponse(page, media_type="text/html", headers=_INDEX_HEADERS)
         return HTMLResponse(_FALLBACK_HTML, status_code=200)
 
     return app

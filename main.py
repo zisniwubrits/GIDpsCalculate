@@ -18,10 +18,11 @@
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 import threading
 import webbrowser
+
+from server import build_check
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8777
@@ -47,11 +48,22 @@ def main(argv=None) -> int:
         return 1
 
     url = "http://%s:%d" % (args.host, args.port)
-    built = os.path.isfile(os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), "web", "dist", "index.html"))
+    state = build_check.status()
     print("原神伤害计算器后端： %s" % url)
-    print("前端构建产物： %s" % ("已就绪（web/dist）" if built else
-                             "未构建 —— 开发请另开终端跑 cd web && pnpm dev"))
+    if not state["built"]:
+        print("前端构建产物： 未构建 —— 开发请另开终端跑 cd web && pnpm dev，"
+              "或先 cd web && pnpm build")
+    elif state["stale"]:
+        # 关键提醒：接口会完全正常，但浏览器拿到的是旧界面（缺新功能），极难自行发现
+        print("=" * 66)
+        print("【注意】前端产物已过期：%s" % state["reason"])
+        print("        产物时间 %s ／ 源码最新 %s" % (state["buildTime"], state["sourceTime"]))
+        print("        浏览器会继续显示旧界面（接口正常但缺新功能）。请执行：")
+        print("            cd web && pnpm build")
+        print("        或直接用 launcher.bat 启动（它会自动重建）。")
+        print("=" * 66)
+    else:
+        print("前端构建产物： 已就绪（%s）" % state["buildTime"])
     if not args.no_browser:
         _open_browser_later(url)
 

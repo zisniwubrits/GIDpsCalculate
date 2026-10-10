@@ -56,12 +56,15 @@ git commit -m "feat: 简述这个功能"
 | `genshin_dmg/graph.py` | 节点图模型与求值（变量两轮解析、环路检测、工程 JSON 往返） |
 | `genshin_dmg/report.py` | 文本报告（导出结果） |
 | `genshin_dmg/tutorial.py` | F1 教程文案（后端提供文本，前端只渲染） |
-| `server/app.py` | FastAPI 接口 + 生产环境静态托管 `web/dist` |
+| `server/app.py` | FastAPI 接口 + 生产环境静态托管 `web/dist`（index.html no-cache、assets 长缓存） |
+| `server/storage.py` | 工程落盘：记忆目录、工程名清洗、一键保存路径规则 |
+| `server/dialogs.py` | 本机原生文件对话框（子进程弹 tkinter） |
+| `server/build_check.py` | 前端产物是否过期（启动器 / main.py / /api/health 共用） |
 | `web/src/App.tsx` | 前端主界面（画布、工具栏、侧栏、撤销重做、工程读写） |
 | `web/src/model.ts` | 画布模型纯函数（落位、对齐、预设、JSON 往返）——业务规则放这里，方便单测 |
 | `web/src/components/` | 卡片、连线、表格、右键菜单、弹窗、侧栏、工具栏 |
 | `web/src/state/` | 撤销重做、后端请求、localStorage 持久化 |
-| `test_damage.py` / `test_graph.py` / `test_server.py` / `test_launcher.py` | 后端与启动器测试（`python -m pytest`） |
+| `test_damage.py` / `test_graph.py` / `test_server.py` / `test_storage.py` / `test_build_check.py` / `test_launcher.py` | 后端与启动器测试（`python -m pytest`） |
 | `web/src/**/*.test.ts(x)` | 前端测试（`pnpm test`） |
 | `private/` | 个人存档与笔记，**已被 .gitignore 忽略，不要提交** |
 
@@ -103,6 +106,26 @@ git commit -m "feat: 简述这个功能"
 - 前端开发服务器 5173，Vite 已把 `/api` 代理到 8777；后端换端口时用环境变量：
   PowerShell `$env:DSH_API="http://127.0.0.1:9000"; pnpm dev`。
 - 生产：`cd web && pnpm build` → `web/dist`，由 `python main.py` 直接托管。
+
+### 前端产物必须重建（很容易踩的坑）
+
+**改了 `web/` 下任何东西，都要 `pnpm build`**；否则后端继续把**旧界面**发给浏览器：
+接口全部正常、功能却缺失（新按钮/新面板不出现），因为没有报错而极难发现。
+
+判定逻辑只有一份，在 `server/build_check.py`：`web/dist/index.html` 不存在，
+或**比前端源码最新修改时间旧**（监视 `web/src` 全部文件 + `index.html` /
+`package.json` / `vite.config.ts` / `tsconfig.json` / 锁文件）就算过期。三处共用：
+
+| 位置 | 行为 |
+|---|---|
+| `launcher.bat` | 过期就**自动重建**（不再只看 dist 是否存在） |
+| `python main.py` | 启动时在终端打印警告与修复命令 |
+| `GET /api/health` | 返回 `webStale` / `webBuildTime` / `webSourceTime`，前端工具栏显示「⚠ 前端产物过期」 |
+
+另外 `index.html` 一律以 `Cache-Control: no-cache` 提供（入口不能缓存，否则重建后
+浏览器仍会加载旧 bundle）；`/assets/*` 文件名带内容 hash，长缓存 + `immutable`。
+
+自检：`python -m server.build_check`（退出码 0 = 最新，1 = 需要重建）。
 
 ### 启动器（`launcher.bat`）：必须纯 ASCII，界面文案用英文
 

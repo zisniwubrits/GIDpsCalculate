@@ -215,6 +215,18 @@ textarea:focus {
   color: var(--accent);
 }
 
+/* 前端产物过期警告（鼠标悬停看 title 里的修复命令） */
+.tb-stale {
+  font-size: 12px;
+  color: #8a5a00;
+  background: #fff5da;
+  border: 1px solid #f0d69a;
+  border-radius: 10px;
+  padding: 1px 8px;
+  cursor: help;
+  white-space: nowrap;
+}
+
 /* -------------------------------------------------------------- 侧边栏 */
 .sidebar {
   width: 186px;

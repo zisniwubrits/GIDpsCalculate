@@ -105,6 +105,11 @@ export function health(signal?: AbortSignal): Promise<{
   ok: boolean;
   version: string;
   webBuilt: boolean;
+  /** 前端产物比源码旧（浏览器拿到的是旧界面）—— 界面据此提示重建 */
+  webStale: boolean;
+  webBuildTime: string | null;
+  webSourceTime: string | null;
+  webReason: string;
 }> {
   return getJSON("/api/health", signal);
 }
