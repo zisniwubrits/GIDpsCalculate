@@ -317,6 +317,11 @@ textarea:focus {
   text-overflow: ellipsis;
 }
 
+/* 折叠卡片：只剩标题栏（字段区与底部输出都不渲染），去掉多余的分隔线 */
+.card-collapsed .card-head {
+  border-bottom: 0;
+}
+
 .card-x {
   padding: 0 5px;
   line-height: 16px;

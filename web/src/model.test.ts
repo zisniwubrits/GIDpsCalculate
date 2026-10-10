@@ -177,6 +177,27 @@ describe("工程 JSON 往返", () => {
     expect(back.links).toEqual(links);
   });
 
+  it("折叠状态随工程 JSON 往返；旧存档缺该字段时按展开处理", () => {
+    const nodes = [
+      node("n1", "dmg", [40, 60], { collapsed: true }),
+      node("n2", "res", [400, 60]),
+    ];
+    const json = graphToJSON(nodes, [], 1, "折叠");
+    // 始终写出布尔值，便于后端 / 旧版读取
+    expect(json.nodes[0].collapsed).toBe(true);
+    expect(json.nodes[1].collapsed).toBe(false);
+
+    const back = jsonToGraph(json, schema);
+    expect(back.nodes[0].collapsed).toBe(true);
+    expect(back.nodes[1].collapsed).toBe(false);
+
+    const legacy = jsonToGraph(
+      { nodes: [{ id: "n1", type: "dmg", pos: [0, 0], fields: {} }], links: [] },
+      schema,
+    );
+    expect(legacy.nodes[0].collapsed).toBe(false);
+  });
+
   it("兼容旧存档：缺 size/font_size/inputs，旧配方写法", () => {
     const legacy = {
       version: 1,

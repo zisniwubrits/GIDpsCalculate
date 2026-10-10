@@ -60,6 +60,7 @@ export function makeNode(
     font_size: null,
     inputs: spec.inputs,
     fields,
+    collapsed: false,
   };
 }
 
@@ -266,6 +267,7 @@ export function graphToJSON(
       font_size: n.font_size,
       inputs: n.inputs,
       fields: { ...n.fields },
+      collapsed: Boolean(n.collapsed),
     })),
     links: links.map((l) => ({ src: l.src, dst: l.dst, port: l.port })),
   };
@@ -315,6 +317,7 @@ export function jsonToGraph(
       font_size: Number.isFinite(rawFont) && rawFont > 0 ? rawFont : null,
       inputs,
       fields,
+      collapsed: Boolean((nd as { collapsed?: unknown }).collapsed),
     });
   });
   const links: GraphLinkJSON[] = [];

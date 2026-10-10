@@ -456,6 +456,17 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
     [apply],
   );
 
+  /** 折叠 / 展开卡片（只显示卡片类型）。界面状态：写进工程 JSON，不进求值载荷。 */
+  const toggleCollapse = useCallback(
+    (id: string) => {
+      apply((s) => ({
+        ...s,
+        nodes: s.nodes.map((n) => (n.id === id ? { ...n, collapsed: !n.collapsed } : n)),
+      }));
+    },
+    [apply],
+  );
+
   const menuItems = useMemo<MenuItem[]>(() => {
     if (!menu) return [];
     const node = nodes.find((n) => n.id === menu.id);
@@ -512,9 +523,14 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
         },
       });
     }
+    items.push({
+      label: node.collapsed ? "展开卡片" : "折叠卡片",
+      onClick: () => toggleCollapse(menu.id),
+    });
     items.push({ label: "删除卡片", danger: true, onClick: () => removeNode(menu.id) });
     return items;
-  }, [menu, nodes, schema, results, copyNodeValue, removeNode, setFontSize, setResultVars]);
+  }, [menu, nodes, schema, results, copyNodeValue, removeNode, setFontSize, setResultVars,
+      toggleCollapse]);
 
   // -- 键盘快捷键 --------------------------------------------------------
   useEffect(() => {
@@ -571,11 +587,15 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
           onMenu: (id, kind, ev) => setMenu({ id, kind, x: ev.clientX, y: ev.clientY }),
           onCopy,
         };
-        const style = n.resizing
-          ? undefined
-          : n.size
-            ? { width: n.size[0], height: n.size[1] }
-            : undefined;
+        let style: { width?: number; height?: number } | undefined;
+        if (!n.resizing) {
+          if (n.collapsed) {
+            // 折叠后高度由内容（只剩标题栏）决定，只保留用户拖出来的宽度
+            style = n.size ? { width: n.size[0] } : undefined;
+          } else if (n.size) {
+            style = { width: n.size[0], height: n.size[1] };
+          }
+        }
         return {
           id: n.id,
           type: "card" as const,

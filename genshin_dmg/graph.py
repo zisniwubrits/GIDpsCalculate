@@ -39,10 +39,11 @@ class GraphError(ValueError):
 class GraphNode:
     """一张卡片。"""
 
-    __slots__ = ("id", "type", "pos", "size", "font_size", "inputs", "fields")
+    __slots__ = ("id", "type", "pos", "size", "font_size", "inputs", "fields",
+                 "collapsed")
 
     def __init__(self, id, type, pos=(40.0, 60.0), size=None, font_size=None,
-                 inputs=None, fields=None):
+                 inputs=None, fields=None, collapsed=False):
         if type not in NODE_TYPES:
             raise GraphError("未知卡片类型: %s" % type)
         self.id = str(id)
@@ -52,6 +53,9 @@ class GraphNode:
         self.font_size = float(font_size) if font_size else None
         self.inputs = self._norm_inputs(inputs)
         self.fields = self._coerce(fields)
+        # 折叠只是界面状态（前端只显示卡片类型），但属于工程 JSON 的一部分：
+        # 存在这里是为了 /api/evaluate 回传的规范化图不丢字段。
+        self.collapsed = to_bool(collapsed)
 
     @staticmethod
     def _norm_size(size):
@@ -117,6 +121,7 @@ class GraphNode:
             font_size=self.font_size,
             inputs=int(self.inputs),
             fields=dict(self.fields),
+            collapsed=bool(self.collapsed),
         )
 
 
@@ -448,7 +453,7 @@ class Graph:
             node = GraphNode(
                 id=nid, type=t, pos=pos, size=nd.get("size"),
                 font_size=nd.get("font_size"), inputs=nd.get("inputs"),
-                fields=nd.get("fields"),
+                fields=nd.get("fields"), collapsed=nd.get("collapsed"),
             )
             g.add(node)
             if old is not None:

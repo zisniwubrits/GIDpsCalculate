@@ -387,6 +387,29 @@ class TestGraphStructure(unittest.TestCase):
         self.assertEqual(Graph.from_dict(dict(zoom=0.01)).zoom, 0.25)
         self.assertEqual(Graph.from_dict(dict(zoom="坏值")).zoom, 1.0)
 
+    def test_collapsed_flag_roundtrips(self):
+        """折叠是界面状态，但要能随工程 JSON 往返（evaluate 回传的规范图也不丢）。"""
+        data = dict(nodes=[
+            dict(id="n1", type="dmg", pos=[10, 20], fields={}, collapsed=True),
+            dict(id="n2", type="res", pos=[30, 40], fields={}),
+        ], links=[])
+        g = Graph.from_dict(data)
+
+        self.assertTrue(g.nodes["n1"].collapsed)
+        self.assertFalse(g.nodes["n2"].collapsed)          # 旧工程没有该字段 → 展开
+        back = Graph.from_dict(g.to_dict())
+        self.assertTrue(back.nodes["n1"].collapsed)
+        self.assertFalse(back.nodes["n2"].collapsed)
+
+    def test_collapsed_accepts_string_and_garbage(self):
+        """JSON 里写成 "false"/坏值时按布尔语义安全解析。"""
+        g = Graph.from_dict(dict(nodes=[
+            dict(id="n1", type="dmg", fields={}, collapsed="false"),
+            dict(id="n2", type="dmg", fields={}, collapsed="坏值"),
+        ]))
+        self.assertFalse(g.nodes["n1"].collapsed)
+        self.assertFalse(g.nodes["n2"].collapsed)
+
     def test_link_to_same_port_replaces(self):
         g = Graph()
         g.add(GraphNode("s1", "base", fields={"stat_base": "1000", "multiplier": "100"}))

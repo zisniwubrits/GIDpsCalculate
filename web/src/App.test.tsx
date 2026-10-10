@@ -324,6 +324,41 @@ describe("App 集成（假后端 + 真 schema）", () => {
     expect(lastBody?.links.every((l) => l.src !== "n2" && l.dst !== "n2")).toBe(true);
   });
 
+  it("右键标题栏可折叠卡片：只显示卡片类型；折叠状态进工程 JSON，不进求值载荷", async () => {
+    const user = userEvent.setup();
+    await renderApp();
+    await addCard(user, "dmg");
+    const card = await screen.findByTestId("card-n1");
+    await waitFor(() => expect(lastBody?.nodes).toHaveLength(1));
+    expect(within(card).getByText("增伤区净%")).toBeInTheDocument();
+
+    fireEvent.contextMenu(card.querySelector(".card-head") as HTMLElement);
+    await user.click(
+      within(await screen.findByTestId("ctx-card")).getByRole("button", { name: "折叠卡片" }),
+    );
+
+    await waitFor(() => expect(card).toHaveAttribute("data-collapsed", "1"));
+    // 折叠后：字段区与底部输出都不渲染，只剩卡片类型名
+    expect(within(card).queryByText("增伤区净%")).not.toBeInTheDocument();
+    expect(card.querySelector(".card-body")).toBeNull();
+    expect(card.querySelector(".card-foot")).toBeNull();
+    expect(card.textContent).toContain("增伤区");
+    // 界面状态：不进求值载荷（否则折叠一次就要重算）
+    expect(lastBody?.nodes[0]).not.toHaveProperty("collapsed");
+
+    // 折叠状态随工程 JSON 保存 / 恢复
+    await user.click(screen.getByRole("button", { name: "保存工程…" }));
+    await waitFor(() => expect(savedBody?.nodes[0].collapsed).toBe(true));
+
+    // 再右键可展开
+    fireEvent.contextMenu(card.querySelector(".card-head") as HTMLElement);
+    await user.click(
+      within(await screen.findByTestId("ctx-card")).getByRole("button", { name: "展开卡片" }),
+    );
+    await waitFor(() => expect(card).not.toHaveAttribute("data-collapsed"));
+    expect(within(card).getByText("增伤区净%")).toBeInTheDocument();
+  });
+
   it("撤销 / 重做（Ctrl+Z、Ctrl+Shift+Z）", async () => {
     const user = userEvent.setup();
     await renderApp();

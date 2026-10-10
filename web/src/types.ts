@@ -85,6 +85,13 @@ export interface GraphNodeJSON {
   font_size: number | null;
   inputs: number;
   fields: Fields;
+  /**
+   * 卡片是否折叠（只显示卡片类型）。
+   *
+   * 属于**界面状态**：会写进工程 JSON / localStorage，但**不进 `/api/evaluate` 载荷**
+   * （折叠不影响计算，见 App.tsx 的 evalPayload）。
+   */
+  collapsed?: boolean;
 }
 
 export interface GraphLinkJSON {

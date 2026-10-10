@@ -121,18 +121,21 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
   const { node, spec, result, fontSize, table } = data;
   const hasInput = !spec.isolated && spec.inputs > 0;
   const hasOutput = !spec.isolated && !spec.no_output;
+  /** 折叠状态：只显示卡片类型（标题栏），字段区与底部输出都收起 */
+  const collapsed = Boolean(node.collapsed);
 
   const onField = useCallback(
     (key: string, v: FieldValue) => data.onField(id, key, v),
     [data, id],
   );
 
-  const title =
-    node.type === "calc"
+  const title = collapsed
+    ? spec.label
+    : node.type === "calc"
       ? String(node.fields.title ?? spec.title) || spec.title
       : spec.title;
 
-  const body = (
+  const body = collapsed ? null : (
     <div className={`card-body${spec.bare ? " card-body-bare" : ""}`}>
       {spec.table && table ? (
         <DataTable
@@ -155,7 +158,7 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
     </div>
   );
 
-  const footer = (() => {
+  const footer = collapsed ? null : (() => {
     if (spec.no_output) return null;
     if (node.type === "var") {
       return (
@@ -226,7 +229,7 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
   return (
     <>
       <NodeResizer
-        isVisible={Boolean(selected)}
+        isVisible={Boolean(selected) && !collapsed}
         minWidth={160}
         minHeight={90}
         lineClassName="resize-line"
@@ -242,10 +245,11 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
         }}
       />
       <div
-        className={`card${selected ? " card-sel" : ""}${node.type === "result" ? " card-result" : ""}`}
+        className={`card${selected ? " card-sel" : ""}${node.type === "result" ? " card-result" : ""}${collapsed ? " card-collapsed" : ""}`}
         style={fontSize ? { fontSize: `${fontSize}px` } : undefined}
         data-testid={`card-${id}`}
         data-type={node.type}
+        data-collapsed={collapsed ? "1" : undefined}
       >
         <div
           className="card-head"
