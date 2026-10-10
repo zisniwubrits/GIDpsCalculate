@@ -661,4 +661,16 @@ describe("App 集成（假后端 + 真 schema）", () => {
     expect(within(card).getByText("强化区间")).toBeInTheDocument();
     expect(within(card).getByText("暴击率（%）")).toBeInTheDocument();
   });
+
+  it("理想圣遗物卡片只有表格，没有多行文本框（用户要求去掉那个控件）", async () => {
+    const user = userEvent.setup();
+    await renderApp();
+    await addCard(user, "const");
+
+    const card = await screen.findByTestId("card-n1");
+    expect(within(card).queryAllByRole("textbox")).toHaveLength(0);
+    expect(within(card).getByTestId("table-relic-n1")).toBeInTheDocument();
+    // 工程里也不该再存 content 字段
+    await waitFor(() => expect(lastBody?.nodes[0].fields).toEqual({}));
+  });
 });

@@ -353,6 +353,14 @@ class TestVarTable(unittest.TestCase):
         self.assertEqual(tables["relic"]["rows"], [list(r) for r in nd.RELIC_ROWS])
         self.assertEqual(tables["vars"]["header"], ["变量", "值"])
 
+    def test_relic_card_has_only_the_table(self):
+        """理想圣遗物卡片只有表格：没有多行文本框字段（用户要求去掉那个控件）。"""
+        self.assertEqual(nd.NODE_TYPES["const"]["fields"], [])
+        spec = nd.schema()["nodeTypes"]["const"]
+        self.assertEqual(spec["fields"], [])
+        self.assertEqual(spec["table"], "relic")
+        self.assertNotIn("content", [f["key"] for f in spec["fields"]])
+
 
 class TestSetVarCard(unittest.TestCase):
     """「赋值变量」卡片：把上游输出按所选分量赋给一个变量（纯汇点，不进结果链）。"""

@@ -976,23 +976,14 @@
       "label": "理想圣遗物",
       "group": "工具",
       "inputs": 0,
-      "fields": [
-        {
-          "key": "content",
-          "label": "内容",
-          "default": "",
-          "kind": "textbox"
-        }
-      ],
-      "defaults": {
-        "content": ""
-      },
+      "fields": [],
+      "defaults": {},
       "isolated": true,
       "no_output": true,
       "resizable": true,
-      "wide_fields": true,
+      "wide_fields": false,
       "bare": false,
-      "plain": true,
+      "plain": false,
       "copyable": false,
       "font_menu": false,
       "vars_card": false,

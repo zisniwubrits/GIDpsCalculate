@@ -513,11 +513,11 @@ NODE_TYPES: dict = {
         _F("defs", "定义",
            "攻击力 = 1000\n倍率 = 200\n基础伤害 = 攻击力 * 倍率", "textbox"),
     ]),
+    # 理想圣遗物卡片只有表格（用户要求去掉原来那张多行文本框）：
+    # 表格本身可点选/框选并用 Ctrl+C 复制，卡片右键也有「复制整表」。
     "const": dict(title="理想圣遗物词条", label="理想圣遗物", group="工具", inputs=0,
                   compute=_t_text, isolated=True, no_output=True, resizable=True,
-                  wide_fields=True, plain=True, table="relic", fields=[
-        _F("content", "内容", "", "textbox"),
-    ]),
+                  table="relic", fields=[]),
     "vartable": dict(title="变量表", label="变量表", group="工具", inputs=0,
                      compute=_t_text, isolated=True, no_output=True, resizable=True,
                      table="vars", fields=[]),
