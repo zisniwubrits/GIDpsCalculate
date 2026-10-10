@@ -367,6 +367,10 @@ textarea:focus {
   display: flex;
   flex: 1 1 auto;
   min-height: 0;
+  /* 必须显式写 stretch：.f-row 的 `align-items: start` 是给普通卡用的（文本框保持自己的
+     行数，卡片拉高时不跟着变长），但它会顺着 `.f-row f-row-bare` 这个组合类名一起生效，
+     导致便签卡（文本卡 / 变量卡）的文本框永远只有 2 行、拉高卡片也只留空白。 */
+  align-items: stretch;
 }
 
 .f-bare {
@@ -376,8 +380,6 @@ textarea:focus {
   border-radius: 0;
   background: transparent;
   padding: 2px 3px;
-  /* 右下角只留卡片自己的缩放手柄，避免与文本框手柄抢同一个角 */
-  resize: none;
 }
 
 .f-bare:focus {
@@ -412,6 +414,13 @@ textarea:focus {
 .f-area {
   resize: vertical;
   line-height: 1.5;
+}
+
+/* 便签卡的文本框（文本卡 / 变量卡）关掉自带手柄：右下角只留卡片自己的 ◢。
+   选择器必须写成 `.f-area.f-bare`（两个类）：`.f-bare` 单独写在文件前面，
+   同等优先级的 `.f-area { resize: vertical }` 会把它覆盖掉，文本框就又能被拖高了。 */
+.f-area.f-bare {
+  resize: none;
 }
 
 .f-check {

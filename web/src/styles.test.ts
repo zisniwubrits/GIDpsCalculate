@@ -55,11 +55,20 @@ describe("文本卡片（便签式）", () => {
     expect(ruleBody(".card-body-bare")).toMatch(/padding:\s*2px\s+4px/);
   });
 
-  it("去掉输入框边框，并让文本框不再抢右下角的缩放手柄", () => {
-    const body = ruleBody(".f-bare");
-    expect(body).toMatch(/border:\s*none/);
-    expect(body).toMatch(/background:\s*transparent/);
-    expect(body).toMatch(/resize:\s*none/);
+  it("文本框随卡片铺满：便签行要覆盖 .f-row 的 align-items: start", () => {
+    // `.f-row`（普通卡：文本框保持自己的行数，卡片拉高不跟着变长）与 `.f-row-bare`
+    // 是挂在同一个 div 上的组合类名；少了这边的 stretch，便签卡文本框永远只有 2 行高、
+    // 卡片拉高只留一片空白（用户报过这个问题）。
+    expect(ruleBody(".f-row-bare")).toMatch(/align-items:\s*stretch/);
+  });
+
+  it("去掉输入框边框，且不再抢右下角的缩放手柄", () => {
+    const bare = ruleBody(".f-bare");
+    expect(bare).toMatch(/border:\s*none/);
+    expect(bare).toMatch(/background:\s*transparent/);
+    // resize 必须写在 `.f-area.f-bare`（两个类）里：`.f-bare` 单独写在文件前面，
+    // 同等优先级的 `.f-area { resize: vertical }` 会把它覆盖掉，文本框又能被拖高。
+    expect(ruleBody(".f-area.f-bare")).toMatch(/resize:\s*none/);
   });
 });
 
