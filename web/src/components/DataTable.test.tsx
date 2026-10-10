@@ -54,6 +54,21 @@ describe("DataTable", () => {
     expect(spy).toHaveBeenCalledWith("2.72/3.11");
   });
 
+  it("整表用一套 grid 列轨道（列宽才能上下对齐）", () => {
+    render(<DataTable header={header} rows={rows} testId="t" />);
+    // 4 列表头 → 4 条轨道；行盒子是 display:contents，不再各算各的宽度
+    expect(screen.getByTestId("t").style.gridTemplateColumns).toBe(
+      "repeat(4, minmax(62px, 1fr))",
+    );
+  });
+
+  it("变量表（mono）列的最小宽度更宽，方便看数字", () => {
+    render(<DataTable header={["变量", "值"]} rows={[["攻击力", "1000"]]} mono testId="m" />);
+    expect(screen.getByTestId("m").style.gridTemplateColumns).toBe(
+      "repeat(2, minmax(78px, 1fr))",
+    );
+  });
+
   it("拖动可选中矩形区域", () => {
     const spy = vi.spyOn(navigator.clipboard, "writeText");
     render(<DataTable header={header} rows={rows} testId="t" />);

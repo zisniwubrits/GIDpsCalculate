@@ -349,6 +349,13 @@ textarea:focus {
   overflow: auto;
 }
 
+/* 表格卡片的字段区（理想圣遗物 / 变量表）：滚动交给表格自己（表头吸顶 + 单条滚动条），
+   所以这里不再自己滚，避免出现「卡片一条、表格一条」两层滚动条。 */
+.card-body-table {
+  overflow: hidden;
+  padding: 4px;
+}
+
 .f-row {
   display: grid;
   grid-template-columns: 84px 1fr;
@@ -533,13 +540,19 @@ textarea:focus {
 }
 
 /* ---------------------------------------------------------------- 表格 */
+/* 列宽对齐的关键：整个表格是一个 grid，所有行共用同一套列轨道；
+   行盒子 display:contents 不生成盒子，单元格直接落进网格。
+   （此前是「每行各自 flex」，各按本行内容算宽度，导致同一列上下对不齐。） */
 .dtable {
+  display: grid;
   border: 1px solid var(--line);
   border-radius: 4px;
   overflow: auto;
-  max-height: 320px;
   background: #fff;
   outline: none;
+  /* 作为卡片内容区的子项：随卡片变高，超出时才在表格内部滚动 */
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .dtable:focus {
@@ -547,16 +560,16 @@ textarea:focus {
 }
 
 .dtable-row {
-  display: flex;
+  display: contents;
 }
 
 .dtable-cell {
-  flex: 1 1 auto;
-  min-width: 62px;
   padding: 2px 6px;
   border-right: 1px solid #eef2f6;
   border-bottom: 1px solid #eef2f6;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   user-select: none;
 }
 
@@ -564,7 +577,11 @@ textarea:focus {
   border-right: none;
 }
 
+/* 表头吸顶：滚动时列名始终可见 */
 .dtable-th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   background: #eef3f8;
   font-weight: 700;
   color: var(--accent);
@@ -578,7 +595,6 @@ textarea:focus {
    否则变量名（常见中文，如「攻击力」）会被浏览器渲染成宋体，与界面其它文字不一致。 */
 .dtable-mono .dtable-cell {
   font-family: Consolas, "Courier New", "Microsoft YaHei", "PingFang SC", monospace;
-  min-width: 78px;
 }
 
 /* ------------------------------------------------------- 菜单 / 弹窗 */

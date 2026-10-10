@@ -137,7 +137,11 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
       : spec.title;
 
   const body = collapsed ? null : (
-    <div className={`card-body${spec.bare ? " card-body-bare" : ""}`}>
+    <div
+      className={`card-body${spec.bare ? " card-body-bare" : ""}${
+        spec.table ? " card-body-table" : ""
+      }`}
+    >
       {spec.table && table ? (
         <DataTable
           header={table.header}

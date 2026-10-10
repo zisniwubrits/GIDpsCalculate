@@ -76,10 +76,19 @@ export default function DataTable({ header, rows, mono, testId }: DataTableProps
     [header, rows, sel],
   );
 
+  const cols = Math.max(1, header.length);
+  // 整表一套列宽（CSS Grid）——如果让每行各自 flex，各行会按自己的内容算宽度，
+  // 同一列在上下行就会对不齐（这是之前的 bug）。行盒子用 display:contents，
+  // 单元格直接参与同一个网格，列宽自然一致。
+  const gridStyle = {
+    gridTemplateColumns: `repeat(${cols}, minmax(${mono ? 78 : 62}px, 1fr))`,
+  };
+
   return (
     <div
       ref={boxRef}
       className={`dtable${mono ? " dtable-mono" : ""}`}
+      style={gridStyle}
       tabIndex={0}
       role="grid"
       data-testid={testId}

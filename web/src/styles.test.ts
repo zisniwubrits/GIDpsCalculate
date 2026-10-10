@@ -85,3 +85,36 @@ describe("字体", () => {
     expect(body).toMatch(/Microsoft YaHei/);
   });
 });
+
+describe("表格：列宽对齐 + 表头吸顶 + 填满卡片", () => {
+  it("整表用一个 grid，行盒子不生成盒子 —— 这是列宽上下对齐的关键", () => {
+    // 之前是「每行各自 flex（flex: 1 1 auto）」，各行按本行内容算宽度，
+    // 同一列在上下行宽度不同 → 竖线对不齐（用户报过）。
+    expect(ruleBody(".dtable")).toMatch(/display:\s*grid/);
+    expect(ruleBody(".dtable-row")).toMatch(/display:\s*contents/);
+  });
+
+  it("表格随卡片变高、超出才在自己内部滚动（不再限制 320px 死高）", () => {
+    const body = ruleBody(".dtable");
+    expect(body).toMatch(/flex:\s*1\s+1\s+auto/);
+    expect(body).toMatch(/min-height:\s*0/);
+    expect(body).toMatch(/overflow:\s*auto/);
+    expect(body).not.toMatch(/max-height/);
+  });
+
+  it("表头吸顶，滚动时列名还在", () => {
+    const body = ruleBody(".dtable-th");
+    expect(body).toMatch(/position:\s*sticky/);
+    expect(body).toMatch(/top:\s*0/);
+  });
+
+  it("表格卡片的字段区不自己滚（否则卡片与表格两条滚动条）", () => {
+    expect(ruleBody(".card-body-table")).toMatch(/overflow:\s*hidden/);
+  });
+
+  it("单元格不再用 flex 宽度，并且超宽时省略号而不是撑开列", () => {
+    const body = ruleBody(".dtable-cell");
+    expect(body).not.toMatch(/flex:/);
+    expect(body).toMatch(/text-overflow:\s*ellipsis/);
+  });
+});
