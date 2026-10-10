@@ -120,26 +120,28 @@ describe("表格：列宽对齐 + 表头吸顶 + 填满卡片", () => {
 });
 
 describe("画布水印", () => {
-  it("铺满画布、不吃鼠标事件", () => {
+  it("铺满整块画布：必须显式 width/height 100%，否则 <svg> 只用固有尺寸 300×150", () => {
+    // 实测踩过：<svg> 是替换元素，只写 inset:0 而宽高 auto 时按规范取固有尺寸
+    // 300×150 → 水印只画在左上角一小块，用户"看不到水印"。
     const body = ruleBody(".canvas-watermark");
+    expect(body).toMatch(/width:\s*100%/);
+    expect(body).toMatch(/height:\s*100%/);
     expect(body).toMatch(/position:\s*absolute/);
     expect(body).toMatch(/inset:\s*0/);
     expect(body).toMatch(/pointer-events:\s*none/);
   });
 
-  it("层级在卡片之下但**不能用负数**（负数会被 .canvas 背景盖住而看不见）", () => {
-    // `.react-flow` 自身没有 position、也不是层叠上下文：负 z-index 会掉到根
-    // 层叠上下文最底层，被 .canvas 的背景盖掉。React Flow 的点阵能用 -1 是因为
-    // 它在 .react-flow__pane（z-index:1）这个独立层叠上下文内部 —— 我们不能照抄。
-    const body = ruleBody(".canvas-watermark");
-    expect(body).toMatch(/z-index:\s*0/);
-    expect(body).not.toMatch(/z-index:\s*-/);
+  it("位于画布最底层（-2）：点阵 -1、卡片在 .react-flow__renderer(4) 里", () => {
+    // React Flow 给 .react-flow 打内联 `position: relative; z-index: 0`，
+    // 它自身就是层叠上下文，所以用负数安全（实测过 RF 的内联样式）；
+    // 点阵背景是 portal 插进来的、固定在水印之前，只能靠 z-index 分先后。
+    expect(ruleBody(".canvas-watermark")).toMatch(/z-index:\s*-2/);
   });
 
-  it("水印文字很浅（浅浅的底纹），颜色与透明度写在 .wm-text 上", () => {
+  it("水印是比背景略深的浅蓝色实色（不靠透明度压淡，免得看不见）", () => {
     const body = ruleBody(".canvas-watermark .wm-text");
-    expect(body).toMatch(/fill:\s*#/);
-    expect(body).toMatch(/fill-opacity:\s*0\.\d+/);
+    expect(body).toMatch(/fill:\s*#cfe0f0/);
+    expect(body).not.toMatch(/fill-opacity/);
     // 字号由组件按画布单位给出，样式里不写死，免得两处打架
     expect(body).not.toMatch(/font-size/);
   });

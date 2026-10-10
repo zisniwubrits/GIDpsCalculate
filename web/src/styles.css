@@ -107,23 +107,28 @@ textarea:focus {
 }
 
 /* 画布水印（工程名）：贴在画布平面上，跟随平移与缩放。
-   z-index 用 0 而不是负数（这点很容易踩）：`.react-flow` 自身没有 position、
-   也不是层叠上下文，若给负数就会跑到根层叠上下文的最底层，被 `.canvas` 自己的
-   背景盖住而完全看不见。React Flow 的点阵之所以能用 -1，是因为它在
-   `.react-flow__pane`（z-index:1，独立层叠上下文）内部。
-   用 0 → 排在 `.canvas` 背景之后、`.react-flow__renderer`（z-index:4，卡片与连线
-   都在里面）之前，也就是「所有卡片之下」。
+   两条实测结论（别再"顺手改坏"）：
+   1. **必须显式写 width/height: 100%**。<svg> 是替换元素，只给 inset:0 而宽高 auto
+      时，按 CSS 规范会用它的固有尺寸 300×150 —— 水印只画在左上角一小块，等于看不见。
+   2. z-index 用 -2，做真正的画布最底层：React Flow 会给 .react-flow 打**内联样式**
+      `position: relative; z-index: 0`，它自身就是层叠上下文，所以负数安全；
+      点阵背景是 -1（由 portal 插在水印之前，改 JSX 顺序也没用），卡片与连线在
+      .react-flow__renderer（z-index:4）里 —— 于是层级是 水印 < 点阵 < 卡片。
    pointer-events: none 保证不挡画布拖动、框选与连线。 */
 .canvas-watermark {
   position: absolute;
   inset: 0;
-  z-index: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -2;
   pointer-events: none;
 }
 
 .canvas-watermark .wm-text {
-  fill: #8fa6bd;
-  fill-opacity: 0.16;
+  /* 浅蓝色底纹：比画布背景 --bg(#f4f6f8) 略深，但要保持"浅浅的"观感；
+     用实色而不是靠 fill-opacity 压淡，免得又淡到看不见（用户反馈过一次）。
+     想再调深浅改这一行即可（越接近 #f4f6f8 越淡，越接近 #b8cde2 越明显）。 */
+  fill: #cfe0f0;
   letter-spacing: 1px;
   /* 字号由组件按画布单位给出（随缩放变化），这里只管颜色与字形 */
   font-family: inherit;
