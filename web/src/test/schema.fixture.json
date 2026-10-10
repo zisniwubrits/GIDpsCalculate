@@ -113,6 +113,10 @@
           "label": "变量表"
         },
         {
+          "type": "setvar",
+          "label": "赋值变量"
+        },
+        {
           "type": "result",
           "label": "★结果"
         }
@@ -169,6 +173,7 @@
       "vars_card": false,
       "ctx_menu": false,
       "has_factor": false,
+      "sink": false,
       "table": null,
       "hidden_fields": []
     },
@@ -200,6 +205,7 @@
       "vars_card": false,
       "ctx_menu": false,
       "has_factor": true,
+      "sink": false,
       "table": null,
       "hidden_fields": []
     },
@@ -231,6 +237,7 @@
       "vars_card": false,
       "ctx_menu": false,
       "has_factor": true,
+      "sink": false,
       "table": null,
       "hidden_fields": []
     },
@@ -283,6 +290,7 @@
       "vars_card": false,
       "ctx_menu": false,
       "has_factor": true,
+      "sink": false,
       "table": null,
       "hidden_fields": []
     },
@@ -321,6 +329,7 @@
       "vars_card": false,
       "ctx_menu": false,
       "has_factor": true,
+      "sink": false,
       "table": null,
       "hidden_fields": []
     },
@@ -380,6 +389,7 @@
       "vars_card": false,
       "ctx_menu": false,
       "has_factor": true,
+      "sink": false,
       "table": null,
       "hidden_fields": []
     },
@@ -411,6 +421,7 @@
       "vars_card": false,
       "ctx_menu": false,
       "has_factor": true,
+      "sink": false,
       "table": null,
       "hidden_fields": []
     },
@@ -433,6 +444,7 @@
       "vars_card": false,
       "ctx_menu": false,
       "has_factor": false,
+      "sink": false,
       "table": null,
       "hidden_fields": []
     },
@@ -489,6 +501,7 @@
       "vars_card": false,
       "ctx_menu": false,
       "has_factor": false,
+      "sink": false,
       "table": null,
       "hidden_fields": []
     },
@@ -552,6 +565,7 @@
       "vars_card": false,
       "ctx_menu": false,
       "has_factor": false,
+      "sink": false,
       "table": null,
       "hidden_fields": []
     },
@@ -590,6 +604,7 @@
       "vars_card": false,
       "ctx_menu": false,
       "has_factor": false,
+      "sink": false,
       "table": null,
       "hidden_fields": []
     },
@@ -635,6 +650,7 @@
       "vars_card": false,
       "ctx_menu": false,
       "has_factor": false,
+      "sink": false,
       "table": null,
       "hidden_fields": []
     },
@@ -666,6 +682,7 @@
       "vars_card": false,
       "ctx_menu": false,
       "has_factor": false,
+      "sink": false,
       "table": null,
       "hidden_fields": []
     },
@@ -697,6 +714,7 @@
       "vars_card": false,
       "ctx_menu": false,
       "has_factor": true,
+      "sink": false,
       "table": null,
       "hidden_fields": []
     },
@@ -728,6 +746,7 @@
       "vars_card": false,
       "ctx_menu": false,
       "has_factor": true,
+      "sink": false,
       "table": null,
       "hidden_fields": []
     },
@@ -759,6 +778,7 @@
       "vars_card": false,
       "ctx_menu": false,
       "has_factor": true,
+      "sink": false,
       "table": null,
       "hidden_fields": []
     },
@@ -811,6 +831,7 @@
       "vars_card": false,
       "ctx_menu": false,
       "has_factor": true,
+      "sink": false,
       "table": null,
       "hidden_fields": []
     },
@@ -842,6 +863,7 @@
       "vars_card": false,
       "ctx_menu": false,
       "has_factor": true,
+      "sink": false,
       "table": null,
       "hidden_fields": []
     },
@@ -880,6 +902,7 @@
       "vars_card": false,
       "ctx_menu": false,
       "has_factor": false,
+      "sink": false,
       "table": null,
       "hidden_fields": []
     },
@@ -911,6 +934,7 @@
       "vars_card": false,
       "ctx_menu": false,
       "has_factor": false,
+      "sink": false,
       "table": null,
       "hidden_fields": []
     },
@@ -942,6 +966,7 @@
       "vars_card": true,
       "ctx_menu": false,
       "has_factor": false,
+      "sink": false,
       "table": null,
       "hidden_fields": []
     },
@@ -973,6 +998,7 @@
       "vars_card": false,
       "ctx_menu": false,
       "has_factor": false,
+      "sink": false,
       "table": "relic",
       "hidden_fields": []
     },
@@ -995,7 +1021,52 @@
       "vars_card": false,
       "ctx_menu": false,
       "has_factor": false,
+      "sink": false,
       "table": "vars",
+      "hidden_fields": []
+    },
+    "setvar": {
+      "type": "setvar",
+      "title": "赋值变量",
+      "label": "赋值变量",
+      "group": "工具",
+      "inputs": 1,
+      "fields": [
+        {
+          "key": "var_name",
+          "label": "变量名",
+          "default": "",
+          "kind": "text"
+        },
+        {
+          "key": "pick",
+          "label": "取值",
+          "default": "期望",
+          "kind": "combo",
+          "options": [
+            "未暴击",
+            "暴击",
+            "期望"
+          ]
+        }
+      ],
+      "defaults": {
+        "var_name": "",
+        "pick": "期望"
+      },
+      "isolated": false,
+      "no_output": false,
+      "resizable": false,
+      "wide_fields": false,
+      "bare": false,
+      "plain": false,
+      "copyable": false,
+      "font_menu": false,
+      "vars_card": false,
+      "ctx_menu": false,
+      "has_factor": false,
+      "sink": true,
+      "table": null,
       "hidden_fields": []
     },
     "result": {
@@ -1040,6 +1111,7 @@
       "vars_card": false,
       "ctx_menu": true,
       "has_factor": false,
+      "sink": false,
       "table": null,
       "hidden_fields": [
         "var_nc",

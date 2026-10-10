@@ -120,7 +120,8 @@ function FieldControl({
 function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
   const { node, spec, result, fontSize, table } = data;
   const hasInput = !spec.isolated && spec.inputs > 0;
-  const hasOutput = !spec.isolated && !spec.no_output;
+  // sink 卡片（「赋值变量」）只有输入端口：它不参与结果链，只把上游值记到变量表
+  const hasOutput = !spec.isolated && !spec.no_output && !spec.sink;
   /** 折叠状态：只显示卡片类型（标题栏），字段区与底部输出都收起 */
   const collapsed = Boolean(node.collapsed);
 

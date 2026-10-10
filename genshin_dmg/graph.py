@@ -267,23 +267,33 @@ class Graph:
     def evaluate(self) -> dict:
         """整图求值：返回变量表、每个节点的输出与最终结果。
 
-        变量求值分两轮（与 tkinter 版一致）：
+        变量求值分三轮（前两轮与 tkinter 版一致）：
 
         1. 先解析「变量」卡片的定义；
-        2. 把「★结果」卡片的三元组登记为变量（同名以结果卡片为准），
-           再让「变量」卡片可以引用这些结果变量（如 ``秒伤 = 期望伤害/时间``）。
+        2. 把「★结果」卡片的三元组登记为变量；
+        3. 把「赋值变量」卡片的变量登记进来（显式连线赋值，同名以它为准）；
+           然后让「变量」卡片再解析一轮（可引用这些变量，如 ``秒伤 = 期望伤害/时间``）。
+
+        同名优先级：赋值变量卡 > ★结果卡三元组 > 变量卡片。
         """
         env: dict = {}
         token = _nodes.use_env(env)
         try:
             # 第一轮：只解析「变量」卡片的定义
             self._parse_var_cards(env)
-            # 第二轮：登记结果卡片三元组变量，并让变量卡片可以引用它们
+            # 第二轮：登记结果卡片三元组变量
             rvars = self._result_vars()
             if rvars:
                 env.update(rvars)
-                self._parse_var_cards(env, locked=set(rvars))
-                env.update(rvars)               # 同名以结果卡片为准
+            # 第三轮：登记赋值变量卡片的变量
+            svars = self._assigned_vars()
+            if svars:
+                env.update(svars)
+            if rvars or svars:
+                # 变量卡片可以引用结果 / 赋值变量，但不能覆盖它们（locked）
+                self._parse_var_cards(env, locked=set(rvars) | set(svars))
+                env.update(rvars)
+                env.update(svars)               # 赋值卡优先级最高
             self.variables = dict(env)
             # 变量表已就绪，逐个节点求值
             first = self.result_node()
@@ -348,7 +358,16 @@ class Graph:
         parts = []
         if info["factor"]:
             parts.append(info["factor"])
-        if info["isTriple"]:
+        if node.type == "setvar":
+            # 赋值变量卡：底部显示「赋值 变量名 = 当前值」，并回传绑定的变量名
+            name = valid_var_name(node.fields.get("var_name"))
+            info["boundNames"] = [name] if name else []
+            if name:
+                parts.append("赋值 %s = %s"
+                             % (name, fmt_num(v[self.setvar_pick(node)])))
+            else:
+                parts.append("未指定变量名")
+        elif info["isTriple"]:
             parts.append("未暴击 %s ｜ 暴击 %s ｜ 期望 %s"
                          % (fmt_num(v[0]), fmt_num(v[1]), fmt_num(v[2])))
         else:
@@ -416,6 +435,34 @@ class Graph:
             for name, val in zip(names, v):
                 if name:
                     out[name] = float(val)
+        return out
+
+    @staticmethod
+    def setvar_pick(node) -> int:
+        """赋值变量卡「取值」下拉对应的分量下标（未暴击 0 / 暴击 1 / 期望 2）。"""
+        try:
+            return _nodes.SETVAR_PICKS.index(node.fields.get("pick") or "期望")
+        except ValueError:                      # 旧存档 / 脏值 → 按默认「期望」
+            return 2
+
+    def _assigned_vars(self) -> dict:
+        """把「赋值变量」卡片登记的变量，返回 ``{变量名: 数值}``。
+
+        卡片是纯汇点（无输出端口），按图形顺序求值：后面的卡片可以引用前面刚登记的变量。
+        变量名为空 / 非法，或上游还没接好（比如引用了未定义变量）时，本次不登记。
+        """
+        out: dict = {}
+        for nid, node in self.nodes.items():
+            if node.type != "setvar":
+                continue
+            name = valid_var_name(node.fields.get("var_name"))
+            if not name:
+                continue
+            try:
+                v = self.node_output(nid)
+            except Exception:
+                continue
+            out[name] = float(v[self.setvar_pick(node)])
         return out
 
     # -- 工程存档 ---------------------------------------------------------

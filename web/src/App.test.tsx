@@ -359,6 +359,24 @@ describe("App 集成（假后端 + 真 schema）", () => {
     expect(within(card).getByText("增伤区净%")).toBeInTheDocument();
   });
 
+  it("赋值变量卡片是纯汇点：只有输入端口，默认取「期望」", async () => {
+    const user = userEvent.setup();
+    await renderApp();
+    expect(screen.getByTestId("add-setvar")).toHaveTextContent("赋值变量");
+
+    await addCard(user, "setvar");
+    const card = await screen.findByTestId("card-n1");
+
+    // sink 卡片不画输出端口（schema 的 sink 字段驱动），但有输入端口
+    const wrapper = card.parentElement as HTMLElement;
+    expect(wrapper.querySelectorAll(".react-flow__handle.port-in")).toHaveLength(1);
+    expect(wrapper.querySelectorAll(".react-flow__handle.port-out")).toHaveLength(0);
+
+    // 字段值原样发给后端（变量名 + 取值，默认「期望」）
+    await waitFor(() => expect(lastBody?.nodes[0].fields.pick).toBe("期望"));
+    expect(lastBody?.nodes[0].fields).toHaveProperty("var_name");
+  });
+
   it("撤销 / 重做（Ctrl+Z、Ctrl+Shift+Z）", async () => {
     const user = userEvent.setup();
     await renderApp();

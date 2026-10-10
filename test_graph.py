@@ -330,6 +330,81 @@ class TestVarTable(unittest.TestCase):
         self.assertEqual(tables["vars"]["header"], ["变量", "值"])
 
 
+class TestSetVarCard(unittest.TestCase):
+    """「赋值变量」卡片：把上游输出按所选分量赋给一个变量（纯汇点，不进结果链）。"""
+
+    def build(self, pick="期望", name="面板攻击力"):
+        g = Graph()
+        g.add(GraphNode("n1", "base", fields={"stat_base": "1000", "multiplier": "200"}))
+        g.add(GraphNode("n2", "crit"))            # 默认 50% / 100% → 2000 / 4000 / 3000
+        g.add(GraphNode("s1", "setvar", fields={"var_name": name, "pick": pick}))
+        g.connect("n1", "n2")
+        g.connect("n2", "s1")
+        return g
+
+    def test_registers_picked_component(self):
+        for pick, expect in (("未暴击", 2000.0), ("暴击", 4000.0), ("期望", 3000.0)):
+            self.assertEqual(variables_of(self.build(pick=pick)), {"面板攻击力": expect})
+
+    def test_default_pick_is_expected(self):
+        """没填「取值」（旧存档）→ 按「期望」处理。"""
+        g = Graph()
+        g.add(GraphNode("n1", "base", fields={"stat_base": "1000", "multiplier": "200"}))
+        g.add(GraphNode("s1", "setvar", fields={"var_name": "面板"}))
+        g.connect("n1", "s1")
+
+        self.assertEqual(variables_of(g), {"面板": 2000.0})
+
+    def test_dirty_pick_falls_back_to_expected(self):
+        g = self.build(pick="坏值")
+        self.assertEqual(variables_of(g), {"面板攻击力": 3000.0})
+
+    def test_blank_or_invalid_name_not_registered(self):
+        for name in ("", "  ", "for", "带 空格", "1abc"):
+            self.assertEqual(variables_of(self.build(name=name)), {})
+
+    def test_card_shows_assigned_variable_and_value(self):
+        out = self.build(name="面板", pick="期望").evaluate()["nodes"]["s1"]
+        self.assertEqual(out["display"], "赋值 面板 = %s" % fmt_num(3000.0))
+        self.assertEqual(out["boundNames"], ["面板"])
+
+        blank = self.build(name="").evaluate()["nodes"]["s1"]
+        self.assertEqual(blank["display"], "未指定变量名")
+        self.assertEqual(blank["boundNames"], [])
+
+    def test_usable_by_other_cards_and_var_card(self):
+        """赋值出来的变量与结果变量一样通用（变量卡片 / 其它卡片都能引用）。"""
+        g = self.build(name="面板")
+        g.add(GraphNode("v1", "var", fields={"defs": "秒伤 = 面板/20"}))
+        self.assertAlmostEqual(variables_of(g)["秒伤"], 150.0)   # 3000/20
+
+    def test_setvar_wins_name_conflict_with_result_card(self):
+        """同名优先级：赋值变量卡 > ★结果卡三元组卡 > 变量卡片。"""
+        g = self.build(name="伤害", pick="未暴击")               # 2000
+        g.add(GraphNode("r1", "result", fields={"var_ex": "伤害"}))   # 3000
+        g.connect("n2", "r1")
+        g.add(GraphNode("v1", "var", fields={"defs": "伤害 = 999"}))
+        self.assertEqual(variables_of(g)["伤害"], 2000.0)
+
+    def test_sink_card_has_input_but_no_output_port(self):
+        spec = nd.NODE_TYPES["setvar"]
+        self.assertEqual(spec["inputs"], 1)
+        self.assertTrue(spec.get("sink"))            # 前端据此不画输出端口
+        self.assertFalse(spec.get("isolated"))
+        self.assertFalse(spec.get("no_output"))      # 但仍有底部输出行（显示赋值结果）
+        self.assertTrue(nd.node_schema("setvar")["sink"])
+
+    def test_sink_card_does_not_join_result_chain(self):
+        g = self.build(name="面板")
+        g.add(GraphNode("r1", "result"))
+        g.connect("n2", "r1")
+
+        out = g.evaluate()
+        self.assertTrue(out["ok"])
+        self.assertNotIn("setvar", out["chainTypes"])   # 汇点不在结果链上
+        self.assertAlmostEqual(out["result"]["values"]["expected"], 3000.0)
+
+
 class TestGraphStructure(unittest.TestCase):
     def test_cycle_detected(self):
         g = Graph()

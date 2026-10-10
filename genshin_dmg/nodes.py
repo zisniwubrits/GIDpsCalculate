@@ -29,6 +29,7 @@ __all__ = [
     "VAR_TABLE_HEADER",
     "RESULT_VAR_FIELDS",
     "RESULT_VAR_KEYS",
+    "SETVAR_PICKS",
     "AMP_OPTIONS",
     "amp_options",
     "amp_key",
@@ -246,6 +247,14 @@ def _t_text(get, ins):
     return (0.0, 0.0, 0.0)
 
 
+def _t_setvar(get, ins):
+    """赋值变量卡片：把上游三元组原样传出（供登记变量用）。
+
+    它本身是**纯汇点**（``sink``，没有输出端口）：不参与结果链，只把这个值记到变量表里。
+    """
+    return ins[0] if ins else (0.0, 0.0, 0.0)
+
+
 # ---------------------------------------------------------------------------
 # 「本卡系数」显示文案
 # ---------------------------------------------------------------------------
@@ -348,6 +357,12 @@ RESULT_VAR_FIELDS = (
     ("var_ex", "期望变量"),
 )
 RESULT_VAR_KEYS = tuple(k for k, _ in RESULT_VAR_FIELDS)
+
+
+# ---------------------------------------------------------------------------
+# 赋值变量卡片：「取值」下拉的可选项（顺序与三元组一致：未暴击 / 暴击 / 期望）
+# ---------------------------------------------------------------------------
+SETVAR_PICKS = ("未暴击", "暴击", "期望")
 
 
 # ---------------------------------------------------------------------------
@@ -501,6 +516,13 @@ NODE_TYPES: dict = {
     "vartable": dict(title="变量表", label="变量表", group="工具", inputs=0,
                      compute=_t_text, isolated=True, no_output=True, resizable=True,
                      table="vars", fields=[]),
+    # 赋值变量卡片：把上游输出（按「取值」挑一个分量）赋给一个变量。
+    # sink=True → 有输入端口、没有输出端口：不参与结果链，只登记变量。
+    "setvar": dict(title="赋值变量", label="赋值变量", group="工具", inputs=1,
+                   compute=_t_setvar, sink=True, fields=[
+        _F("var_name", "变量名", "", "text"),
+        _F("pick", "取值", "期望", "combo", list(SETVAR_PICKS)),
+    ]),
     "result": dict(title="★ 结果", label="★结果", group="工具", inputs=1,
                    compute=_t_result, ctx_menu=True, hidden_fields=[
         _F(k, label, "") for k, label in RESULT_VAR_FIELDS
@@ -595,6 +617,7 @@ def node_schema(type_key: str) -> dict:
         vars_card=bool(spec.get("vars_card")),
         ctx_menu=bool(spec.get("ctx_menu")),
         has_factor=bool(spec.get("factor")),
+        sink=bool(spec.get("sink")),
         table=spec.get("table"),
         hidden_fields=[f["key"] for f in spec.get("hidden_fields", [])],
     )
