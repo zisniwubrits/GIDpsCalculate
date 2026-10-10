@@ -29,6 +29,26 @@ from genshin_dmg.nodes import (
 __all__ = ["GraphNode", "Link", "Graph"]
 
 
+def split_var_line(line: str):
+    """把「变量」卡片里的一行拆成 ``(名称, 表达式)``；不是定义行则返回 None。
+
+    认 ``=`` / ``：`` / ``:`` 三种分隔符，跳过空行与 ``#`` 注释。
+    解析定义（``_parse_var_cards``）与显示「本卡定义了哪些变量」（``var_card_names``）
+    共用这一份规则，免得两处口径漂移。
+    """
+    line = line.strip()
+    if not line or line.startswith("#"):
+        return None
+    for sep in ("=", "：", ":"):
+        if sep in line:
+            name, _, expr = line.partition(sep)
+            name = name.strip()
+            if not name:
+                return None
+            return name, expr.strip()
+    return None
+
+
 class GraphError(ValueError):
     """图结构 / 求值错误（环路、无结果卡片、字段非法…）。"""
 
@@ -335,10 +355,15 @@ class Graph:
             info["rows"] = self.variable_rows()
             return info
         if spec.get("vars_card"):
-            # 变量卡片只显示当前变量总览（内容由 refresh_variables 决定）
-            summary = ", ".join("%s=%s" % (k, plain_num(x))
-                                for k, x in self.variables.items())
-            info["varsText"] = "变量: " + (summary if summary else "(无)")
+            # 只列**本卡片定义**的变量（原来这里打印全局总览，用户要求改掉）；
+            # 值取当前生效值 —— 同名可能被结果卡三元组 / 赋值变量卡覆盖，
+            # 显示的数值与其它卡片实际用到的保持一致。全局总览看「变量表」卡片。
+            parts = []
+            for name in self.var_card_names(nid):
+                value = self.variables.get(name)
+                parts.append("%s=%s" % (name, plain_num(value)) if value is not None
+                             else "%s=未解析" % name)
+            info["varsText"] = "变量: " + (", ".join(parts) if parts else "(无)")
             return info
         if spec.get("no_output"):
             return info
@@ -388,6 +413,18 @@ class Graph:
         rows = [[name, plain_num(val)] for name, val in self.variables.items()]
         return rows or [["（暂无变量）", ""]]
 
+    def var_card_names(self, nid: str) -> list:
+        """该「变量」卡片自己定义了哪些变量名（按书写顺序，去重）。"""
+        node = self.nodes.get(nid)
+        if node is None or node.type != "var":
+            return []
+        names: list = []
+        for line in (node.fields.get("defs") or "").splitlines():
+            parsed = split_var_line(line)
+            if parsed and parsed[0] not in names:
+                names.append(parsed[0])
+        return names
+
     def _parse_var_cards(self, env: dict, locked=()) -> dict:
         """把「变量」卡片里的 ``名称 = 表达式`` 逐行解析进 env（就地更新并返回）。
 
@@ -396,23 +433,15 @@ class Graph:
         for node in self.nodes.values():
             if node.type != "var":
                 continue
-            lines = (node.fields.get("defs") or "").splitlines()
-            for line in lines:
-                line = line.strip()
-                if not line or line.startswith("#"):
+            for line in (node.fields.get("defs") or "").splitlines():
+                parsed = split_var_line(line)
+                if parsed is None:
                     continue
-                name, expr = None, None
-                for sep in ("=", "：", ":"):
-                    if sep in line:
-                        name, _, expr = line.partition(sep)
-                        break
-                if name is None:
-                    continue
-                name = name.strip()
-                if not name or name in locked:
+                name, expr = parsed
+                if name in locked:
                     continue
                 try:
-                    value = _nodes.eval_field(expr.strip())
+                    value = _nodes.eval_field(expr)
                 except ValueError:
                     continue                    # 定义失败则忽略该行
                 env[name] = value

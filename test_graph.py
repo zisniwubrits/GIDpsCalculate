@@ -362,6 +362,79 @@ class TestVarTable(unittest.TestCase):
         self.assertNotIn("content", [f["key"] for f in spec["fields"]])
 
 
+class TestVarCardFooter(unittest.TestCase):
+    """「变量」卡片底部只展示**本卡片定义**的变量（用户要求，原来打印全局总览）。"""
+
+    def footer(self, graph, nid):
+        return graph.evaluate()["nodes"][nid]["varsText"]
+
+    def test_only_own_variables_are_listed(self):
+        g = Graph()
+        g.add(GraphNode("v1", "var", fields={"defs": "攻击力 = 1000\n倍率 = 200"}))
+        g.add(GraphNode("v2", "var", fields={"defs": "防御 = 500"}))
+
+        self.assertEqual(self.footer(g, "v1"), "变量: 攻击力=1000, 倍率=200")
+        self.assertEqual(self.footer(g, "v2"), "变量: 防御=500")
+        # v1 不该出现 v2 的「防御」
+        self.assertNotIn("防御", self.footer(g, "v1"))
+
+    def test_values_are_the_effective_ones(self):
+        """同名以「后定义者」为准：卡片上显示生效值，与其它卡片实际用到的一致。"""
+        g = Graph()
+        g.add(GraphNode("v1", "var", fields={"defs": "倍率 = 200"}))
+        g.add(GraphNode("v2", "var", fields={"defs": "倍率 = 300"}))
+
+        self.assertEqual(self.footer(g, "v1"), "变量: 倍率=300")
+        self.assertEqual(self.footer(g, "v2"), "变量: 倍率=300")
+
+    def test_result_variable_override_is_shown(self):
+        """被 ★结果 三元组覆盖的名字：卡片仍列出，值显示覆盖后的生效值。"""
+        g = Graph()
+        g.add(GraphNode("b", "base", fields={"stat_base": "1000", "multiplier": "100"}))
+        g.add(GraphNode("r", "result", inputs=1, fields={"var_ex": "倍率"}))
+        g.add(GraphNode("v1", "var", fields={"defs": "倍率 = 999"}))
+        g.connect("b", "r")
+
+        self.assertEqual(self.footer(g, "v1"), "变量: 倍率=1000")
+
+    def test_empty_and_broken_lines(self):
+        g = Graph()
+        g.add(GraphNode("v1", "var", fields={"defs": ""}))
+        g.add(GraphNode("v2", "var", fields={"defs": "# 注释\n\n坏行没有等号"}))
+        g.add(GraphNode("v3", "var", fields={"defs": "好 = 1\n坏 = (("}))
+
+        self.assertEqual(self.footer(g, "v1"), "变量: (无)")
+        self.assertEqual(self.footer(g, "v2"), "变量: (无)")
+        # 表达式算不出来的行明说「未解析」，不再静默消失
+        self.assertEqual(self.footer(g, "v3"), "变量: 好=1, 坏=未解析")
+
+    def test_duplicate_names_listed_once(self):
+        g = Graph()
+        g.add(GraphNode("v1", "var", fields={"defs": "甲 = 1\n甲 = 2"}))
+        self.assertEqual(self.footer(g, "v1"), "变量: 甲=2")
+
+    def test_var_table_card_still_lists_everything(self):
+        """全局总览仍在「变量表」卡片里（别把两件事混在一起）。"""
+        g = Graph()
+        g.add(GraphNode("v1", "var", fields={"defs": "攻击力 = 1000\n倍率 = 200"}))
+        g.add(GraphNode("v2", "var", fields={"defs": "防御 = 500"}))
+        g.add(GraphNode("t1", "vartable"))
+
+        rows = g.evaluate()["nodes"]["t1"]["rows"]
+        self.assertEqual([r[0] for r in rows], ["攻击力", "倍率", "防御"])
+
+    def test_split_var_line_accepts_three_separators(self):
+        from genshin_dmg.graph import split_var_line
+        self.assertEqual(split_var_line("甲 = 1"), ("甲", "1"))
+        self.assertEqual(split_var_line("甲：1"), ("甲", "1"))
+        self.assertEqual(split_var_line("甲: 1"), ("甲", "1"))
+        self.assertIsNone(split_var_line(""))
+        self.assertIsNone(split_var_line("   "))
+        self.assertIsNone(split_var_line("# 甲 = 1"))
+        self.assertIsNone(split_var_line("没有分隔符"))
+        self.assertIsNone(split_var_line("= 1"))
+
+
 class TestSetVarCard(unittest.TestCase):
     """「赋值变量」卡片：把上游输出按所选分量赋给一个变量（纯汇点，不进结果链）。"""
 
