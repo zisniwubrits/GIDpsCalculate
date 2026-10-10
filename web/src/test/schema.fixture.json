@@ -959,7 +959,7 @@
       "no_output": false,
       "resizable": true,
       "wide_fields": true,
-      "bare": false,
+      "bare": true,
       "plain": false,
       "copyable": false,
       "font_menu": false,

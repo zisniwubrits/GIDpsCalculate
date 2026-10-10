@@ -502,9 +502,12 @@ NODE_TYPES: dict = {
                  font_menu=True, bare=True, fields=[
         _F("content", "内容", "在此输入文本", "textbox"),
     ]),
+    # 变量卡片：定义全局变量，供所有数值框/表达式引用（如 攻击力*2）
+    # bare=True：卡片内就是一大块多行文本框（不画「定义」标签、无内层边框、随卡片铺满），
+    #            与「文本」卡同样的便签式处理，见 web/src/styles.css 的 .f-bare
     "var": dict(title="变量", label="变量", group="工具", inputs=0, compute=_t_text,
                 isolated=True, vars_card=True, resizable=True, wide_fields=True,
-                fields=[
+                bare=True, fields=[
         _F("defs", "定义",
            "攻击力 = 1000\n倍率 = 200\n基础伤害 = 攻击力 * 倍率", "textbox"),
     ]),

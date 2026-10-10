@@ -531,10 +531,10 @@ class TestSchemaForFrontend(unittest.TestCase):
         import json
         json.dumps(self.s, ensure_ascii=False)
 
-    def test_only_text_card_is_bare(self):
-        """bare 是「便签式卡片」的界面提示，目前只有「文本」卡用它。"""
+    def test_bare_cards(self):
+        """bare 是「便签式卡片」的界面提示：文本卡与变量卡（卡片内就是一大块文本框）。"""
         bare = [k for k, v in self.s["nodeTypes"].items() if v["bare"]]
-        self.assertEqual(bare, ["text"])
+        self.assertEqual(bare, ["text", "var"])
 
     def test_schema_has_no_variadic_flag(self):
         """不再向前端暴露 variadic：加法卡固定 2 路输入，已去掉运行时扩展能力。"""

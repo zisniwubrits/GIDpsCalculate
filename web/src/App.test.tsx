@@ -622,6 +622,26 @@ describe("App 集成（假后端 + 真 schema）", () => {
     await waitFor(() => expect(lastBody?.nodes[0].fields.content).toContain("便签内容"));
   });
 
+  it("变量卡片是便签式文本框：不显示「定义」标签，文本框随卡片铺满", async () => {
+    const user = userEvent.setup();
+    await renderApp();
+    await addCard(user, "var");
+
+    const card = await screen.findByTestId("card-n1");
+    // 「定义」标签不再显示（原来它占掉左侧一整列，文本框铺不满）
+    expect(within(card).queryByText("定义")).not.toBeInTheDocument();
+    expect(within(card).getByText("变量")).toBeInTheDocument();      // 标题栏还在
+
+    const area = within(card).getByRole("textbox");
+    expect(area.tagName).toBe("TEXTAREA");
+    // f-bare：无边框、铺满、且没有自己的纵向拖拽手柄（见 styles.css）
+    expect(area).toHaveClass("f-bare");
+    expect(area).not.toHaveAttribute("rows");
+
+    await user.type(area, "\n秒伤 = 100");
+    await waitFor(() => expect(lastBody?.nodes[0].fields.defs).toContain("秒伤 = 100"));
+  });
+
   it("变量表卡片显示后端返回的行", async () => {
     const user = userEvent.setup();
     await renderApp();

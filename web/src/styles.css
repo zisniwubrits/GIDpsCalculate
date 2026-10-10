@@ -356,7 +356,8 @@ textarea:focus {
   gap: 5px;
 }
 
-/* 便签式卡片（schema 里 bare=true，目前只有「文本」卡）：没有标签列、没有内层边框 */
+/* 便签式卡片（schema 里 bare=true：「文本」卡与「变量」卡）：没有标签列、没有内层边框，
+   文本框随卡片铺满（横向 + 纵向），因此卡片右下角只留自己的缩放手柄 */
 .card-body-bare {
   padding: 2px 4px;
   gap: 2px;
