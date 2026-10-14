@@ -263,10 +263,11 @@ describe("角色容器面板", () => {
     expect(portIn).toMatch(/top:\s*-\d+px/);        // 负偏移 = 在卡片上边缘之上
     expect(portOut).toMatch(/top:\s*-\d+px/);
     // 百分比写法（用户口径：就是容器 50% 那条线，左右各一个）
-    expect(portOut).toMatch(/left:\s*50%/);         // 出度压在 50% 那条线上
     const inLeft = Number(/([\d.]+)%/.exec(portIn)?.[1] ?? NaN);
-    expect(inLeft).toBeLessThan(50);                // 入度在它左边
-    expect(inLeft).toBeGreaterThanOrEqual(40);
+    const outLeft = Number(/([\d.]+)%/.exec(portOut)?.[1] ?? NaN);
+    expect(inLeft).toBeLessThan(50);                // 入度在 50% 左侧
+    expect(outLeft).toBeGreaterThan(50);            // 出度在 50% 右侧
+    expect(inLeft + outLeft).toBe(100);             // 关于 50% 对称
   });
 
   it("拐力箭头画成蓝色虚线，与伤害连线区分（不用暖色）", () => {

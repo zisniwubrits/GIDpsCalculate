@@ -14,13 +14,14 @@ import { ROLE_PORT_IN_LEFT, ROLE_PORT_OUT_LEFT } from "./CardNode";
 const num = (s: string) => Number.parseFloat(s);
 
 describe("拐力端口：一个入度点 + 一个出度点，分居 50% 两侧", () => {
-  it("入度在 50% 左边一档、出度正好在 50%（整组以 50% 为界）", () => {
+  it("入度 48% / 出度 52%（以 50% 为轴对称，一左一右）", () => {
     expect(ROLE_PORT_IN_LEFT).toMatch(/%$/);         // 百分比写法：卡片多宽都跟着走
     expect(ROLE_PORT_OUT_LEFT).toMatch(/%$/);
     const inLeft = num(ROLE_PORT_IN_LEFT);
     const outLeft = num(ROLE_PORT_OUT_LEFT);
-    expect(outLeft).toBe(50);                        // 出度就压在 50% 这条线上
-    expect(inLeft).toBeLessThan(outLeft);            // 入度在它左边
+    expect(inLeft).toBeLessThan(50);                 // 入度在 50% 左侧
+    expect(outLeft).toBeGreaterThan(50);             // 出度在 50% 右侧
+    expect(inLeft + outLeft).toBe(100);              // 关于 50% 对称
     expect(outLeft - inLeft).toBeLessThanOrEqual(10);  // 挨着，算"同一组"
     expect(inLeft).toBeGreaterThanOrEqual(40);       // 靠中间，不贴左边缘
   });
