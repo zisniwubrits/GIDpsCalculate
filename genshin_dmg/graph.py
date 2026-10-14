@@ -18,7 +18,16 @@
 from __future__ import annotations
 
 from genshin_dmg import nodes as _nodes
-from genshin_dmg.expr import fmt_num, plain_num, to_bool, valid_var_name
+from genshin_dmg.expr import (
+    NS_JOIN,
+    demangle,
+    env_key,
+    fmt_num,
+    plain_num,
+    qualify,
+    to_bool,
+    valid_var_name,
+)
 from genshin_dmg.nodes import (
     NODE_TYPES,
     RESULT_VAR_KEYS,
@@ -27,6 +36,18 @@ from genshin_dmg.nodes import (
 )
 
 __all__ = ["GraphNode", "Link", "Graph"]
+
+
+def _valid_role(role) -> str:
+    """角色名规范化：非法（空 / 含 ``::`` / 含 ``__`` / 非标识符）时返回空串。
+
+    空串表示「不属于任何角色」，等价于全局作用域。角色名必须是**单个**名字
+    （``雷神``），不能再套一层命名空间。
+    """
+    t = str(role or "").strip()
+    if not t or NS_JOIN in t or "::" in t:
+        return ""
+    return t if valid_var_name(t) == t else ""
 
 
 def split_var_line(line: str):
@@ -60,10 +81,10 @@ class GraphNode:
     """一张卡片。"""
 
     __slots__ = ("id", "type", "pos", "size", "font_size", "inputs", "fields",
-                 "collapsed")
+                 "collapsed", "role")
 
     def __init__(self, id, type, pos=(40.0, 60.0), size=None, font_size=None,
-                 inputs=None, fields=None, collapsed=False):
+                 inputs=None, fields=None, collapsed=False, role=""):
         if type not in NODE_TYPES:
             raise GraphError("未知卡片类型: %s" % type)
         self.id = str(id)
@@ -76,6 +97,9 @@ class GraphNode:
         # 折叠只是界面状态（前端只显示卡片类型），但属于工程 JSON 的一部分：
         # 存在这里是为了 /api/evaluate 回传的规范化图不丢字段。
         self.collapsed = to_bool(collapsed)
+        # 这张卡片属于哪个「角色」命名空间：由**前端按位置**判定后放进求值载荷
+        # （工程 JSON 不存，位置随时能重算）。名字非法时按"不属于任何角色"处理。
+        self.role = _valid_role(role)
 
     @staticmethod
     def _norm_size(size):
@@ -236,6 +260,31 @@ class Graph:
         return out
 
     # -- 求值 -------------------------------------------------------------
+    def scoped_env(self, node, env=None) -> dict:
+        """求值某节点的字段时用的变量表：**先本角色、再全局**。
+
+        做法是在全局变量表之上，把该节点所属角色的变量额外加一份**裸名别名**
+        （``雷神__攻击力`` 额外绑成 ``攻击力``），这样卡片里直接写 ``攻击力``
+        就优先取本角色的那份；显式写 ``雷神::攻击力`` 在任何地方都能取到。
+        """
+        base = self.variables if env is None else env
+        if not getattr(node, "role", ""):
+            return base
+        prefix = node.role + NS_JOIN
+        out = dict(base)
+        for key, val in base.items():
+            if key.startswith(prefix):
+                out[key[len(prefix):]] = val
+        return out
+
+    def _compute(self, node, fn):
+        """在该节点的作用域里执行 fn（读字段时才拿得到正确的变量表）。"""
+        token = _nodes.use_env(self.scoped_env(node))
+        try:
+            return fn()
+        finally:
+            _nodes.reset_env(token)
+
     def node_output(self, nid: str, _stack=None):
         """计算某节点的 ``(未暴击, 暴击, 期望)`` 三元组（含上游）。"""
         if nid not in self.nodes:
@@ -252,16 +301,18 @@ class Graph:
                 ins.append((0.0, 0.0, 0.0))
             else:
                 ins.append(self.node_output(src, _stack | {nid}))
-        return spec["compute"](node.getter(), ins)
+        # 每张卡都在**自己的作用域**里读字段（递归上来时也一样，谁读字段谁决定作用域）
+        return self._compute(node, lambda: spec["compute"](node.getter(), ins))
 
     def factor_text(self, nid: str):
         """该卡片的「本卡系数」文案（无 factor 时返回 None）。"""
-        spec = NODE_TYPES[self.nodes[nid].type]
+        node = self.nodes[nid]
+        spec = NODE_TYPES[node.type]
         fac = spec.get("factor")
         if not fac:
             return None
         try:
-            return str(fac(self.nodes[nid].getter(), []))
+            return str(self._compute(node, lambda: fac(node.getter(), [])))
         except Exception:                                   # pragma: no cover
             return None
 
@@ -319,7 +370,7 @@ class Graph:
             first = self.result_node()
             out = dict(
                 ok=False, error=None, result=None,
-                variables=[dict(name=k, value=float(v), text=plain_num(v))
+                variables=[dict(name=demangle(k), value=float(v), text=plain_num(v))
                            for k, v in env.items()],
                 nodes={}, chainTypes=self.chain_types(), warnings=self.warnings(),
             )
@@ -358,9 +409,10 @@ class Graph:
             # 只列**本卡片定义**的变量（原来这里打印全局总览，用户要求改掉）；
             # 值取当前生效值 —— 同名可能被结果卡三元组 / 赋值变量卡覆盖，
             # 显示的数值与其它卡片实际用到的保持一致。全局总览看「变量表」卡片。
+            # 名字是展示名（角色内的带 角色:: 前缀），查表时换成内部键。
             parts = []
             for name in self.var_card_names(nid):
-                value = self.variables.get(name)
+                value = self.variables.get(env_key(name))
                 parts.append("%s=%s" % (name, plain_num(value)) if value is not None
                              else "%s=未解析" % name)
             info["varsText"] = "变量: " + (", ".join(parts) if parts else "(无)")
@@ -385,7 +437,9 @@ class Graph:
             parts.append(info["factor"])
         if node.type == "setvar":
             # 赋值变量卡：底部显示「赋值 变量名 = 当前值」，并回传绑定的变量名
-            name = valid_var_name(node.fields.get("var_name"))
+            # （展示名带角色前缀：卡片在 雷神 容器里就登记成 雷神::名字）
+            raw = valid_var_name(node.fields.get("var_name"))
+            name = qualify(raw, node.role) if raw else ""
             info["boundNames"] = [name] if name else []
             if name:
                 parts.append("赋值 %s = %s"
@@ -397,7 +451,8 @@ class Graph:
                          % (fmt_num(v[0]), fmt_num(v[1]), fmt_num(v[2])))
         else:
             if node.type == "result":
-                names = [t for t in node.result_var_names() if t]
+                names = [qualify(t, node.role)
+                         for t in node.result_var_names() if t]
                 info["boundNames"] = names
                 if names:
                     parts.append("结果 %s ｜ 变量 %s" % (fmt_num(v[0]), " / ".join(names)))
@@ -409,43 +464,63 @@ class Graph:
         return info
 
     def variable_rows(self) -> list:
-        """变量表的正文行：名称 / 数值（无变量时给一行占位提示）。"""
-        rows = [[name, plain_num(val)] for name, val in self.variables.items()]
+        """变量表的正文行：名称 / 数值（无变量时给一行占位提示）。
+
+        名称是**展示名**（内部键 ``雷神__攻击力`` 还原成 ``雷神::攻击力``）。
+        """
+        rows = [[demangle(name), plain_num(val)] for name, val in self.variables.items()]
         return rows or [["（暂无变量）", ""]]
 
     def var_card_names(self, nid: str) -> list:
-        """该「变量」卡片自己定义了哪些变量名（按书写顺序，去重）。"""
+        """该「变量」卡片定义了哪些变量（**展示名**：角色内的自动带 ``角色::`` 前缀）。"""
         node = self.nodes.get(nid)
         if node is None or node.type != "var":
             return []
         names: list = []
         for line in (node.fields.get("defs") or "").splitlines():
             parsed = split_var_line(line)
-            if parsed and parsed[0] not in names:
-                names.append(parsed[0])
+            if not parsed:
+                continue
+            name = valid_var_name(parsed[0])
+            if not name:
+                continue
+            display = qualify(name, node.role)
+            if display not in names:
+                names.append(display)
         return names
 
     def _parse_var_cards(self, env: dict, locked=()) -> dict:
         """把「变量」卡片里的 ``名称 = 表达式`` 逐行解析进 env（就地更新并返回）。
 
-        ``locked`` 中的名字（来自结果卡片的三元组变量）不会被变量卡片覆盖。
+        * 卡片在某个角色容器里时，定义的变量自动带前缀（``雷神__攻击力``）；
+          行里**显式**写 ``胡桃::攻击力`` 则按显式的前缀走。
+        * ``locked`` 中的名字（来自结果卡片的三元组变量）不会被变量卡片覆盖。
         """
         for node in self.nodes.values():
             if node.type != "var":
                 continue
-            for line in (node.fields.get("defs") or "").splitlines():
-                parsed = split_var_line(line)
-                if parsed is None:
-                    continue
-                name, expr = parsed
-                if name in locked:
-                    continue
-                try:
-                    value = _nodes.eval_field(expr)
-                except ValueError:
-                    continue                    # 定义失败则忽略该行
-                env[name] = value
-                _nodes.use_env(env)             # 后续行可引用前面刚定义的变量
+            token = _nodes.use_env(self.scoped_env(node, env))
+            try:
+                for line in (node.fields.get("defs") or "").splitlines():
+                    parsed = split_var_line(line)
+                    if parsed is None:
+                        continue
+                    name = valid_var_name(parsed[0])
+                    if not name:
+                        continue                # 名字非法（含 __ 等）→ 不定义
+                    display = qualify(name, node.role)
+                    key = env_key(display)
+                    if key in locked:
+                        continue
+                    try:
+                        value = _nodes.eval_field(parsed[1])
+                    except ValueError:
+                        continue                # 定义失败则忽略该行
+                    env[key] = value
+                    # 同一张卡的后续行要能引用刚定义的变量：重建一次作用域
+                    _nodes.use_env(self.scoped_env(node, env))
+            finally:
+                _nodes.reset_env(token)
         return env
 
     def _result_vars(self) -> dict:
@@ -463,7 +538,7 @@ class Graph:
                 continue                        # 结果链尚未接好：本次不登记
             for name, val in zip(names, v):
                 if name:
-                    out[name] = float(val)
+                    out[env_key(qualify(name, node.role))] = float(val)
         return out
 
     @staticmethod
@@ -491,7 +566,7 @@ class Graph:
                 v = self.node_output(nid)
             except Exception:
                 continue
-            out[name] = float(v[self.setvar_pick(node)])
+            out[env_key(qualify(name, node.role))] = float(v[self.setvar_pick(node)])
         return out
 
     # -- 工程存档 ---------------------------------------------------------
@@ -530,6 +605,7 @@ class Graph:
                 id=nid, type=t, pos=pos, size=nd.get("size"),
                 font_size=nd.get("font_size"), inputs=nd.get("inputs"),
                 fields=nd.get("fields"), collapsed=nd.get("collapsed"),
+                role=nd.get("role"),
             )
             g.add(node)
             if old is not None:

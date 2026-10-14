@@ -4,9 +4,16 @@
 所有数值输入框都走 :func:`parse_num` / :func:`parse_pct`，因此天然支持：
   * 算式：``70+30``、``200*3``、``(80+20)*1.5``
   * 变量名：``攻击力*2``（变量来自「变量」卡片与「★结果」卡片的三元组）
+  * 命名空间变量：``雷神::攻击力*2``（角色容器卡的命名空间，见下）
   * 全角符号：``× ÷ ＋ － （）`` 与千分位逗号
 
 :func:`eval_expr` 使用 :mod:`ast` 白名单求值，**不使用 eval**。
+
+命名空间（``角色::变量``）怎么实现：Python 的标识符里不能有 ``::``，
+所以求值前先把 ``A::B`` 拼成合法标识符 ``A__B``（:func:`mangle`），
+变量表内部就用这个键；对外（界面、错误信息、变量表）一律用 :func:`demangle`
+还原成 ``A::B`` 展示。映射要**单射**，因此角色名与变量名里禁止出现连续两个
+下划线（``__`` 保留给内部拼接）—— :func:`valid_var_name` 会拦下这种名字。
 
 格式化统一走 :func:`fmt_num` / :func:`plain_num`，**不出现科学计数法**。
 """
@@ -16,6 +23,7 @@ from __future__ import annotations
 import ast
 import keyword
 import operator
+import re
 
 __all__ = [
     "eval_expr",
@@ -25,10 +33,24 @@ __all__ = [
     "plain_num",
     "valid_var_name",
     "to_bool",
+    "mangle",
+    "demangle",
+    "env_key",
+    "qualify",
+    "NS_SEP",
+    "NS_JOIN",
 ]
 
-# 全角 → 半角
-_FULLWIDTH = {"，": ",", "×": "*", "÷": "/", "＋": "+", "－": "-", "（）": "()"}
+# 全角 → 半角（全角冒号也认：中文输入法下很容易打出 ：： ）
+_FULLWIDTH = {"，": ",", "×": "*", "÷": "/", "＋": "+", "－": "-",
+              "（）": "()", "：": ":"}
+
+# 命名空间分隔符（用户书写）与内部拼接符（拼成合法标识符）
+NS_SEP = "::"
+NS_JOIN = "__"
+
+# 形如 名字::名字 的片段（名字=标识符形态：字母/下划线开头，后跟字母数字下划线）
+_NS_RE = re.compile(r"([^\W\d]\w*)\s*::\s*([^\W\d]\w*)")
 
 _OPS = {
     ast.Add: operator.add,
@@ -45,8 +67,57 @@ _OPS = {
 _TRUE_WORDS = ("1", "true", "yes", "是", "on")
 
 
+# ---------------------------------------------------------------- 命名空间
+def mangle(text: str) -> str:
+    """把表达式里的 ``角色::变量`` 拼成合法标识符 ``角色__变量``（供 ast 解析）。"""
+    return _NS_RE.sub(lambda m: m.group(1) + NS_JOIN + m.group(2), text or "")
+
+
+def demangle(name: str) -> str:
+    """内部标识符 → 展示名：``角色__变量`` → ``角色::变量``（没有前缀则原样返回）。"""
+    if NS_JOIN in name:
+        ns, _, var = name.partition(NS_JOIN)
+        return "%s%s%s" % (ns, NS_SEP, var)
+    return name
+
+
+def qualify(name: str, role: str = "") -> str:
+    """给变量名加上角色前缀（已经有前缀 / 没有角色则原样返回）。"""
+    t = (name or "").strip()
+    if not t or not role or NS_SEP in t:
+        return t
+    return "%s%s%s" % (role, NS_SEP, t)
+
+
+def env_key(name: str) -> str:
+    """展示名 → 变量表内部键（``角色::变量`` → ``角色__变量``；普通名原样）。"""
+    return mangle((name or "").strip())
+
+
+def _plain_ok(t: str) -> bool:
+    """单个名字（不含命名空间）是否合法：标识符、非关键字、不含内部拼接符。"""
+    return bool(t) and t.isidentifier() and not keyword.iskeyword(t) and NS_JOIN not in t
+
+
+def valid_var_name(s) -> str:
+    """校验用户填写的变量名，返回**规范化的展示名**；非法时返回空串（表示不定义）。
+
+    支持 ``角色::变量`` 形式；角色名与变量名都不能含 ``__``（保留给内部拼接）。
+    """
+    t = (s or "").strip()
+    if not t:
+        return ""
+    if NS_SEP in t:
+        ns, _, var = t.partition(NS_SEP)
+        ns, var = ns.strip(), var.strip()
+        if not _plain_ok(ns) or not _plain_ok(var):
+            return ""
+        return "%s%s%s" % (ns, NS_SEP, var)
+    return t if _plain_ok(t) else ""
+
+
 def eval_expr(text: str, env: dict | None = None) -> float:
-    """安全求值算术表达式（支持 ``+ - * / // % **``、括号、变量名）。
+    """安全求值算术表达式（支持 ``+ - * / // % **``、括号、变量名、``角色::变量``）。
 
     失败时抛 :class:`ValueError`（空表达式、语法错误、未定义变量、除以零…）。
     """
@@ -59,6 +130,7 @@ def eval_expr(text: str, env: dict | None = None) -> float:
     t = "".join(t.split())          # 去掉空格与换行，便于多行编辑
     if not t:
         raise ValueError("表达式为空")
+    t = mangle(t)                   # 角色::变量 → 角色__变量（合法标识符）
     try:
         tree = ast.parse(t, mode="eval")
     except SyntaxError:
@@ -72,7 +144,8 @@ def eval_expr(text: str, env: dict | None = None) -> float:
         if isinstance(node, ast.Name):          # 变量引用
             if node.id in env:
                 return float(env[node.id])
-            raise ValueError("未定义变量: %s" % node.id)
+            # 报错用展示名，别把内部的 角色__变量 露给用户
+            raise ValueError("未定义变量: %s" % demangle(node.id))
         if isinstance(node, ast.BinOp) and type(node.op) in _OPS:
             return _OPS[type(node.op)](ev(node.left), ev(node.right))
         if isinstance(node, ast.UnaryOp) and type(node.op) in _OPS:
@@ -138,14 +211,6 @@ def plain_num(x: float) -> str:
         return str(int(x))
     s = "{:.6f}".format(x).rstrip("0").rstrip(".")
     return s if s else "0"
-
-
-def valid_var_name(s) -> str:
-    """校验用户填写的变量名；空 / 非法标识符 / 关键字时返回空串（表示不定义）。"""
-    t = (s or "").strip()
-    if not t or keyword.iskeyword(t) or not t.isidentifier():
-        return ""
-    return t
 
 
 def to_bool(value) -> bool:

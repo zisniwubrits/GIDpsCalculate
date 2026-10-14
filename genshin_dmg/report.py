@@ -20,6 +20,11 @@ APP_TITLE = "原神 · 直伤伤害计算"
 _LINE = "=" * 48
 
 
+def _role_tag(node) -> str:
+    """节点卡片在报告里的角色标注（``<<雷神>>``；不属于任何角色时为空串）。"""
+    return " <%s>" % node.role if getattr(node, "role", "") else ""
+
+
 def snapshot(graph: Graph):
     """采集画布快照 → ``[(分组, [(标签, 值)])]``。"""
     rows = []
@@ -28,8 +33,8 @@ def snapshot(graph: Graph):
         vals = []
         for f in field_specs(node.type):
             vals.append("%s=%s" % (f["label"], node.fields.get(f["key"], "")))
-        rows.append((nid, "[%s] @(%d,%d) %s" % (
-            spec["title"], node.pos[0], node.pos[1], " ".join(vals))))
+        rows.append((nid, "[%s]%s @(%d,%d) %s" % (
+            spec["title"], _role_tag(node), node.pos[0], node.pos[1], " ".join(vals))))
     links = ["%s -> %s.in%d" % (l.src, l.dst, l.port) for l in graph.links]
     return [
         ("节点卡片", rows),
@@ -63,7 +68,8 @@ def describe(graph: Graph, out: dict) -> list:
             txt = "(错误: %s)" % info["error"]
         else:
             txt = info.get("display") or "（无输出）"
-        lines.append("%s%s  →  %s" % ("    " * depth, graph.nodes[nid].title, txt))
+        lines.append("%s%s%s  →  %s" % ("    " * depth, graph.nodes[nid].title,
+                                        _role_tag(graph.nodes[nid]), txt))
 
     walk(res, 0)
     return lines
