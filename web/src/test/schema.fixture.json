@@ -164,7 +164,8 @@
         "stat_base": "1000",
         "stat_big": "0",
         "stat_flat": "0",
-        "multiplier": "200"
+        "multiplier": "200",
+        "card_name": ""
       },
       "isolated": false,
       "no_output": false,
@@ -180,7 +181,9 @@
       "has_factor": false,
       "sink": false,
       "table": null,
-      "hidden_fields": []
+      "hidden_fields": [
+        "card_name"
+      ]
     },
     "dmg": {
       "type": "dmg",
@@ -197,7 +200,8 @@
         }
       ],
       "defaults": {
-        "dmg_net": "46.6"
+        "dmg_net": "46.6",
+        "card_name": ""
       },
       "isolated": false,
       "no_output": false,
@@ -213,7 +217,9 @@
       "has_factor": true,
       "sink": false,
       "table": null,
-      "hidden_fields": []
+      "hidden_fields": [
+        "card_name"
+      ]
     },
     "res": {
       "type": "res",
@@ -230,7 +236,8 @@
         }
       ],
       "defaults": {
-        "resistance": "10"
+        "resistance": "10",
+        "card_name": ""
       },
       "isolated": false,
       "no_output": false,
@@ -246,7 +253,9 @@
       "has_factor": true,
       "sink": false,
       "table": null,
-      "hidden_fields": []
+      "hidden_fields": [
+        "card_name"
+      ]
     },
     "def": {
       "type": "def",
@@ -284,7 +293,8 @@
         "char_level": "90",
         "enemy_level": "90",
         "def_reduction": "0",
-        "ignore_def": "0"
+        "ignore_def": "0",
+        "card_name": ""
       },
       "isolated": false,
       "no_output": false,
@@ -300,7 +310,9 @@
       "has_factor": true,
       "sink": false,
       "table": null,
-      "hidden_fields": []
+      "hidden_fields": [
+        "card_name"
+      ]
     },
     "crit": {
       "type": "crit",
@@ -324,7 +336,8 @@
       ],
       "defaults": {
         "crit_rate": "50",
-        "crit_damage": "100"
+        "crit_damage": "100",
+        "card_name": ""
       },
       "isolated": false,
       "no_output": false,
@@ -340,7 +353,9 @@
       "has_factor": true,
       "sink": false,
       "table": null,
-      "hidden_fields": []
+      "hidden_fields": [
+        "card_name"
+      ]
     },
     "amp": {
       "type": "amp",
@@ -385,7 +400,8 @@
         "formula": "无",
         "em": "0",
         "amp_bonus": "0",
-        "shield": false
+        "shield": false,
+        "card_name": ""
       },
       "isolated": false,
       "no_output": false,
@@ -401,7 +417,9 @@
       "has_factor": true,
       "sink": false,
       "table": null,
-      "hidden_fields": []
+      "hidden_fields": [
+        "card_name"
+      ]
     },
     "boost": {
       "type": "boost",
@@ -418,7 +436,8 @@
         }
       ],
       "defaults": {
-        "boost": "0"
+        "boost": "0",
+        "card_name": ""
       },
       "isolated": false,
       "no_output": false,
@@ -434,7 +453,9 @@
       "has_factor": true,
       "sink": false,
       "table": null,
-      "hidden_fields": []
+      "hidden_fields": [
+        "card_name"
+      ]
     },
     "add": {
       "type": "add",
@@ -443,7 +464,9 @@
       "group": "直伤乘区",
       "inputs": 2,
       "fields": [],
-      "defaults": {},
+      "defaults": {
+        "card_name": ""
+      },
       "isolated": false,
       "no_output": false,
       "resizable": false,
@@ -458,7 +481,9 @@
       "has_factor": false,
       "sink": false,
       "table": null,
-      "hidden_fields": []
+      "hidden_fields": [
+        "card_name"
+      ]
     },
     "aggravate": {
       "type": "aggravate",
@@ -500,7 +525,8 @@
         "kind": "超激化",
         "em": "0",
         "bonus": "0",
-        "level": "90"
+        "level": "90",
+        "card_name": ""
       },
       "isolated": false,
       "no_output": false,
@@ -516,7 +542,9 @@
       "has_factor": false,
       "sink": false,
       "table": null,
-      "hidden_fields": []
+      "hidden_fields": [
+        "card_name"
+      ]
     },
     "transform": {
       "type": "transform",
@@ -565,7 +593,8 @@
         "reaction": "超载",
         "em": "0",
         "bonus": "0",
-        "level": "90"
+        "level": "90",
+        "card_name": ""
       },
       "isolated": false,
       "no_output": false,
@@ -581,7 +610,9 @@
       "has_factor": false,
       "sink": false,
       "table": null,
-      "hidden_fields": []
+      "hidden_fields": [
+        "card_name"
+      ]
     },
     "crystal": {
       "type": "crystal",
@@ -605,7 +636,8 @@
       ],
       "defaults": {
         "em": "0",
-        "shield_strength": "0"
+        "shield_strength": "0",
+        "card_name": ""
       },
       "isolated": false,
       "no_output": false,
@@ -621,7 +653,9 @@
       "has_factor": false,
       "sink": false,
       "table": null,
-      "hidden_fields": []
+      "hidden_fields": [
+        "card_name"
+      ]
     },
     "attr": {
       "type": "attr",
@@ -652,7 +686,8 @@
       "defaults": {
         "stat_base": "1000",
         "stat_big": "0",
-        "stat_flat": "0"
+        "stat_flat": "0",
+        "card_name": ""
       },
       "isolated": false,
       "no_output": false,
@@ -668,7 +703,9 @@
       "has_factor": false,
       "sink": false,
       "table": null,
-      "hidden_fields": []
+      "hidden_fields": [
+        "card_name"
+      ]
     },
     "react_base": {
       "type": "react_base",
@@ -685,7 +722,8 @@
         }
       ],
       "defaults": {
-        "level": "90"
+        "level": "90",
+        "card_name": ""
       },
       "isolated": false,
       "no_output": false,
@@ -701,7 +739,9 @@
       "has_factor": false,
       "sink": false,
       "table": null,
-      "hidden_fields": []
+      "hidden_fields": [
+        "card_name"
+      ]
     },
     "coeff": {
       "type": "coeff",
@@ -718,7 +758,8 @@
         }
       ],
       "defaults": {
-        "coeff": "1"
+        "coeff": "1",
+        "card_name": ""
       },
       "isolated": false,
       "no_output": false,
@@ -734,7 +775,9 @@
       "has_factor": true,
       "sink": false,
       "table": null,
-      "hidden_fields": []
+      "hidden_fields": [
+        "card_name"
+      ]
     },
     "mult": {
       "type": "mult",
@@ -751,7 +794,8 @@
         }
       ],
       "defaults": {
-        "multiplier": "200"
+        "multiplier": "200",
+        "card_name": ""
       },
       "isolated": false,
       "no_output": false,
@@ -767,7 +811,9 @@
       "has_factor": true,
       "sink": false,
       "table": null,
-      "hidden_fields": []
+      "hidden_fields": [
+        "card_name"
+      ]
     },
     "base_boost": {
       "type": "base_boost",
@@ -784,7 +830,8 @@
         }
       ],
       "defaults": {
-        "base_boost": "0"
+        "base_boost": "0",
+        "card_name": ""
       },
       "isolated": false,
       "no_output": false,
@@ -800,7 +847,9 @@
       "has_factor": true,
       "sink": false,
       "table": null,
-      "hidden_fields": []
+      "hidden_fields": [
+        "card_name"
+      ]
     },
     "em_gain": {
       "type": "em_gain",
@@ -838,7 +887,8 @@
         "em": "0",
         "k": "6",
         "denom": "2000",
-        "bonus": "0"
+        "bonus": "0",
+        "card_name": ""
       },
       "isolated": false,
       "no_output": false,
@@ -854,7 +904,9 @@
       "has_factor": true,
       "sink": false,
       "table": null,
-      "hidden_fields": []
+      "hidden_fields": [
+        "card_name"
+      ]
     },
     "star_coeff": {
       "type": "star_coeff",
@@ -871,7 +923,8 @@
         }
       ],
       "defaults": {
-        "hits": "0"
+        "hits": "0",
+        "card_name": ""
       },
       "isolated": false,
       "no_output": false,
@@ -887,7 +940,9 @@
       "has_factor": true,
       "sink": false,
       "table": null,
-      "hidden_fields": []
+      "hidden_fields": [
+        "card_name"
+      ]
     },
     "calc": {
       "type": "calc",
@@ -911,7 +966,8 @@
       ],
       "defaults": {
         "title": "计算卡",
-        "expr": "1+1"
+        "expr": "1+1",
+        "card_name": ""
       },
       "isolated": true,
       "no_output": false,
@@ -927,7 +983,9 @@
       "has_factor": false,
       "sink": false,
       "table": null,
-      "hidden_fields": []
+      "hidden_fields": [
+        "card_name"
+      ]
     },
     "text": {
       "type": "text",
@@ -944,7 +1002,8 @@
         }
       ],
       "defaults": {
-        "content": "在此输入文本"
+        "content": "在此输入文本",
+        "card_name": ""
       },
       "isolated": true,
       "no_output": true,
@@ -960,7 +1019,9 @@
       "has_factor": false,
       "sink": false,
       "table": null,
-      "hidden_fields": []
+      "hidden_fields": [
+        "card_name"
+      ]
     },
     "var": {
       "type": "var",
@@ -977,7 +1038,8 @@
         }
       ],
       "defaults": {
-        "defs": "攻击力 = 1000\n倍率 = 200\n基础伤害 = 攻击力 * 倍率"
+        "defs": "攻击力 = 1000\n倍率 = 200\n基础伤害 = 攻击力 * 倍率",
+        "card_name": ""
       },
       "isolated": true,
       "no_output": false,
@@ -993,7 +1055,9 @@
       "has_factor": false,
       "sink": false,
       "table": null,
-      "hidden_fields": []
+      "hidden_fields": [
+        "card_name"
+      ]
     },
     "const": {
       "type": "const",
@@ -1002,7 +1066,9 @@
       "group": "工具",
       "inputs": 0,
       "fields": [],
-      "defaults": {},
+      "defaults": {
+        "card_name": ""
+      },
       "isolated": true,
       "no_output": true,
       "resizable": true,
@@ -1017,7 +1083,9 @@
       "has_factor": false,
       "sink": false,
       "table": "relic",
-      "hidden_fields": []
+      "hidden_fields": [
+        "card_name"
+      ]
     },
     "vartable": {
       "type": "vartable",
@@ -1026,7 +1094,9 @@
       "group": "工具",
       "inputs": 0,
       "fields": [],
-      "defaults": {},
+      "defaults": {
+        "card_name": ""
+      },
       "isolated": true,
       "no_output": true,
       "resizable": true,
@@ -1041,7 +1111,9 @@
       "has_factor": false,
       "sink": false,
       "table": "vars",
-      "hidden_fields": []
+      "hidden_fields": [
+        "card_name"
+      ]
     },
     "setvar": {
       "type": "setvar",
@@ -1070,7 +1142,8 @@
       ],
       "defaults": {
         "var_name": "",
-        "pick": "期望"
+        "pick": "期望",
+        "card_name": ""
       },
       "isolated": false,
       "no_output": false,
@@ -1086,7 +1159,9 @@
       "has_factor": false,
       "sink": true,
       "table": null,
-      "hidden_fields": []
+      "hidden_fields": [
+        "card_name"
+      ]
     },
     "role": {
       "type": "role",
@@ -1127,30 +1202,12 @@
       "label": "★结果",
       "group": "工具",
       "inputs": 1,
-      "fields": [
-        {
-          "key": "var_nc",
-          "label": "未暴击变量",
-          "default": "",
-          "kind": "num"
-        },
-        {
-          "key": "var_cr",
-          "label": "暴击变量",
-          "default": "",
-          "kind": "num"
-        },
-        {
-          "key": "var_ex",
-          "label": "期望变量",
-          "default": "",
-          "kind": "num"
-        }
-      ],
+      "fields": [],
       "defaults": {
         "var_nc": "",
         "var_cr": "",
-        "var_ex": ""
+        "var_ex": "",
+        "card_name": ""
       },
       "isolated": false,
       "no_output": false,
@@ -1169,7 +1226,8 @@
       "hidden_fields": [
         "var_nc",
         "var_cr",
-        "var_ex"
+        "var_ex",
+        "card_name"
       ]
     }
   },

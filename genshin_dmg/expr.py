@@ -74,11 +74,11 @@ def mangle(text: str) -> str:
 
 
 def demangle(name: str) -> str:
-    """内部标识符 → 展示名：``角色__变量`` → ``角色::变量``（没有前缀则原样返回）。"""
-    if NS_JOIN in name:
-        ns, _, var = name.partition(NS_JOIN)
-        return "%s%s%s" % (ns, NS_SEP, var)
-    return name
+    """内部标识符 → 展示名：``角色__变量`` → ``角色::变量``（没有前缀则原样返回）。
+
+    用户名字里禁止 ``__``，所以内部键里的每个拼接符都是命名空间分隔。
+    """
+    return (name or "").replace(NS_JOIN, NS_SEP)
 
 
 def qualify(name: str, role: str = "") -> str:
@@ -143,7 +143,10 @@ def eval_expr(text: str, env: dict | None = None) -> float:
             return node.value
         if isinstance(node, ast.Name):          # 变量引用
             if node.id in env:
-                return float(env[node.id])
+                val = env[node.id]
+                # 值可以是数字，也可以是**惰性取值函数**（命名的卡片输出要等求值才知道，
+                # 见 graph.py 的 _card_vars），这里统一兑现成数字。
+                return float(val() if callable(val) else val)
             # 报错用展示名，别把内部的 角色__变量 露给用户
             raise ValueError("未定义变量: %s" % demangle(node.id))
         if isinstance(node, ast.BinOp) and type(node.op) in _OPS:

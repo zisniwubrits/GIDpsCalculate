@@ -598,10 +598,27 @@ PRESETS = {
 
 
 # ---------------------------------------------------------------------------
+# 卡片命名（`卡片名::输出`）
+# ---------------------------------------------------------------------------
+# 每张卡片都可以起个名字（右键菜单「命名卡片…」），名字不显示在卡片体内 ——
+# 因此挂在 **hidden_fields** 上：能存进工程 JSON、能进求值载荷，但不渲染。
+# 命名后可以按 `卡片名`（= 期望值）或 `卡片名::暴击` / `卡片名::未暴击` 取值，
+# 用来对比/复用某张卡片的输出（解析见 graph.py 的 _card_vars）。
+# 角色容器卡不参与命名（它自己的「角色名」就是它的身份）。
+CARD_NAME_FIELD = _F("card_name", "卡片名", "", "text")
+
+for _key, _spec in NODE_TYPES.items():
+    if _key == "role":
+        continue
+    _spec.setdefault("hidden_fields", [])
+    _spec["hidden_fields"] = list(_spec["hidden_fields"]) + [dict(CARD_NAME_FIELD)]
+
+
+# ---------------------------------------------------------------------------
 # 供前端使用的描述
 # ---------------------------------------------------------------------------
 def field_specs(type_key: str) -> list:
-    """某类型可见字段 + 隐藏字段（结果卡片的三个变量名）。"""
+    """某类型可见字段 + 隐藏字段（结果卡片的三个变量名、卡片名）。"""
     spec = NODE_TYPES[type_key]
     return list(spec.get("fields", [])) + list(spec.get("hidden_fields", []))
 
@@ -620,7 +637,10 @@ def node_schema(type_key: str) -> dict:
         label=spec["label"],
         group=spec["group"],
         inputs=int(spec["inputs"]),
-        fields=field_specs(type_key),
+        # fields = **可见**字段（前端直接渲染它）；hidden_fields = 只存不渲染的字段
+        # （结果卡的三个变量名、每张卡的卡片名）。取模型默认值请用 defaults_of()
+        # 或 field_specs()，它们把两者都算上。
+        fields=list(spec.get("fields", [])),
         defaults=defaults_of(type_key),
         isolated=bool(spec.get("isolated")),
         no_output=bool(spec.get("no_output")),

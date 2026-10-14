@@ -354,12 +354,142 @@ class TestVarTable(unittest.TestCase):
         self.assertEqual(tables["vars"]["header"], ["变量", "值"])
 
     def test_relic_card_has_only_the_table(self):
-        """理想圣遗物卡片只有表格：没有多行文本框字段（用户要求去掉那个控件）。"""
+        """理想圣遗物卡片只有表格：没有可见字段（多行文本框已按要求去掉）。"""
         self.assertEqual(nd.NODE_TYPES["const"]["fields"], [])
         spec = nd.schema()["nodeTypes"]["const"]
         self.assertEqual(spec["fields"], [])
         self.assertEqual(spec["table"], "relic")
         self.assertNotIn("content", [f["key"] for f in spec["fields"]])
+        # 只留「卡片名」这个隐藏字段（只存不渲染）
+        self.assertEqual(spec["hidden_fields"], ["card_name"])
+
+
+class TestVisibleAndHiddenFields(unittest.TestCase):
+    """schema 的 fields 只给**可见**字段，hidden_fields 只存不渲染。
+
+    历史上 fields 把隐藏字段也算进去了，前端直接渲染 spec.fields →
+    结果卡片多出三个变量名输入框（用户看到的多余控件就是这么来的）。
+    """
+
+    def test_schema_fields_exclude_hidden(self):
+        s = nd.schema()["nodeTypes"]
+        for key, spec in s.items():
+            hidden = set(spec["hidden_fields"])
+            visible = {f["key"] for f in spec["fields"]}
+            self.assertFalse(visible & hidden, "%s 的可见字段里混进了隐藏字段" % key)
+
+    def test_result_card_hides_the_three_variable_names(self):
+        spec = nd.schema()["nodeTypes"]["result"]
+        self.assertEqual(spec["fields"], [])
+        self.assertEqual(spec["hidden_fields"],
+                         ["var_nc", "var_cr", "var_ex", "card_name"])
+
+    def test_every_card_can_be_named_but_role_card(self):
+        """每张卡都能命名（card_name 隐藏字段），角色容器卡除外。"""
+        for key, spec in nd.NODE_TYPES.items():
+            keys = [f["key"] for f in nd.field_specs(key)]
+            if key == "role":
+                self.assertNotIn("card_name", keys, key)
+            else:
+                self.assertIn("card_name", keys, key)
+
+    def test_defaults_include_hidden_fields(self):
+        """默认值要带上隐藏字段，否则工程 JSON 里存不下卡片名。"""
+        self.assertIn("card_name", nd.defaults_of("dmg"))
+        self.assertIn("var_ex", nd.defaults_of("result"))
+
+
+class TestCardNames(unittest.TestCase):
+    """卡片命名：`卡片名` = 该卡期望值，`卡片名::暴击` / `::未暴击` 取分量。"""
+
+    def card(self, nid, kind="base", role="", **fields):
+        return GraphNode(nid, kind, fields=fields, role=role)
+
+    def test_bare_name_is_expected_and_parts_are_available(self):
+        g = Graph()
+        g.add(self.card("b", stat_base="1000", multiplier="200", card_name="雷神基础"))
+        g.add(self.card("c1", "calc", expr="雷神基础"))
+        g.add(self.card("c2", "calc", expr="雷神基础::暴击"))
+        g.add(self.card("c3", "calc", expr="雷神基础::未暴击"))
+        g.add(self.card("c4", "calc", expr="雷神基础::期望"))
+        out = g.evaluate()
+
+        self.assertEqual(out["nodes"]["c1"]["values"]["noncrit"], 2000)
+        self.assertEqual(out["nodes"]["c2"]["values"]["noncrit"], 2000)
+        self.assertEqual(out["nodes"]["c3"]["values"]["noncrit"], 2000)
+        self.assertEqual(out["nodes"]["c4"]["values"]["noncrit"], 2000)
+
+    def test_crit_part_differs_when_chain_has_crit(self):
+        g = Graph()
+        g.add(self.card("b", stat_base="1000", multiplier="200"))
+        g.add(self.card("k", "crit", crit_rate="100", crit_damage="100", card_name="暴击区卡"))
+        g.add(self.card("c", "calc", expr="暴击区卡::暴击 - 暴击区卡::未暴击"))
+        g.connect("b", "k")
+        # 100% 暴击、100% 暴伤 → 暴击分量是未暴击的 2 倍
+        self.assertEqual(g.evaluate()["nodes"]["c"]["values"]["noncrit"], 2000)
+
+    def test_named_card_can_be_referenced_by_another_named_card(self):
+        g = Graph()
+        g.add(self.card("b", stat_base="1000", multiplier="200", card_name="基础卡"))
+        g.add(self.card("c1", "calc", expr="基础卡 * 2", card_name="翻倍卡"))
+        g.add(self.card("c2", "calc", expr="翻倍卡 + 1"))
+        self.assertEqual(g.evaluate()["nodes"]["c2"]["values"]["noncrit"], 4001)
+
+    def test_unnamed_card_is_not_referenceable(self):
+        g = Graph()
+        g.add(self.card("b", stat_base="1000", multiplier="200"))
+        g.add(self.card("c", "calc", expr="基础值"))     # 类型名不是变量
+        self.assertIn("未定义变量: 基础值", g.evaluate()["nodes"]["c"]["display"])
+
+    def test_variables_win_over_card_names(self):
+        g = Graph()
+        g.add(GraphNode("v", "var", fields={"defs": "攻击力 = 7"}))
+        g.add(self.card("b", stat_base="1000", multiplier="200", card_name="攻击力"))
+        g.add(self.card("c", "calc", expr="攻击力"))
+        # 真变量优先：拿到 7 而不是卡片的期望值 2000
+        self.assertEqual(g.evaluate()["nodes"]["c"]["values"]["noncrit"], 7)
+
+    def test_duplicate_names_first_wins_and_warns(self):
+        g = Graph()
+        g.add(self.card("b1", stat_base="1000", multiplier="200", card_name="同名卡"))
+        g.add(self.card("b2", stat_base="1000", multiplier="500", card_name="同名卡"))
+        g.add(self.card("c", "calc", expr="同名卡"))
+        out = g.evaluate()
+
+        self.assertEqual(out["nodes"]["c"]["values"]["noncrit"], 2000)   # 第一张
+        self.assertTrue(any("卡片名重复" in w for w in out["warnings"]), out["warnings"])
+
+    def test_card_name_is_global_flat_not_role_scoped(self):
+        """卡片名是标签（谁的乘区），不套角色前缀：别的角色里直接写名字就能引用。"""
+        g = Graph()
+        g.add(self.card("b", stat_base="1000", multiplier="200",
+                        role="雷神", card_name="雷神基础"))
+        g.add(self.card("c", "calc", expr="雷神基础", role="胡桃"))
+        self.assertEqual(g.evaluate()["nodes"]["c"]["values"]["noncrit"], 2000)
+
+    def test_invalid_card_name_is_ignored(self):
+        for bad in ("有 空格", "a__b", "1abc", "a:b"):
+            g = Graph()
+            g.add(self.card("b", stat_base="1000", multiplier="200", card_name=bad))
+            g.add(self.card("c", "calc", expr="x"))
+            out = g.evaluate()
+            self.assertEqual(g.nodes["b"].fields["card_name"], bad)   # 原样保留
+            self.assertEqual(g.duplicate_card_names(), [])
+            self.assertIn("未定义变量: x", out["nodes"]["c"]["display"])
+
+    def test_reference_cycle_is_reported(self):
+        g = Graph()
+        g.add(self.card("a", "calc", expr="卡B", card_name="卡A"))
+        g.add(self.card("b", "calc", expr="卡A", card_name="卡B"))
+        text = g.evaluate()["nodes"]["a"]["display"]
+        self.assertIn("成环", text)
+
+    def test_role_card_cannot_be_named(self):
+        """角色容器卡没有 card_name 字段（它的身份是角色名）。"""
+        self.assertNotIn("card_name", [f["key"] for f in nd.field_specs("role")])
+        g = Graph()
+        g.add(GraphNode("r", "role", fields={"role_name": "雷神"}))
+        self.assertEqual(g.card_var_name(g.nodes["r"]), "")
 
 
 class TestVarCardFooter(unittest.TestCase):

@@ -25,7 +25,7 @@ import CardNode, { type CardData, type CardRFNode, type MenuKind } from "./compo
 import CardEdge, { type CardRFEdge } from "./components/CardEdge";
 import CanvasWatermark from "./components/CanvasWatermark";
 import ContextMenu, { type MenuItem } from "./components/ContextMenu";
-import { HelpDialog, ResultVarsDialog } from "./components/Dialogs";
+import { HelpDialog, NameCardDialog, ResultVarsDialog } from "./components/Dialogs";
 import Sidebar from "./components/Sidebar";
 import Toolbar from "./components/Toolbar";
 import {
@@ -116,6 +116,8 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
     null,
   );
   const [resultDialog, setResultDialog] = useState<string | null>(null);
+  /** 正在「命名卡片…」的节点 id（null = 没打开） */
+  const [nameDialog, setNameDialog] = useState<string | null>(null);
   const [showHelp, setShowHelp] = useState(false);
   const [selectedEdge, setSelectedEdge] = useState<string | null>(null);
   const [hoverId, setHoverId] = useState<string | null>(null);
@@ -529,6 +531,10 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
         },
       });
     }
+    if (!spec.role_card) {
+      // 角色容器卡不参与命名（它的身份是「角色名」）
+      items.push({ label: "命名卡片…", onClick: () => setNameDialog(menu.id) });
+    }
     items.push({
       label: node.collapsed ? "展开卡片" : "折叠卡片",
       onClick: () => toggleCollapse(menu.id),
@@ -775,6 +781,19 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
             setResultDialog(null);
           }}
           onClose={() => setResultDialog(null)}
+        />
+      ) : null}
+
+      {nameDialog ? (
+        <NameCardDialog
+          initial={String(nodes.find((n) => n.id === nameDialog)?.fields.card_name ?? "")}
+          title={schema.nodeTypes[nodes.find((n) => n.id === nameDialog)?.type ?? ""]?.title ?? ""}
+          role={roles[nameDialog] ?? ""}
+          onSave={(name) => {
+            onField(nameDialog, "card_name", name);
+            setNameDialog(null);
+          }}
+          onClose={() => setNameDialog(null)}
         />
       ) : null}
 

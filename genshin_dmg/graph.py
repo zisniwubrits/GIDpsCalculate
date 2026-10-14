@@ -20,6 +20,7 @@ from __future__ import annotations
 from genshin_dmg import nodes as _nodes
 from genshin_dmg.expr import (
     NS_JOIN,
+    NS_SEP,
     demangle,
     env_key,
     fmt_num,
@@ -205,6 +206,9 @@ class Graph:
             if link.src in self.nodes and link.dst in self.nodes:
                 self.links.append(link)
         self.variables: dict = {}
+        # 命名卡片的惰性取值表（每次求值重建）与环路栈
+        self._cardvars: dict | None = None
+        self._card_stack: set = set()
 
     # -- 基础 -------------------------------------------------------------
     @staticmethod
@@ -257,24 +261,92 @@ class Graph:
             out.append("没有「结果」卡片：请加一张 ★结果 卡片并把链条接到它上面")
         elif "crit" not in self.chain_types():
             out.append("结果链上没有暴击区：当前显示的是未暴击数值")
+        dup = self.duplicate_card_names()
+        if dup:
+            out.append("卡片名重复（只有第一张生效）：%s" % "、".join(dup))
         return out
+
+    # -- 卡片命名（`卡片名::输出`）-----------------------------------------
+    # 命名卡片的输出也能当变量用：裸名 = 期望值，`卡片名::暴击` / `::未暴击` 取分量。
+    # 值必须**惰性**求（引用它的卡片可能在它上游），所以存 callable，
+    # 由 eval_expr 解析到名字时回调；_card_stack 负责挡住间接环路。
+    CARD_PARTS = ("未暴击", "暴击", "期望")
+
+    def card_var_name(self, node) -> str:
+        """卡片名（**全局扁平**，不套角色前缀）；没命名 / 名字非法 → 空串。
+
+        卡片名是用户自己起的标签（「是谁的乘区」），本身就该是唯一的，
+        再套一层角色前缀会变成 ``雷神::雷神基础`` 这种别扭写法。
+        """
+        return valid_var_name(node.fields.get("card_name"))
+
+    def _card_getter(self, nid: str, idx: int):
+        def get():
+            if nid in self._card_stack:
+                raise ValueError("卡片名引用成环：%s" % self.nodes[nid].title)
+            self._card_stack.add(nid)
+            try:
+                v = self.node_output(nid)
+            finally:
+                self._card_stack.discard(nid)
+            return float(v[idx])
+        return get
+
+    def _card_vars(self) -> dict:
+        """``{内部键: 惰性取值}``：所有命名卡片（每次求值缓存一份）。
+
+        卡片名重复时**第一张生效**（按画布上的节点顺序），并在 warnings 里提示。
+        """
+        if self._cardvars is not None:
+            return self._cardvars
+        out: dict = {}
+        for nid, node in self.nodes.items():
+            if node.type == "role":
+                continue
+            name = self.card_var_name(node)
+            if not name:
+                continue
+            key = env_key(name)
+            if key in out:
+                continue                    # 重名：第一张生效
+            out[key] = self._card_getter(nid, 2)                    # 裸名 = 期望
+            for idx, part in enumerate(self.CARD_PARTS):
+                out[env_key("%s%s%s" % (name, NS_SEP, part))] = self._card_getter(nid, idx)
+        self._cardvars = out
+        return out
+
+    def duplicate_card_names(self) -> list:
+        """重复的卡片名（第一张生效，其余被忽略）—— 用于给用户提示。"""
+        seen, dup = set(), []
+        for node in self.nodes.values():
+            if node.type == "role":
+                continue
+            name = self.card_var_name(node)
+            if not name:
+                continue
+            if name in seen and name not in dup:
+                dup.append(name)
+            seen.add(name)
+        return dup
 
     # -- 求值 -------------------------------------------------------------
     def scoped_env(self, node, env=None) -> dict:
-        """求值某节点的字段时用的变量表：**先本角色、再全局**。
+        """求值某节点的字段时用的变量表，优先级从高到低：
 
-        做法是在全局变量表之上，把该节点所属角色的变量额外加一份**裸名别名**
-        （``雷神__攻击力`` 额外绑成 ``攻击力``），这样卡片里直接写 ``攻击力``
-        就优先取本角色的那份；显式写 ``雷神::攻击力`` 在任何地方都能取到。
+        1. 本角色自己的变量（裸名，覆盖同名全局变量）
+        2. 全局变量 / 结果三元组 / 赋值变量（内部键与裸名都在）
+        3. 命名卡片的输出（``卡片名`` / ``卡片名::暴击``…，最低优先）
         """
         base = self.variables if env is None else env
-        if not getattr(node, "role", ""):
-            return base
-        prefix = node.role + NS_JOIN
         out = dict(base)
-        for key, val in base.items():
-            if key.startswith(prefix):
-                out[key[len(prefix):]] = val
+        role = getattr(node, "role", "")
+        if role:
+            prefix = role + NS_JOIN
+            for key, val in base.items():
+                if key.startswith(prefix):
+                    out[key[len(prefix):]] = val        # 就近：本角色覆盖同名全局
+        for key, getter in self._card_vars().items():
+            out.setdefault(key, getter)                 # 卡片名优先级最低
         return out
 
     def _compute(self, node, fn):
@@ -349,6 +421,8 @@ class Graph:
         """
         env: dict = {}
         token = _nodes.use_env(env)
+        self._cardvars = None           # 每次求值重建命名卡片的惰性表
+        self._card_stack = set()
         try:
             # 第一轮：只解析「变量」卡片的定义
             self._parse_var_cards(env)
