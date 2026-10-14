@@ -119,6 +119,21 @@ describe("表格：列宽对齐 + 表头吸顶 + 填满卡片", () => {
   });
 });
 
+describe("角色容器面板", () => {
+  it("虚线淡蓝底板：一眼区分「面板」与普通白卡，画布点阵能透出来", () => {
+    const body = ruleBody(".card-role-box");
+    expect(body).toMatch(/border:\s*1px\s+dashed/);
+    expect(body).toMatch(/background:\s*rgba\(/);
+    expect(body).toMatch(/box-shadow:\s*none/);
+  });
+
+  it("标题栏上的角色徽标是小胶囊（不抢卡片标题）", () => {
+    const body = ruleBody(".card-role-chip");
+    expect(body).toMatch(/border-radius/);
+    expect(body).toMatch(/font-size:\s*11px/);
+  });
+});
+
 describe("画布水印", () => {
   it("铺满整块画布：必须显式 width/height 100%，否则 <svg> 只用固有尺寸 300×150", () => {
     // 实测踩过：<svg> 是替换元素，只写 inset:0 而宽高 auto 时按规范取固有尺寸

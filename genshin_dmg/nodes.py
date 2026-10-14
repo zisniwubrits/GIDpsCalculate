@@ -528,6 +528,17 @@ NODE_TYPES: dict = {
         _F("var_name", "变量名", "", "text"),
         _F("pick", "取值", "期望", "combo", list(SETVAR_PICKS)),
     ]),
+    # 角色容器卡：画布上的一块面板，用来把卡片划进某个「角色」命名空间。
+    # 名字**完全自定义**（抽象角色：可以是角色名、队伍位、配装名…），只要能用进
+    # `名字::变量` 这种写法即可（不含空格 / :: / 连续下划线）。
+    # 它没有端口、不参与计算；**归属由前端按位置判定**（卡片中心落在面板矩形内即属于它，
+    # 拖面板不会带走里面的卡片），前端把解析出的 role 放进求值载荷，
+    # 变量作用域（角色::变量 的就近解析）由 graph.py 负责。
+    "role": dict(title="角色", label="角色", group="工具", inputs=0,
+                 compute=_t_text, isolated=True, no_output=True, resizable=True,
+                 role_card=True, fields=[
+        _F("role_name", "角色名", "", "text"),
+    ]),
     "result": dict(title="★ 结果", label="★结果", group="工具", inputs=1,
                    compute=_t_result, ctx_menu=True, hidden_fields=[
         _F(k, label, "") for k, label in RESULT_VAR_FIELDS
@@ -620,6 +631,7 @@ def node_schema(type_key: str) -> dict:
         copyable=bool(spec.get("copyable")),
         font_menu=bool(spec.get("font_menu")),
         vars_card=bool(spec.get("vars_card")),
+        role_card=bool(spec.get("role_card")),
         ctx_menu=bool(spec.get("ctx_menu")),
         has_factor=bool(spec.get("factor")),
         sink=bool(spec.get("sink")),

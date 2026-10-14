@@ -21,12 +21,91 @@ export const CARD_DRAG_HANDLE = ".card-head";
 export const EST_W = 300;
 export const EST_H = 210;
 
+/** 「角色」容器面板的默认尺寸（要够大才装得下几张卡） */
+export const ROLE_W = 560;
+export const ROLE_H = 380;
+
 export type SizeOf = (node: CardNode) => { w: number; h: number };
 
-export const estimateSize: SizeOf = (node) => ({
-  w: node.size?.[0] ?? node.measured?.width ?? EST_W,
-  h: node.size?.[1] ?? node.measured?.height ?? EST_H,
-});
+export const estimateSize: SizeOf = (node) => {
+  const isRole = node.type === "role";
+  return {
+    w: node.size?.[0] ?? node.measured?.width ?? (isRole ? ROLE_W : EST_W),
+    h: node.size?.[1] ?? node.measured?.height ?? (isRole ? ROLE_H : EST_H),
+  };
+};
+
+// ---------------------------------------------------------------- 角色命名空间
+/**
+ * 角色名合法性：它要能用进 `名字::变量` 的写法里，所以
+ * 不能有空白、`:`（含 `::`）、连续下划线，且必须是「标识符」形态（不能数字开头）。
+ * 后端还会用 Python 的 isidentifier 再判一次（后端是最终权威）。
+ */
+const ROLE_NAME_RE = /^[\p{L}\p{N}_]+$/u;
+
+export function validRoleName(name: string): boolean {
+  const t = (name ?? "").trim();
+  if (!t || t !== name) return false;
+  if (t.includes("__") || t.includes(":")) return false;
+  if (!ROLE_NAME_RE.test(t)) return false;
+  return !/^\p{N}/u.test(t);
+}
+
+/** 新建角色容器时的默认名：角色1、角色2…（跳过已占用的） */
+export function nextRoleName(nodes: CardNode[]): string {
+  const taken = new Set(
+    nodes
+      .filter((n) => n.type === "role")
+      .map((n) => String(n.fields.role_name ?? "").trim()),
+  );
+  let i = 1;
+  while (taken.has(`角色${i}`)) i += 1;
+  return `角色${i}`;
+}
+
+export interface RoleBox {
+  id: string;
+  name: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** 画布上所有有效的角色容器矩形（名字为空/非法的容器不参与归属判定）。 */
+export function roleBoxes(nodes: CardNode[]): RoleBox[] {
+  const out: RoleBox[] = [];
+  for (const n of nodes) {
+    if (n.type !== "role") continue;
+    const name = String(n.fields.role_name ?? "").trim();
+    if (!validRoleName(name)) continue;
+    const { w, h } = estimateSize(n);
+    out.push({ id: n.id, name, x: n.pos[0], y: n.pos[1], w, h });
+  }
+  return out;
+}
+
+/** 某节点属于哪个角色：卡片中心落在哪个容器里（嵌套时取最小的那个）；否则返回 ""。 */
+export function roleOfNode(node: CardNode, boxes: RoleBox[]): string {
+  if (node.type === "role") return ""; // 容器自身不属于任何角色
+  const { w, h } = estimateSize(node);
+  const cx = node.pos[0] + w / 2;
+  const cy = node.pos[1] + h / 2;
+  let best: RoleBox | null = null;
+  for (const b of boxes) {
+    if (cx < b.x || cx > b.x + b.w || cy < b.y || cy > b.y + b.h) continue;
+    if (!best || b.w * b.h < best.w * best.h) best = b;
+  }
+  return best ? best.name : "";
+}
+
+/** 整张画布的「节点 id → 角色名」（给卡片徽标与求值载荷用）。 */
+export function buildRoleMap(nodes: CardNode[]): Record<string, string> {
+  const boxes = roleBoxes(nodes);
+  const out: Record<string, string> = {};
+  for (const n of nodes) out[n.id] = roleOfNode(n, boxes);
+  return out;
+}
 
 /** 生成不重复的节点 id：n1、n2… */
 export function nextNodeId(nodes: CardNode[]): string {
@@ -38,13 +117,17 @@ export function nextNodeId(nodes: CardNode[]): string {
   return `n${max + 1}`;
 }
 
-/** 按 schema 造一张新卡片（字段取默认值，可覆盖）。 */
+/** 按 schema 造一张新卡片（字段取默认值，可覆盖）。
+ *
+ * ``siblings`` 是画布上已有的卡片：只有「角色」容器需要它来自动起一个不重名的默认名。
+ */
 export function makeNode(
   schema: Schema,
   type: string,
   pos: [number, number],
   id: string,
   overrides: Record<string, string> = {},
+  siblings: CardNode[] = [],
 ): CardNode {
   const spec = schema.nodeTypes[type];
   if (!spec) throw new Error(`未知卡片类型: ${type}`);
@@ -52,11 +135,17 @@ export function makeNode(
   for (const [k, v] of Object.entries(overrides)) {
     if (k in fields) fields[k] = v;
   }
+  const isRole = type === "role";
+  if (isRole && !fields.role_name) {
+    // 抽象角色的名字完全自定义，默认按 角色N 起一个不容易重名的
+    fields.role_name = nextRoleName(siblings);
+  }
   return {
     id,
     type,
     pos,
-    size: null,
+    // 容器要立刻够大（否则新建出来是个小卡片，拖不进东西）
+    size: isRole ? [ROLE_W, ROLE_H] : null,
     font_size: null,
     inputs: spec.inputs,
     fields,

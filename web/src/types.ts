@@ -34,6 +34,8 @@ export interface NodeTypeSpec {
   copyable: boolean;
   font_menu: boolean;
   vars_card: boolean;
+  /** 「角色」容器面板（按位置给卡片划分命名空间） */
+  role_card: boolean;
   ctx_menu: boolean;
   has_factor: boolean;
   /** 纯汇点卡片（有输入端口、没有输出端口，如「赋值变量」）：不参与结果链 */
@@ -94,6 +96,13 @@ export interface GraphNodeJSON {
    * （折叠不影响计算，见 App.tsx 的 evalPayload）。
    */
   collapsed?: boolean;
+  /**
+   * 这张卡片属于哪个「角色」命名空间（由画布上角色容器面板的位置推导）。
+   *
+   * **只在 `/api/evaluate` 载荷里出现**，不进工程 JSON —— 归属随时可由位置重算，
+   * 存起来反而会跟画布不一致。后端据此做变量作用域的就近解析。
+   */
+  role?: string;
 }
 
 export interface GraphLinkJSON {

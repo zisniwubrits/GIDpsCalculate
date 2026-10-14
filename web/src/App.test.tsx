@@ -707,4 +707,40 @@ describe("App 集成（假后端 + 真 schema）", () => {
     expect(Number(pattern?.getAttribute("width"))).toBeGreaterThan(100);
     expect(wm.querySelector("text")).toHaveTextContent("未命名");
   });
+
+  it("「角色」容器卡：标题栏显示自定义角色名、面板可缩放、标题里带命名空间提示", async () => {
+    const user = userEvent.setup();
+    await renderApp();
+    await addCard(user, "role");
+
+    const card = await screen.findByTestId("card-n1");
+    expect(card).toHaveAttribute("data-type", "role");
+    // 默认名 角色1（抽象角色，名字随用户改）
+    expect(within(card).getByText("角色 · 角色1")).toBeInTheDocument();
+    // 面板样式 + 提示文案
+    expect(card).toHaveClass("card-role-box");
+    expect(within(card).getByText(/把卡片拖进这块面板/)).toBeInTheDocument();
+    // 角色名可改，标题栏跟着变
+    const nameInput = within(card).getByDisplayValue("角色1");
+    await user.clear(nameInput);
+    await user.type(nameInput, "主C");
+    await waitFor(() => expect(within(card).getByText("角色 · 主C")).toBeInTheDocument());
+  });
+
+  it("求值载荷里每张卡都带 role 字段（默认空串），容器自身也是空串", async () => {
+    const user = userEvent.setup();
+    await renderApp();
+    await addCard(user, "role");
+    await addCard(user, "dmg");
+
+    await waitFor(() => expect(lastBody?.nodes).toHaveLength(2));
+    const byId = Object.fromEntries((lastBody?.nodes ?? []).map((n) => [n.id, n]));
+    expect(byId["n1"].role).toBe(""); // 容器自己不属于任何角色
+    expect(byId["n2"].role).toBe(""); // 没落在面板里
+    // 容器排在 rfNodes 前面 → 画在卡片下面（React Flow 按数组顺序叠放）
+    const domOrder = Array.from(document.querySelectorAll('[data-testid^="card-n"]')).map(
+      (el) => el.getAttribute("data-testid"),
+    );
+    expect(domOrder[0]).toBe("card-n1");
+  });
 });

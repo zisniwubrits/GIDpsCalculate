@@ -1,9 +1,12 @@
 /** 画布模型纯函数测试（落位 / 对齐 / 预设 / 工程 JSON 往返）。 */
 import { describe, expect, it } from "vitest";
 import {
+  ROLE_H,
+  ROLE_W,
   addPreset,
   alignPositions,
   areaFree,
+  buildRoleMap,
   chainOrigin,
   connect,
   estimateSize,
@@ -12,7 +15,11 @@ import {
   jsonToGraph,
   makeNode,
   nextNodeId,
+  nextRoleName,
+  roleBoxes,
+  roleOfNode,
   spreadChain,
+  validRoleName,
   wouldCycle,
 } from "./model";
 import type { CardNode, Schema } from "./types";
@@ -257,5 +264,94 @@ describe("工程 JSON 往返", () => {
     expect(back.nodes[0].fields.var_nc).toBe("未暴击伤害");
     expect(back.nodes[0].fields.var_ex).toBe("期望伤害");
     expect(back.nodes[0].fields.var_cr).toBe("");
+  });
+});
+
+describe("角色容器（抽象角色命名空间）", () => {
+  it("角色名要能用在 名字::变量 里：不能有空格 / : / 连续下划线，也不能数字开头", () => {
+    for (const ok of ["雷神", "主C", "配置A", "角色1", "abc_1"]) {
+      expect(validRoleName(ok)).toBe(true);
+    }
+    for (const bad of ["", "  ", " 雷神", "雷神 ", "有 空格", "a::b", "a:b", "a__b", "1abc", "a-b", "a.b"]) {
+      expect(validRoleName(bad)).toBe(false);
+    }
+  });
+
+  it("新建角色容器：尺寸够大、默认名不重名", () => {
+    const first = makeNode(schema, "role", [0, 0], "n1");
+    expect(first.size).toEqual([ROLE_W, ROLE_H]);
+    expect(first.fields.role_name).toBe("角色1");
+
+    // 连着新建：角色1 → 角色2 → 角色3（默认名不撞）
+    const second = makeNode(schema, "role", [0, 0], "n2", {}, [first]);
+    expect(second.fields.role_name).toBe("角色2");
+    expect(nextRoleName([first, second])).toBe("角色3");
+    expect(
+      makeNode(schema, "role", [0, 0], "n3", {}, [first, second]).fields.role_name,
+    ).toBe("角色3");
+  });
+
+  it("角色面板没测量前的估算尺寸也更大（否则落位会叠在一起）", () => {
+    const role = node("n1", "role", [0, 0], { size: null, measured: undefined });
+    expect(estimateSize(role)).toEqual({ w: ROLE_W, h: ROLE_H });
+    const dmg = node("n2", "dmg", [0, 0], { size: null, measured: undefined });
+    expect(estimateSize(dmg)).toEqual({ w: 300, h: 210 });
+  });
+
+  it("按卡片中心判定归属：中心落在面板里就算属于该角色", () => {
+    const role = node("r1", "role", [100, 100], { size: [600, 400] });
+    const inside = node("n1", "dmg", [200, 200]); // 中心 (350,305) 在 100..700 / 100..500 内
+    const outside = node("n2", "dmg", [900, 200]);
+    const boxes = roleBoxes([role, inside, outside]);
+
+    expect(roleOfNode(inside, boxes)).toBe("角色1");
+    expect(roleOfNode(outside, boxes)).toBe("");
+    // 容器自身不属于任何角色
+    expect(roleOfNode(role, boxes)).toBe("");
+  });
+
+  it("只看中心：卡片压在边界上但中心在内就算属于", () => {
+    const role = node("r1", "role", [0, 0], { size: [600, 400] });
+    // 卡片 300×210，放在 (450,300)：中心 (600,405) 刚好超出右下角 → 不算
+    expect(roleOfNode(node("n1", "dmg", [450, 300]), roleBoxes([role]))).toBe("");
+    // 放在 (430,280)：中心 (580,385) 仍在面板内 → 算
+    expect(roleOfNode(node("n2", "dmg", [430, 280]), roleBoxes([role]))).toBe("角色1");
+  });
+
+  it("名字为空 / 非法的容器不参与归属（等于没画）", () => {
+    const unnamed = node("r1", "role", [0, 0], { size: [600, 400], fields: { role_name: "" } });
+    const bad = node("r2", "role", [0, 0], { size: [600, 400], fields: { role_name: "有 空格" } });
+    const inside = node("n1", "dmg", [200, 200]);
+
+    expect(roleBoxes([unnamed, bad, inside])).toHaveLength(0);
+    expect(roleOfNode(inside, roleBoxes([unnamed, bad, inside]))).toBe("");
+  });
+
+  it("容器嵌套时取最小的那个（可预期、与绘制顺序无关）", () => {
+    const outer = node("r1", "role", [0, 0], { size: [1000, 800], fields: { role_name: "外层" } });
+    const inner = node("r2", "role", [100, 100], { size: [400, 300], fields: { role_name: "内层" } });
+    const card = node("n1", "dmg", [150, 150]);
+
+    expect(buildRoleMap([outer, inner, card])).toEqual({ r1: "", r2: "", n1: "内层" });
+  });
+
+  it("buildRoleMap 给每个节点一个角色名（没有就是空串）", () => {
+    const role = node("r1", "role", [0, 0], { size: [600, 400] });
+    const inside = node("n1", "dmg", [200, 200]);
+    const outside = node("n2", "dmg", [900, 900]);
+
+    expect(buildRoleMap([role, inside, outside])).toEqual({
+      r1: "",
+      n1: "角色1",
+      n2: "",
+    });
+  });
+
+  it("归属不进工程 JSON（位置能重算，不进求值载荷以外的持久化）", () => {
+    const role = node("r1", "role", [0, 0], { size: [600, 400] });
+    const inside = node("n1", "dmg", [200, 200], { role: "角色1" });
+    const json = graphToJSON([role, inside], [], 1, "测试");
+
+    expect(json.nodes.every((n) => !("role" in n))).toBe(true);
   });
 });

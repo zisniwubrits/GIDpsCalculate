@@ -16,6 +16,10 @@ export interface CardData extends Record<string, unknown> {
   fontSize: number;
   /** 表格类卡片的内容（const 静态 / vartable 动态） */
   table: { header: string[]; rows: string[][] } | null;
+  /** 这张卡片属于哪个「角色」命名空间（由画布上的容器面板按位置推导，空 = 不属于任何角色） */
+  role: string;
+  /** 角色容器面板里当前有几张卡片（只对 role_card 有意义） */
+  roleCount?: number;
   onField: (id: string, key: string, value: FieldValue) => void;
   onDelete: (id: string) => void;
   /** 拖动缩放手柄结束后把最终尺寸（含左上角坐标变化）写回模型 */
@@ -134,7 +138,10 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
     ? spec.label
     : node.type === "calc"
       ? String(node.fields.title ?? spec.title) || spec.title
-      : spec.title;
+      : node.type === "role"
+        ? // 角色容器：标题栏直接显示自定义的角色名（抽象角色，名字随你起）
+          `角色 · ${String(node.fields.role_name ?? "").trim() || "未命名"}`
+        : spec.title;
 
   const body = collapsed ? null : (
     <div
@@ -149,6 +156,13 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
           mono={spec.table === "vars"}
           testId={`table-${spec.table}-${id}`}
         />
+      ) : null}
+      {spec.role_card ? (
+        <p className="role-hint">
+          把卡片拖进这块面板就算属于这个角色；里面的变量按
+          <b> {String(node.fields.role_name ?? "").trim() || "角色名"}::变量名 </b>
+          加入命名空间（本角色内可直接写变量名）。当前面板内 {data.roleCount ?? 0} 张卡片。
+        </p>
       ) : null}
       {spec.fields.map((f) => (
         <div className={`f-row${spec.bare ? " f-row-bare" : ""}`} key={f.key}>
@@ -250,7 +264,7 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
         }}
       />
       <div
-        className={`card${selected ? " card-sel" : ""}${node.type === "result" ? " card-result" : ""}${collapsed ? " card-collapsed" : ""}`}
+        className={`card${selected ? " card-sel" : ""}${node.type === "result" ? " card-result" : ""}${collapsed ? " card-collapsed" : ""}${spec.role_card ? " card-role-box" : ""}`}
         style={fontSize ? { fontSize: `${fontSize}px` } : undefined}
         data-testid={`card-${id}`}
         data-type={node.type}
@@ -271,6 +285,11 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
           <span className="card-title" title={spec.title}>
             {title}
           </span>
+          {data.role && !collapsed ? (
+            <span className="card-role-chip" title={`属于角色「${data.role}」：其中的变量写作 ${data.role}::变量名`}>
+              {data.role}
+            </span>
+          ) : null}
           <button
             type="button"
             className="card-x nodrag"

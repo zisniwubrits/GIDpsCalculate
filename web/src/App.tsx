@@ -32,6 +32,7 @@ import {
   CARD_DRAG_HANDLE,
   addPreset,
   alignPositions,
+  buildRoleMap,
   connect,
   estimateSize,
   freeSlot,
@@ -124,6 +125,9 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
   const lastSignature = useRef<string | null>(null);
 
   // -- 求值载荷：不含位置 / 尺寸（拖动卡片不该触发重新计算）-----------------
+  // 角色归属（role）由位置推导：useEvaluate 按**序列化内容**去重，所以拖动时只有
+  // 「卡片跨过容器边界、role 真的变了」才重算，不会刷求值。
+  const roles = useMemo(() => buildRoleMap(nodes), [nodes]);
   const evalPayload = useMemo<GraphJSON>(
     () => ({
       version: 1,
@@ -138,10 +142,11 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
         font_size: null,
         inputs: n.inputs,
         fields: n.fields,
+        role: roles[n.id] ?? "",
       })),
       links: links.map((l) => ({ ...l })),
     }),
-    [nodes, links],
+    [nodes, links, roles],
   );
   const evaluation = useEvaluate(evalPayload);
   const results = useMemo(() => evaluation.data?.nodes ?? {}, [evaluation.data]);
@@ -243,7 +248,7 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
     (type: string) => {
       apply((s) => ({
         ...s,
-        nodes: [...s.nodes, makeNode(schema, type, freeSlot(s.nodes, sizeOf), nextNodeId(s.nodes))],
+        nodes: [...s.nodes, makeNode(schema, type, freeSlot(s.nodes, sizeOf), nextNodeId(s.nodes), {}, s.nodes)],
       }));
     },
     [apply, schema, sizeOf],
@@ -573,15 +578,26 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
   }, [history, clearSelection, selectAll, showHelp, doSave]);
 
   // -- 渲染 ---------------------------------------------------------------
+  // 角色容器排在最前面 → React Flow 按数组顺序决定叠放，容器才会画在卡片**下面**
+  const orderedNodes = useMemo(
+    () => [...nodes].sort((a, b) => Number(b.type === "role") - Number(a.type === "role")),
+    [nodes],
+  );
   const rfNodes = useMemo<CardRFNode[]>(
     () =>
-      nodes.map((n) => {
+      orderedNodes.map((n) => {
+        const roleName = String(n.fields.role_name ?? "").trim();
         const data: CardData = {
           node: n,
           spec: schema.nodeTypes[n.type],
           result: results[n.id] ?? null,
           fontSize: n.font_size ?? 0,
           table: tableFor(n, schema, results),
+          role: roles[n.id] ?? "",
+          // 容器面板自报家门的数字：里面此刻有几张卡片
+          roleCount: n.type === "role"
+            ? Object.values(roles).filter((r) => r && r === roleName).length
+            : undefined,
           onField,
           onDelete: removeNode,
           onResize,
@@ -609,7 +625,7 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
           dragHandle: CARD_DRAG_HANDLE,
         };
       }),
-    [nodes, schema, results, onField, removeNode, onCopy, onResize],
+    [orderedNodes, schema, results, roles, onField, removeNode, onCopy, onResize],
   );
 
   const rfEdges = useMemo<CardRFEdge[]>(

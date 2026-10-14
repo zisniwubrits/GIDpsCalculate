@@ -322,6 +322,43 @@ textarea:focus {
   box-shadow: 0 0 0 2px rgba(47, 111, 167, 0.25);
 }
 
+/* 「角色」容器面板：读起来是一块半透明底板（画布点阵能透出来），
+   卡片浮在它上面 —— 所以它是虚线边、无阴影、淡蓝底。 */
+.card-role-box {
+  background: rgba(47, 111, 167, 0.05);
+  border: 1px dashed #a9c2d8;
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+.card-role-box .card-head {
+  background: rgba(47, 111, 167, 0.12);
+  border-bottom: 1px dashed #b9cde0;
+}
+
+/* 标题栏上的角色徽标：一眼看出这张卡属于哪个角色 */
+.card-role-chip {
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: rgba(47, 111, 167, 0.14);
+  color: var(--accent);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.role-hint {
+  margin: 4px 0 0;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.role-hint b {
+  color: var(--accent);
+  font-weight: 700;
+}
+
 .card-result {
   border-color: #9cb8d4;
 }
