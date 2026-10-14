@@ -799,6 +799,21 @@ describe("App 集成（假后端 + 真 schema）", () => {
     expect(box.querySelector(".role-port-out")?.getAttribute("title")).toContain("拐力");
   });
 
+  it("武器卡只有出度端口（只出不进），不能连入度都没有", async () => {
+    const user = userEvent.setup();
+    await renderApp();
+    await addCard(user, "weapon");
+
+    const card = await screen.findByTestId("card-n1");
+    const box = card.closest(".react-flow__node") as HTMLElement;
+    // 回归：上一版把出度端口写成 `if (!isWeapon)`，结果武器一个端口都没有
+    // （用户报"武器卡片的输出端口看不见"）
+    expect(box.querySelectorAll(".react-flow__handle.role-port-out")).toHaveLength(1);
+    // 武器是"只出不进"：不该有入度端口
+    expect(box.querySelectorAll(".react-flow__handle.role-port-in")).toHaveLength(0);
+    expect(box.querySelector(".role-port-out")?.getAttribute("title")).toContain("拐力");
+  });
+
   it("角色标记下方显示「面板」：默认只列有值的项，可在弹窗里勾选控制显示哪几项", async () => {
     const user = userEvent.setup();
     await renderApp();

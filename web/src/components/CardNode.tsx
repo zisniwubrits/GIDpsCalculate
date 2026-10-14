@@ -304,20 +304,21 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
         />,
       );
     }
-    if (!isWeapon) {
-      // 出度：一个角色（或武器）对外只提供一份拐力
-      handles.push(
-        <Handle
-          key="out"
-          id="out"
-          type="source"
-          position={Position.Top}
-          className="port port-out role-port-out"
-          style={{ left: ROLE_PORT_OUT_LEFT }}
-          title={outTitle}
-        />,
-      );
-    }
+    // 出度：角色**和武器**都对外提供拐力（武器是"只出不进"，所以它只有这个端口）。
+    //
+    // 注意这里**不能**写 `if (!isWeapon)` —— 那会把武器的出度端口也一起砍掉，
+    // 武器就彻底没有端口了（用户报过"武器卡片的输出端口看不见"）。
+    handles.push(
+      <Handle
+        key="out"
+        id="out"
+        type="source"
+        position={Position.Top}
+        className="port port-out role-port-out"
+        style={{ left: ROLE_PORT_OUT_LEFT }}
+        title={outTitle}
+      />,
+    );
   } else {
     if (hasInput) {
       const n = Math.max(1, node.inputs);
