@@ -28,7 +28,7 @@ export const ROLE_H = 380;
 export type SizeOf = (node: CardNode) => { w: number; h: number };
 
 export const estimateSize: SizeOf = (node) => {
-  const isRole = node.type === "role";
+  const isRole = isNamespaceNode(node);
   return {
     w: node.size?.[0] ?? node.measured?.width ?? (isRole ? ROLE_W : EST_W),
     h: node.size?.[1] ?? node.measured?.height ?? (isRole ? ROLE_H : EST_H),
@@ -55,7 +55,7 @@ export function validRoleName(name: string): boolean {
 export function nextRoleName(nodes: CardNode[]): string {
   const taken = new Set(
     nodes
-      .filter((n) => n.type === "role")
+      .filter((n) => isNamespaceNode(n))
       .map((n) => String(n.fields.role_name ?? "").trim()),
   );
   let i = 1;
@@ -73,10 +73,28 @@ export interface RoleBox {
 }
 
 /** 画布上所有有效的角色容器矩形（名字为空/非法的容器不参与归属判定）。 */
+/**
+ * 是不是**命名空间容器**（角色 / 武器）：它们的字段里一定有 `role_name`
+ * （角色名 / 武器名）。这样前端不用硬编码卡片类型名。
+ */
+export function isNamespaceNode(node: CardNode): boolean {
+  return Object.prototype.hasOwnProperty.call(node.fields ?? {}, "role_name");
+}
+
+/**
+ * 是不是**带面板**的命名空间容器（角色）：武器没有面板。
+ * 判据用 `panel_show`（控制面板显示哪些项的字段）—— 武器的字段里没有它。
+ */
+export function isPanelNode(node: CardNode): boolean {
+  return (
+    isNamespaceNode(node) && Object.prototype.hasOwnProperty.call(node.fields ?? {}, "panel_show")
+  );
+}
+
 export function roleBoxes(nodes: CardNode[]): RoleBox[] {
   const out: RoleBox[] = [];
   for (const n of nodes) {
-    if (n.type !== "role") continue;
+    if (!isNamespaceNode(n)) continue;
     const name = String(n.fields.role_name ?? "").trim();
     if (!validRoleName(name)) continue;
     const { w, h } = estimateSize(n);
@@ -87,7 +105,7 @@ export function roleBoxes(nodes: CardNode[]): RoleBox[] {
 
 /** 某节点属于哪个角色：卡片中心落在哪个容器里（嵌套时取最小的那个）；否则返回 ""。 */
 export function roleOfNode(node: CardNode, boxes: RoleBox[]): string {
-  if (node.type === "role") return ""; // 容器自身不属于任何角色
+  if (isNamespaceNode(node)) return ""; // 容器自身不属于任何角色
   const { w, h } = estimateSize(node);
   const cx = node.pos[0] + w / 2;
   const cy = node.pos[1] + h / 2;
@@ -114,7 +132,7 @@ export function buildRoleMap(nodes: CardNode[]): Record<string, string> {
  * 面板一起删掉）。这条规则让「框选」不选中面板：想选它请点它的标题栏。
  */
 export function ignoredByBoxSelect(node: CardNode): boolean {
-  return node.type === "role";
+  return isNamespaceNode(node);
 }
 
 // ---------------------------------------------------------------- schema 兜底

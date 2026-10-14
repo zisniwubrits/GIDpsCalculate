@@ -36,6 +36,8 @@ export interface NodeTypeSpec {
   vars_card: boolean;
   /** 「角色」容器面板（按位置给卡片划分命名空间） */
   role_card: boolean;
+  /** 武器：继承角色类的命名空间容器，只输出拐力、无面板、不支持 in:: */
+  weapon_card: boolean;
   ctx_menu: boolean;
   has_factor: boolean;
   /** 纯汇点卡片（有输入端口、没有输出端口，如「赋值变量」）：不参与结果链 */

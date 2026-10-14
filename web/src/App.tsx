@@ -52,6 +52,8 @@ import {
   makeNode,
   nextNodeId,
   parsePanel,
+  isNamespaceNode,
+  isPanelNode,
   parsePanelShow,
   wouldCycle,
   type AlignMode,
@@ -418,7 +420,7 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
     (source: string, target: string) => {
       const a = nodes.find((n) => n.id === source);
       const b = nodes.find((n) => n.id === target);
-      return Boolean(a && b && a.type === "role" && b.type === "role");
+      return Boolean(a && b && isNamespaceNode(a) && isNamespaceNode(b));
     },
     [nodes],
   );
@@ -623,8 +625,13 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
       });
     }
     if (spec.role_card) {
-      items.push({ label: "设置角色名…", onClick: () => setRoleNameDialog(menu.id) });
-      items.push({ label: "角色面板…", onClick: () => setPanelDialog(menu.id) });
+      items.push({
+        label: spec.weapon_card ? "设置武器名…" : "设置角色名…",
+        onClick: () => setRoleNameDialog(menu.id),
+      });
+      if (!spec.weapon_card) {
+        items.push({ label: "角色面板…", onClick: () => setPanelDialog(menu.id) });
+      }
     } else {
       items.push({ label: "命名卡片…", onClick: () => setNameDialog(menu.id) });
     }
@@ -717,8 +724,8 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
           table: tableFor(n, schema, results),
           role: roles[n.id] ?? "",
           // 角色卡：左上角标签上方显示"出入度"（给出去/收进来的拐）
-          roleBuffs: n.type === "role" ? roleBuffRows(n) : undefined,
-          rolePanel: n.type === "role" ? rolePanelRows(n) : undefined,
+          roleBuffs: isNamespaceNode(n) ? roleBuffRows(n) : undefined,
+          rolePanel: isPanelNode(n) ? rolePanelRows(n) : undefined,
           onField,
           onDelete: removeNode,
           onResize,
@@ -734,7 +741,7 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
             style = { width: n.size[0], height: n.size[1] };
           }
         }
-        if (n.type === "role") {
+        if (isNamespaceNode(n)) {
           // 角色容器只是**背景标记**（一块虚线区域 + 一条可拖的标签）：
           // 区域本身不该吃鼠标事件，否则鼠标落在上面会命中节点（光标变抓手）也拖不出框选。
           // 写在**内联样式**上最稳：不受任何 CSS 优先级/顺序影响（样式表那两条只是文档与兜底）。
@@ -750,7 +757,7 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
           measured: n.measured,
           // 角色容器：整个节点不吃鼠标事件（见 styles.css 的 .node-role-box）——
           // 否则鼠标落在面板上时命中节点，光标变成抓手，也拖不出框选。
-          className: n.type === "role" ? "node-role-box" : undefined,
+          className: isNamespaceNode(n) ? "node-role-box" : undefined,
           // 只有标题栏能拖动（见 model.ts 的说明）
           dragHandle: CARD_DRAG_HANDLE,
         };

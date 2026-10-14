@@ -621,6 +621,15 @@ NODE_TYPES: dict = {
     # 它没有端口、不参与计算；**归属由前端按位置判定**（卡片中心落在面板矩形内即属于它，
     # 拖面板不会带走里面的卡片），前端把解析出的 role 放进求值载荷，
     # 变量作用域（角色::变量 的就近解析）由 graph.py 负责。
+    # 武器：**继承角色类**（同样是一块命名空间标记、同样能对外拐力），但
+    #   * 没有面板（不给 panel / panel_show 字段，标记上也不显示面板）
+    #   * **不支持 in::**（它只负责输出拐力，不接受别人拐它）
+    "weapon": dict(title="武器", label="武器", group="工具", inputs=0,
+                   compute=_t_text, isolated=True, no_output=True, resizable=True,
+                   role_card=True, weapon_card=True, fields=[], hidden_fields=[
+        _F("role_name", "武器名", "", "text"),
+        _F("panel", "面板", "", "textbox"),          # 保留键以便旧工程往返，但界面不用
+    ]),
     "role": dict(title="角色", label="角色", group="工具", inputs=0,
                  compute=_t_text, isolated=True, no_output=True, resizable=True,
                  role_card=True, fields=[], hidden_fields=[
@@ -743,6 +752,7 @@ def node_schema(type_key: str) -> dict:
         copyable=bool(spec.get("copyable")),
         font_menu=bool(spec.get("font_menu")),
         vars_card=bool(spec.get("vars_card")),
+        weapon_card=bool(spec.get("weapon_card")),
         role_card=bool(spec.get("role_card")),
         ctx_menu=bool(spec.get("ctx_menu")),
         has_factor=bool(spec.get("factor")),

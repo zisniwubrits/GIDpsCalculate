@@ -6,8 +6,7 @@ import {
   addPreset,
   alignPositions,
   areaFree,
-  buildRoleMap,
-  chainOrigin,
+    chainOrigin,
   connect,
   estimateSize,
   freeSlot,
@@ -25,6 +24,9 @@ import {
   panelPreset,
   needsPanelPreset,
   fillPresetForDropped,
+  isNamespaceNode,
+  isPanelNode,
+  buildRoleMap,
   roleBoxes,
   roleOfNode,
   spreadChain,
@@ -469,6 +471,34 @@ describe("角色容器（抽象角色命名空间）", () => {
     expect(String(again.nodes.find((n) => n.id === "v1")?.fields.defs)).toBe(
       defs("v1"),
     );
+  });
+
+  it("武器也是命名空间容器但没有面板；武器区域里的卡片归它", () => {
+    const g = jsonToGraph(
+      {
+        version: 1,
+        app: "GenshinDamageCalc",
+        zoom: 1,
+        name: "",
+        nodes: [
+          { id: "w1", type: "weapon", pos: [0, 0], size: null, font_size: null, inputs: 0,
+            fields: { role_name: "武器A" } },
+          { id: "r1", type: "role", pos: [900, 0], size: null, font_size: null, inputs: 0,
+            fields: { role_name: "火神" } },
+          { id: "n1", type: "dmg", pos: [120, 120], size: null, font_size: null, inputs: 1,
+            fields: {} },
+        ],
+        links: [],
+      } as unknown as GraphJSON,
+      schema,
+    );
+    const find = (id: string) => g.nodes.find((n) => n.id === id)!;
+    expect(isNamespaceNode(find("w1"))).toBe(true);
+    expect(isPanelNode(find("w1"))).toBe(false);   // 武器没有面板
+    expect(isNamespaceNode(find("r1"))).toBe(true);
+    expect(isPanelNode(find("r1"))).toBe(true);
+    expect(isNamespaceNode(find("n1"))).toBe(false);
+    expect(buildRoleMap(g.nodes)["n1"]).toBe("武器A");   // 卡片归武器命名空间
   });
 
   it("normalizeSchema 给旧后端缺的字段补默认值（否则界面会白屏）", () => {

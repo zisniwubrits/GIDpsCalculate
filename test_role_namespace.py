@@ -773,6 +773,53 @@ class TestNoAutoPanelValue(unittest.TestCase):
         self.assertEqual(g.evaluate()["nodes"]["c1"]["values"]["noncrit"], 40)
 
 
+class TestWeaponNamespace(unittest.TestCase):
+    """武器：继承角色类的命名空间容器 —— 只输出拐力、无面板、不支持 in::。"""
+
+    def build(self, link=True):
+        g = Graph()
+        g.add(GraphNode("rw", "weapon", fields={"role_name": "武器A"}))
+        g.add(var_card("vw", "out::atk_pct = 40", role="武器A"))
+        g.add(GraphNode("rr", "role", fields={"role_name": "火神"}))
+        g.add(var_card("vr", "atk_pct = own::atk_pct + in::atk_pct", role="火神"))
+        g.add(GraphNode("c1", "calc", fields={"expr": "atk_pct"}, role="火神"))
+        if link:
+            g.links.append(Link("rw", "rr", 0))
+        return g
+
+    def test_weapon_grants_to_role(self):
+        self.assertEqual(self.g_value(self.build()), 40)
+
+    def g_value(self, g):
+        return g.evaluate()["nodes"]["c1"]["values"]["noncrit"]
+
+    def test_weapon_has_no_in_namespace(self):
+        """武器不接受拐：in:: 不存在（面板属性也不自动计算，所以要用 out:: 声明给出多少）。"""
+        g = self.build()
+        g.add(GraphNode("c2", "calc", fields={"expr": "in::atk_pct"}, role="武器A"))
+        out = g.evaluate()
+        self.assertIn("未定义变量", out["nodes"]["c2"]["display"])
+        self.assertEqual(out["nodes"]["c1"]["values"]["noncrit"], 40)   # 对外给照旧
+
+    def test_weapon_schema(self):
+        sch = nd.node_schema("weapon")
+        self.assertTrue(sch["weapon_card"])
+        self.assertTrue(sch["role_card"])          # 继承角色类
+        self.assertEqual(sch["fields"], [])        # 没有可见字段（名字走右键设置）
+        self.assertNotIn("panel_show", sch["hidden_fields"])   # 没有面板
+        self.assertIn("role_name", sch["hidden_fields"])
+
+    def test_weapon_variables_are_namespaced(self):
+        """武器区域里的变量按 武器名::变量 命名（与角色同一套机制）。"""
+        g = self.build()
+        g.add(var_card("vw2", "白值 = 500", role="武器A"))
+        g.add(GraphNode("c3", "calc", fields={"expr": "白值"}, role="武器A"))
+        g.add(GraphNode("c4", "calc", fields={"expr": "武器A::白值"}, role=""))
+        out = g.evaluate()
+        self.assertEqual(out["nodes"]["c3"]["values"]["noncrit"], 500)
+        self.assertEqual(out["nodes"]["c4"]["values"]["noncrit"], 500)
+
+
 class TestRoleNameValidation(unittest.TestCase):
     def test_bad_role_is_treated_as_global(self):
         for bad in ("", "  ", "有 空格", "a__b", "雷神::x", "1abc"):

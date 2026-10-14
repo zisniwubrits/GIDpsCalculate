@@ -128,6 +128,8 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
   // 角色卡片是个例外：它没有伤害端口，但要一对**拐力端口** ——
   // 从源角色标签拖到目标角色标签，就等于把这个角色的面板值拐给对面。
   const isRole = Boolean(spec.role_card);
+  /** 武器：同属命名空间容器，但只输出拐力（没有输入端口、没有面板） */
+  const isWeapon = Boolean(spec.weapon_card);
   /** 拐力端口的悬停说明：带上这个命名空间已经收到/给出的拐（明细看「角色面板」弹窗） */
   const buffIn = data.roleBuffs?.in ?? [];
   const buffOut = data.roleBuffs?.out ?? [];
@@ -137,7 +139,7 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
   const outTitle = buffOut.length
     ? `给出去的拐：${buffOut.map((r) => `${r.label} ${r.value} → ${r.role}`).join("；")}`
     : "拐力：拖到另一个角色标签上方的端口，把本角色面板值拐给它";
-  const hasInput = isRole || (!spec.isolated && spec.inputs > 0);
+  const hasInput = (isRole && !isWeapon) || (!spec.isolated && !isRole && spec.inputs > 0);
   // sink 卡片（「赋值变量」）只有输入端口：它不参与结果链，只把上游值记到变量表
   const hasOutput = isRole || (!spec.isolated && !spec.no_output && !spec.sink);
   /** 折叠状态：只显示卡片类型（标题栏），字段区与底部输出都收起 */
@@ -157,7 +159,7 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
     node.type === "calc" ? String(node.fields.title ?? spec.title) || spec.title : spec.title;
   const title = collapsed
     ? spec.label
-    : node.type === "role"
+    : spec.role_card
       ? String(node.fields.role_name ?? "").trim() || "未命名"
       : baseTitle;
 
@@ -372,7 +374,7 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
         </div>
         {/* 角色标记的「面板」：显示在左上角标记牌**下方**（画布上就能看到属性），
             显示哪几项由右键「角色面板…」里的勾选控制；只读，不吃鼠标事件 */}
-        {spec.role_card && !collapsed && data.rolePanel?.length ? (
+        {spec.role_card && !isWeapon && !collapsed && data.rolePanel?.length ? (
           <div className="role-panel" data-testid={`role-panel-${id}`}>
             {data.rolePanel.map((r) => (
               <div

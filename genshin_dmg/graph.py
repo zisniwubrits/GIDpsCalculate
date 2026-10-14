@@ -274,8 +274,8 @@ class Graph:
         for l in self.links:
             if l.dst == dst and l.port == int(port):
                 src = self.nodes.get(l.src)
-                if src is not None and src.type == "role":
-                    continue        # 角色卡之间的是「拐力箭头」，不是数据连线
+                if src is not None and self._is_ns(src):
+                    continue        # 角色/武器之间的是「拐力箭头」，不是数据连线
                 return l.src
         return None
 
@@ -292,8 +292,8 @@ class Graph:
             dst = self.nodes.get(link.dst)
             if src is None or dst is None:
                 continue
-            if src.type != "role" or dst.type != "role":
-                continue                        # 只认角色卡之间的箭头
+            if not self._is_ns(src) or not (self._is_ns(dst) and not self._is_weapon(dst)):
+                continue                        # 源＝角色/武器，目标＝角色
             role_from = _valid_role(src.fields.get("role_name"))
             role_to = _valid_role(dst.fields.get("role_name"))
             if not role_from or not role_to or role_from == role_to:
@@ -347,6 +347,15 @@ class Graph:
         """（兼容旧调用）某角色面板里某个宏的自身值。"""
         return Graph.role_own_value(base_vars, role, macro)
 
+    @staticmethod
+    def _is_ns(node) -> bool:
+        """是不是命名空间容器（角色 / 武器）。"""
+        return bool(NODE_TYPES.get(node.type, {}).get("role_card"))
+
+    @staticmethod
+    def _is_weapon(node) -> bool:
+        return bool(NODE_TYPES.get(node.type, {}).get("weapon_card"))
+
     def _apply_role_panels(self, env: dict) -> None:
         """把每张角色卡「面板」字段里的宏登记成该角色的变量（``角色::宏``）。
 
@@ -354,7 +363,7 @@ class Graph:
         就是它）。只认固定词表里的宏名，值支持算式（在本角色作用域里求值）。
         """
         for node in self.nodes.values():
-            if node.type != "role":
+            if not self._is_ns(node):
                 continue
             role = _valid_role(node.fields.get("role_name"))
             if not role:
@@ -403,11 +412,16 @@ class Graph:
         ``own_vars`` 是**拐力生效前**的变量表（自身值），由调用方在合适的时机拍快照。
         """
         roles = set()
+        weapons = set()
         for node in self.nodes.values():
-            if node.type == "role":
-                role = _valid_role(node.fields.get("role_name"))
-                if role:
-                    roles.add(role)
+            if not self._is_ns(node):
+                continue
+            role = _valid_role(node.fields.get("role_name"))
+            if not role:
+                continue
+            roles.add(role)
+            if self._is_weapon(node):
+                weapons.add(role)        # 武器：只给 own:: / out::，**不给 in::**
         for role in roles:
             prefix = role + NS_JOIN
             names = set(_nodes.PANEL_MACRO_KEYS)
@@ -435,7 +449,9 @@ class Graph:
                     out_val = own                   # 默认：宏就是对外值
                 self.variables[prefix + SUB_OWN + NS_JOIN + name] = own
                 self.variables[out_key] = out_val
-                self.variables[prefix + SUB_IN + NS_JOIN + name] = inc
+                if role not in weapons:
+                    # 武器不支持 in::（它只往外给）——写 in:: 会显示"未定义变量"
+                    self.variables[prefix + SUB_IN + NS_JOIN + name] = inc
 
     # -- 延迟补算（引用了 in::/own:: 这类要等拐力才知道的名字）-----------------
     def _defer(self, kind: str, key: str, expr: str, node, role=None) -> None:
@@ -490,7 +506,9 @@ class Graph:
         for link in self.links:
             a = self.nodes.get(link.src)
             b = self.nodes.get(link.dst)
-            if a is None or b is None or a.type != "role" or b.type != "role":
+            if a is None or b is None:
+                continue
+            if not self._is_ns(a) or not (self._is_ns(b) and not self._is_weapon(b)):
                 continue
             ra = _valid_role(a.fields.get("role_name"))
             rb = _valid_role(b.fields.get("role_name"))
