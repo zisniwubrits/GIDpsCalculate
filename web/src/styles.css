@@ -373,32 +373,44 @@ textarea:focus {
   top: -7px;
 }
 
-/* 画布上角色标记里的「面板」：标记牌下方，只读一行一项；
-   只显示控制哪些项（右键「角色面板…」里勾选），空 = 只显示已有值的那些 */
+/* 画布上角色标记里的「面板」：**沿用普通卡片的外观**（同底色 / 描边 / 圆角 / 投影，
+   字段行也是"名字 + 值"两列），看起来就是挂在标记牌下面的一张只读小卡。
+   它挂在角色节点内，继承节点的 pointer-events: none → 不吃鼠标、不挡框选拖动 */
 .role-panel {
   display: flex;
   flex-direction: column;
   gap: 1px;
   align-self: flex-start;
-  max-width: 100%;
-  padding: 2px 6px 0;
+  min-width: 150px;
+  margin: 3px 0 0 3px;
+  padding: 3px 7px;
+  background: var(--card-bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(30, 50, 70, 0.09);
   font-size: 11px;
   line-height: 1.5;
 }
 
+/* 字段行与普通卡片的 .f-row 同构：左边字段名（灰）、右边值，数值右对齐一列对齐 */
 .role-panel .rp-row {
-  display: flex;
-  gap: 8px;
-  white-space: nowrap;
+  display: grid;
+  grid-template-columns: 84px 1fr;
+  align-items: center;
+  gap: 5px;
 }
 
 .role-panel .rp-key {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   font-family: Consolas, "Courier New", "Microsoft YaHei", monospace;
-  color: var(--accent);
+  color: var(--muted);
 }
 
 .role-panel .rp-val {
-  color: #34495e;
+  color: var(--text);
+  text-align: right;
 }
 
 /* 含拐的面板项（自身 + 收进来的）用暖色标出来 */

@@ -195,15 +195,25 @@ describe("角色容器面板", () => {
     expect(body).toMatch(/font-family/);
   });
 
-  it("角色标记的面板挂在左上角（标记牌下方、靠左），且不吃鼠标事件", () => {
+  it("角色标记的快速查看面板风格对齐普通卡片（同底色/描边/圆角/投影），且不吃鼠标事件", () => {
     const panel = ruleBody(".role-panel");
-    expect(panel).toMatch(/align-self:\s*flex-start/);     // 跟着左上角标记牌走
-    expect(panel).toMatch(/flex-direction:\s*column/);     // 一行一个属性
-    expect(ruleBody(".role-panel .rp-row")).toMatch(/white-space:\s*nowrap/);
+    // 与 .card 同一套外观
+    expect(panel).toMatch(/background:\s*var\(--card-bg\)/);
+    expect(panel).toMatch(/border:\s*1px solid var\(--line\)/);
+    expect(panel).toMatch(/border-radius:\s*8px/);
+    expect(panel).toMatch(/box-shadow:\s*0 1px 3px rgba\(30,\s*50,\s*70,\s*0\.09\)/);
+    // 贴着左上角标记牌，并且是一行一个属性
+    expect(panel).toMatch(/align-self:\s*flex-start/);
+    expect(panel).toMatch(/flex-direction:\s*column/);
+    // 字段行与卡片里的 .f-row 同构：左字段名（灰）+ 右值
+    const row = ruleBody(".role-panel .rp-row");
+    expect(row).toMatch(/grid-template-columns:\s*84px 1fr/);
+    expect(ruleBody(".role-panel .rp-key")).toMatch(/color:\s*var\(--muted\)/);
+    expect(ruleBody(".role-panel .rp-val")).toMatch(/text-align:\s*right/);
     // 含拐的项用暖色标出来
     expect(ruleBody(".role-panel .rp-buffed")).toMatch(/color:\s*var\(--warn\)/);
-    // 角色节点整体 pointer-events: none → 面板只读、不挡框选与拖动
-    expect(ruleBody(".card-role-box .card-head")).toMatch(/font-size:\s*12px/);  // 标记牌加大
+    // 标记牌加大（"标签控件不变、只是变大"）
+    expect(ruleBody(".card-role-box .card-head")).toMatch(/font-size:\s*12px/);
   });
 
   it("角色面板弹窗放大、宏表一行一个（便于交互）", () => {
