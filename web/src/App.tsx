@@ -615,6 +615,13 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
         },
       });
     }
+    if (spec.vars_card) {
+      const shown = node.fields.show_vars !== false;
+      items.push({
+        label: shown ? "隐藏变量值" : "显示变量值",
+        onClick: () => onField(menu.id, "show_vars", !shown),
+      });
+    }
     if (spec.role_card) {
       items.push({ label: "设置角色名…", onClick: () => setRoleNameDialog(menu.id) });
       items.push({ label: "角色面板…", onClick: () => setPanelDialog(menu.id) });
@@ -628,7 +635,7 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
     items.push({ label: "删除卡片", danger: true, onClick: () => removeNode(menu.id) });
     return items;
   }, [menu, nodes, schema, results, copyNodeValue, removeNode, setFontSize, setResultVars,
-      toggleCollapse]);
+      toggleCollapse, onField, setRoleNameDialog, setPanelDialog, setNameDialog]);
 
   // -- 键盘快捷键 --------------------------------------------------------
   useEffect(() => {

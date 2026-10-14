@@ -195,7 +195,9 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
     if (node.type === "var") {
       return (
         <div className="card-foot">
-          {result?.varsText ? <span className="foot-text">{result.varsText}</span> : null}
+          {result?.varsText && node.fields.show_vars !== false ? (
+        <span className="foot-text">{result.varsText}</span>
+      ) : null}
         </div>
       );
     }

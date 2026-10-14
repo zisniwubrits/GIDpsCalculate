@@ -816,6 +816,28 @@ describe("App 集成（假后端 + 真 schema）", () => {
     expect(screen.getByTestId("role-panel-n1")).not.toHaveTextContent("atk ");
   });
 
+  it("变量卡右键可切换「卡片底部是否显示算出的变量值」", async () => {
+    const user = userEvent.setup();
+    await renderApp();
+    await addCard(user, "var");
+    const card = await screen.findByTestId("card-n1");
+
+    // 默认显示（假后端给的 varsText）
+    await waitFor(() => expect(within(card).getByText(/变量: 攻击力=1000/)).toBeInTheDocument());
+
+    // 右键 →「隐藏变量值」→ 写回 show_vars=false，底部那行没了
+    fireEvent.contextMenu(within(card).getByText("变量"));
+    await user.click(await screen.findByText("隐藏变量值"));
+    await waitFor(() => expect(lastBody?.nodes[0].fields.show_vars).toBe(false));
+    await waitFor(() => expect(within(card).queryByText(/变量: 攻击力=1000/)).toBeNull());
+
+    // 再右键 → 菜单项变成「显示变量值」→ 点回去
+    fireEvent.contextMenu(within(card).getByText("变量"));
+    await user.click(await screen.findByText("显示变量值"));
+    await waitFor(() => expect(lastBody?.nodes[0].fields.show_vars).toBe(true));
+    await waitFor(() => expect(within(card).getByText(/变量: 攻击力=1000/)).toBeInTheDocument());
+  });
+
   it("右键角色标签 →「角色面板…」：宏表可编辑、并显示拐力统计（OUT/IN）", async () => {    const user = userEvent.setup();
     await renderApp();
     await addCard(user, "role");
