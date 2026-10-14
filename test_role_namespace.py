@@ -312,9 +312,10 @@ class TestRolePanel(unittest.TestCase):
 
 
 class TestBuffArrows(unittest.TestCase):
-    """拐力箭头：角色卡 → 角色卡，把源角色的面板值**加到**目标角色的同名面板项上。
+    """拐力箭头：角色卡 → 角色卡，把源角色**声明过的 out::** 加到目标角色的同名项上。
 
-    用户确认：多来源**相加**；**不传递**（源的值只看它自己的面板）。
+    用户确认：多来源**相加**；**不传递**；而且**只有 `out::` 才给出去** ——
+    面板里的普通项（`atk` / `atk_pct` …）是"自己用的属性表"，不发拐力。
     """
 
     @staticmethod
@@ -342,18 +343,29 @@ class TestBuffArrows(unittest.TestCase):
         return g.evaluate()["nodes"]["b"]["values"]["noncrit"]
 
     def test_arrow_adds_source_panel_onto_target(self):
-        g = self.build("atk_pct = 40")
+        g = self.build("out::atk_pct = 40")
         self.assertEqual(self.base_value(g), 1000)          # 没箭头：只有自己
         g.links.append(Link("r_src", "r_dst", 0))
         self.assertEqual(self.base_value(g), 1400)          # 拐上 40% 攻击
 
+    def test_plain_panel_entry_does_not_grant(self):
+        """新口径：面板里的普通项（没写 out::）**不发拐力**，箭头等于白拖。"""
+        g = self.build("atk_pct = 40")
+        g.links.append(Link("r_src", "r_dst", 0))
+        self.assertEqual(self.base_value(g), 1000)
+        # 源自己的计算照旧不受影响（面板项还是它自己的属性）
+        g.add(GraphNode("bs", "base",
+                        fields={"stat_base": "", "stat_big": "atk_pct", "multiplier": "100"},
+                        role="辅助"))
+        self.assertEqual(g.evaluate()["nodes"]["bs"]["values"]["noncrit"], 1400)
+
     def test_own_value_wins_no_auto_sum(self):
         """取消自动相加后：自身写了 10 就以 10 为准（以前是 20 → 50%）。"""
-        g = self.build("atk_pct = 40", target_defs="atk = 1000\natk_pct = 10")
+        g = self.build("out::atk_pct = 40", target_defs="atk = 1000\natk_pct = 10")
         g.links.append(Link("r_src", "r_dst", 0))
         self.assertEqual(self.base_value(g), 1100)
         # 想要"自身 + 拐"，自己在变量卡里写出来
-        g2 = self.build("atk_pct = 40",
+        g2 = self.build("out::atk_pct = 40",
                         target_defs="atk = 1000\n总 = own::atk_pct + in::atk_pct")
         g2.add(GraphNode("b2", "base",
                          fields={"stat_base": "", "stat_big": "总", "multiplier": "100"},
@@ -363,38 +375,38 @@ class TestBuffArrows(unittest.TestCase):
         self.assertEqual(g2.evaluate()["nodes"]["b2"]["values"]["noncrit"], 1400)
 
     def test_multiple_sources_add_up(self):
-        g = self.build("atk_pct = 40")
+        g = self.build("out::atk_pct = 40")
         g.add(GraphNode("r_src2", "role", fields={"role_name": "另一个辅助"}))
-        g.add(var_card("v_src2", "atk_pct = 25", role="另一个辅助"))
+        g.add(var_card("v_src2", "out::atk_pct = 25", role="另一个辅助"))
         g.links.append(Link("r_src", "r_dst", 0))
         g.links.append(Link("r_src2", "r_dst", 0))
         self.assertEqual(self.base_value(g), 1650)          # 40+25 = 65%
 
     def test_not_propagated(self):
-        """不传递：C→A、A→B 时 B 只拿到 A 自己的面板值（不含 C 给 A 的拐）。"""
-        g = self.build("atk_pct = 40")
+        """不传递：C→A、A→B 时 B 只拿 A 自己声明过的 out::（不含 C 给 A 的拐）。"""
+        g = self.build("out::atk_pct = 40")
         g.add(GraphNode("r_c", "role", fields={"role_name": "拐A的"}))
-        g.add(var_card("v_c", "atk_pct = 100", role="拐A的"))
+        g.add(var_card("v_c", "out::atk_pct = 100", role="拐A的"))
         g.links.append(Link("r_c", "r_src", 0))             # C → A
         g.links.append(Link("r_src", "r_dst", 0))           # A → B
-        # A 自己的面板是 40（不因为收到 C 的 100 而变成 140）
+        # A 对外提供的仍是自己声明的 40（不因为收到 C 的 100 而变成 140）
         self.assertEqual(self.base_value(g), 1400)
 
     def test_source_role_is_not_buffed_by_its_own_grant(self):
         """自己给自己上拐的箭头无效（自连被忽略），源角色自己的计算不变。"""
-        g = self.build("atk_pct = 40", target_defs="atk = 1000")
+        g = self.build("out::atk_pct = 40", target_defs="atk = 1000")
         g.nodes["r_dst"].fields["role_name"] = "辅助"        # 让箭头变成 A→A
         g.links.append(Link("r_src", "r_dst", 0))
         self.assertEqual(self.base_value(g), 1000)
 
     def test_arrow_between_invalid_roles_is_ignored(self):
-        g = self.build("atk_pct = 40")
+        g = self.build("out::atk_pct = 40")
         g.nodes["r_src"].fields["role_name"] = "有 空格"     # 非法角色名
         g.links.append(Link("r_src", "r_dst", 0))
         self.assertEqual(self.base_value(g), 1000)
 
     def test_unrelated_role_is_unaffected(self):
-        g = self.build("atk_pct = 40")
+        g = self.build("out::atk_pct = 40")
         g.add(GraphNode("b3", "base",
                         fields={"stat_base": "", "stat_big": "", "multiplier": "100"},
                         role="胡桃"))
@@ -404,23 +416,23 @@ class TestBuffArrows(unittest.TestCase):
         self.assertEqual(out["nodes"]["b3"]["values"]["noncrit"], 500)   # 胡桃没被拐
 
     def test_granted_macro_appears_in_variable_table(self):
-        g = self.build("atk_pct = 40", target_defs="atk = 1000\natk_pct = 10")
+        g = self.build("out::atk_pct = 40", target_defs="atk = 1000\natk_pct = 10")
         g.add(GraphNode("t", "vartable"))
         g.links.append(Link("r_src", "r_dst", 0))
         rows = dict(g.evaluate()["nodes"]["t"]["rows"])
         self.assertEqual(rows["火神::atk_pct"], "10")        # 自身优先（不再自动加拐）
-        self.assertEqual(rows["辅助::atk_pct"], "40")        # 源角色自己不变
+        self.assertEqual(rows["辅助::atk_pct"], "40")        # 源角色对外声明的那份
 
     def test_target_expression_using_macro_sees_the_grant(self):
         """目标角色里以面板宏写的算式也吃到拐（变量那一轮会带着拐力重跑）。"""
-        g = self.build("atk = 500", target_defs="atk = 1000\ntotal = atk * 2")
+        g = self.build("out::atk = 500", target_defs="atk = 1000\ntotal = atk * 2")
         g.links.append(Link("r_src", "r_dst", 0))
         names = {v["name"]: v["text"] for v in g.evaluate()["variables"]}
         # 取消自动相加：自身写了 1000 → atk 就是 1000（不再加收进来的 500）
         self.assertEqual(names["火神::total"], "2000")
 
     def test_buff_edges_helper(self):
-        g = self.build("atk_pct = 40")
+        g = self.build("out::atk_pct = 40")
         g.links.append(Link("r_src", "r_dst", 0))
         self.assertEqual(g.buff_edges(), [("辅助", "火神")])
 
@@ -428,7 +440,7 @@ class TestBuffArrows(unittest.TestCase):
 class TestRoleCardPanel(unittest.TestCase):
     """角色卡自带的「面板」字段（右键「角色面板…」弹窗编辑）与拐力统计。"""
 
-    def build(self, panel_a="atk_pct = 40", panel_b="atk = 1000"):
+    def build(self, panel_a="out::atk_pct = 40", panel_b="atk = 1000"):
         g = Graph()
         g.add(GraphNode("ra", "role", fields={"role_name": "辅助", "panel": panel_a}))
         g.add(GraphNode("rb", "role", fields={"role_name": "火神", "panel": panel_b}))
@@ -573,19 +585,20 @@ class TestPanelCustomOut(unittest.TestCase):
 class TestSubNamespaces(unittest.TestCase):
     """子命名空间（``own`` / ``out`` / ``in``）：消除"生效值/自身/给出去/收进来"的歧义。
 
-    用户确认的四个名字（以火神自身 atk_pct=10、收到辅助 40 为例）：
-      * 火神::atk_pct      = 50（生效值，保持原有行为）
+    用户确认的四个名字（以火神自己写 out::atk_pct=10、收到辅助 40 为例）：
+      * 火神::atk_pct      = 10（生效值 = 自己写的那个值）
       * 火神::own::atk_pct = 10（纯自身）
-      * 火神::out::atk_pct = 10（对外提供的 = 自身，"宏就是对外值"）
+      * 火神::out::atk_pct = 10（对外提供的：**只有显式写 out:: 才有**）
       * 火神::in::atk_pct  = 40（收进来的，多来源相加）
-    并且：**任意变量都支持**（非面板宏的 in 就是 0）、**角色内可省略角色名**。
+    并且：**任意变量都支持**（没写 out:: 的变量 out 就是 0、in 也是 0）、
+    **角色内可省略角色名**。
     """
 
     def build(self, link=True):
         g = Graph()
-        g.add(GraphNode("ra", "role", fields={"role_name": "辅助", "panel": "atk_pct = 40"}))
+        g.add(GraphNode("ra", "role", fields={"role_name": "辅助", "panel": "out::atk_pct = 40"}))
         g.add(GraphNode("rb", "role",
-                        fields={"role_name": "火神", "panel": "atk = 1000\natk_pct = 10"}))
+                        fields={"role_name": "火神", "panel": "atk = 1000\nout::atk_pct = 10"}))
         g.add(var_card("vb", "攻击力 = 2000", role="火神"))
         if link:
             g.links.append(Link("ra", "rb", 0))
@@ -597,9 +610,9 @@ class TestSubNamespaces(unittest.TestCase):
 
     def test_four_names(self):
         g = self.build()
-        self.assertEqual(self.calc(g, "c1", "atk_pct"), 10)          # 自身优先（不再自动加拐）
+        self.assertEqual(self.calc(g, "c1", "atk_pct"), 10)          # 生效值 = 自己写的
         self.assertEqual(self.calc(g, "c2", "own::atk_pct"), 10)     # 纯自身
-        self.assertEqual(self.calc(g, "c3", "out::atk_pct"), 10)     # 对外提供
+        self.assertEqual(self.calc(g, "c3", "out::atk_pct"), 10)     # 显式声明过才对外
         self.assertEqual(self.calc(g, "c4", "::in::atk_pct"), 40)    # 收进来
         # 前导 :: 与不写一样，都指"本角色"
         self.assertEqual(self.calc(g, "c5", "in::atk_pct"), 40)
@@ -613,30 +626,30 @@ class TestSubNamespaces(unittest.TestCase):
         self.assertEqual(self.calc(g, "c4", "火神::in::atk_pct", role="胡桃"), 40)
 
     def test_any_variable_supports_sub_namespaces(self):
-        """非面板宏的变量也支持：own/out 是它自己的值，in 是 0（箭头只拐面板宏）。"""
+        """非面板宏、也没写 out:: 的变量：own 是它自己的值，out / in 都是 0。"""
         g = self.build()
         self.assertEqual(self.calc(g, "c1", "攻击力"), 2000)
         self.assertEqual(self.calc(g, "c2", "own::攻击力"), 2000)
-        self.assertEqual(self.calc(g, "c3", "out::攻击力"), 2000)
+        self.assertEqual(self.calc(g, "c3", "out::攻击力"), 0)     # 没声明就不对外提供
         self.assertEqual(self.calc(g, "c4", "in::攻击力"), 0)
         self.assertEqual(self.calc(g, "c5", "火神::in::攻击力", role=""), 0)
 
     def test_in_sums_multiple_sources(self):
         g = self.build()
-        g.add(GraphNode("rc", "role", fields={"role_name": "另一个辅助", "panel": "atk_pct = 25"}))
+        g.add(GraphNode("rc", "role", fields={"role_name": "另一个辅助", "panel": "out::atk_pct = 25"}))
         g.links.append(Link("rc", "rb", 0))
         self.assertEqual(self.calc(g, "c1", "::in::atk_pct"), 65)     # 40 + 25（多来源在 in 里相加）
         self.assertEqual(self.calc(g, "c2", "::own::atk_pct"), 10)    # 自身不受影响
-        self.assertEqual(self.calc(g, "c3", "atk_pct"), 10)           # 自身优先
+        self.assertEqual(self.calc(g, "c3", "atk_pct"), 10)           # 生效值仍是自己写的
 
     def test_not_propagated(self):
-        """不传递：C→A、A→B 时 A 的 out 仍是自身值（不含 C 给的），B 只拿到 A 的 out。"""
+        """不传递：C→A、A→B 时 B 只拿到 A 声明的 out::（不含 C 给 A 的）。"""
         g = self.build(link=False)
-        g.add(GraphNode("rc", "role", fields={"role_name": "拐A的", "panel": "atk_pct = 100"}))
+        g.add(GraphNode("rc", "role", fields={"role_name": "拐A的", "panel": "out::atk_pct = 100"}))
         g.links.append(Link("rc", "ra", 0))
         g.links.append(Link("ra", "rb", 0))
         self.assertEqual(self.calc(g, "c1", "辅助::in::atk_pct", role=""), 100)   # A 收到了
-        self.assertEqual(self.calc(g, "c2", "辅助::out::atk_pct", role=""), 40)   # 但对外还是自身
+        self.assertEqual(self.calc(g, "c2", "辅助::out::atk_pct", role=""), 40)   # 对外仍是自己声明的
         self.assertEqual(self.calc(g, "c3", "::in::atk_pct"), 40)                 # B 只拿 A 的 out
 
     def test_variable_table_does_not_list_sub_namespaces(self):
@@ -690,7 +703,7 @@ class TestDeferredDefinitions(unittest.TestCase):
         """同样的写法在面板与变量卡里结果一致（都要能解析）。"""
         for where in ("panel", "var"):
             g = Graph()
-            g.add(GraphNode("ra", "role", fields={"role_name": "辅助", "panel": "atk_pct = 40"}))
+            g.add(GraphNode("ra", "role", fields={"role_name": "辅助", "panel": "out::atk_pct = 40"}))
             if where == "panel":
                 g.add(GraphNode("rb", "role", fields={
                     "role_name": "火神", "panel": "atk = 1000\natk_pct = in::atk_pct"}))

@@ -164,7 +164,7 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
     : "收到的拐：把别的角色的拐力端口拖到这里";
   const outTitle = buffOut.length
     ? `给出去的拐：${buffOut.map((r) => `${r.label} ${r.value} → ${r.role}`).join("；")}`
-    : "拐力：拖到另一个角色标签上方的端口，把本角色面板值拐给它";
+    : "拐力：把本角色**声明过的 out:: 值**拐给对面（在「角色面板…」里加一行自定义对外项）";
   const hasInput = (isRole && !isWeapon) || (!spec.isolated && !isRole && spec.inputs > 0);
   // sink 卡片（「赋值变量」）只有输入端口：它不参与结果链，只把上游值记到变量表
   const hasOutput = isRole || (!spec.isolated && !spec.no_output && !spec.sink);

@@ -281,10 +281,11 @@ class Graph:
 
     # -- 拐力（角色卡 → 角色卡 的面板叠加）----------------------------------
     def buff_sources(self, base_vars: dict) -> dict:
-        """``{目标角色: {面板宏: 加总值}}``：所有「角色卡 → 角色卡」箭头带来的拐力。
+        """``{目标角色: {对外项名字: 加总值}}``：所有「角色/武器卡 → 角色卡」箭头带来的拐力。
 
-        规则（用户确认）：多来源**相加**；**不传递** —— 源角色的值只取它自己的面板
-        （本角色命名空间优先，其次全局），不把它收到的拐力再传下去。
+        规则（用户确认）：多来源**相加**；**不传递**（源角色只拿它**自己声明过的
+        ``out::``**，不把它收到的拐力再传下去）；**只有 ``out::`` 才给出去** ——
+        面板里的普通项与卡片字段本身都不发拐力。
         """
         out: dict = {}
         for link in self.links:
@@ -299,17 +300,28 @@ class Graph:
             if not role_from or not role_to or role_from == role_to:
                 continue
             grants = out.setdefault(role_to, {})
-            names = list(_nodes.PANEL_MACRO_KEYS)
-            out_prefix = role_from + NS_JOIN + SUB_OUT + NS_JOIN
-            for key in base_vars:
-                if key.startswith(out_prefix):
-                    nm = key[len(out_prefix):]
-                    if NS_JOIN not in nm and nm not in names:
-                        names.append(nm)        # out:: 里写的自定义名字
-            for macro in names:
+            for macro in self._out_names(base_vars, role_from):
                 val = self.role_out_value(base_vars, role_from, macro)
                 if val:
                     grants[macro] = grants.get(macro, 0.0) + val
+        return out
+
+    @staticmethod
+    def _out_names(base_vars: dict, role: str) -> list:
+        """这个角色**显式声明过**的对外项名字（``out::名字`` 的那些）。
+
+        拐力只看这些名字 —— 面板里的普通项（``atk`` / ``atk_pct`` …）是"自己用的
+        属性表"，不写 ``out::`` 就不给出去（用户口径）。
+        """
+        prefix = role + NS_JOIN + SUB_OUT + NS_JOIN
+        out: list = []
+        for key in base_vars:
+            if not key.startswith(prefix):
+                continue
+            nm = key[len(prefix):]
+            if NS_JOIN in nm or nm in out:
+                continue                    # 其它子命名空间的键 / 重复
+            out.append(nm)
         return out
 
     @staticmethod
@@ -326,13 +338,16 @@ class Graph:
 
     @staticmethod
     def role_out_value(base_vars: dict, role: str, macro: str) -> float:
-        """某角色**对外提供**的值（拐力箭头用它）：显式声明的 out:: 优先，否则就是自身。"""
-        out = Graph._first_value(base_vars, (
+        """某角色**对外提供**的值（拐力箭头用它）。
+
+        口径（用户确认）：**只有显式声明的 ``out::名字`` 才给出去** ——
+        角色面板里那些既没有 ``own::`` 也没有 ``out::`` 的普通项（以及卡片字段本身）
+        **不会**自动变成拐力。以前是"没写 out:: 就默认等于自身值"，那会让每个角色
+        只要写了面板属性就在偷偷给拐，跟"面板只是自己用的属性表"这个直觉冲突。
+        """
+        return Graph._first_value(base_vars, (
             env_key(qualify("%s%s%s" % (SUB_OUT, NS_SEP, macro), role)),
-        ), default=None)
-        if out is not None:
-            return out
-        return Graph.role_own_value(base_vars, role, macro)
+        ))
 
     @staticmethod
     def _first_value(vars_: dict, keys, default: float = 0.0) -> float:
@@ -407,13 +422,14 @@ class Graph:
     def _apply_sub_namespaces(self, own_vars: dict) -> None:
         """给每个角色补上 ``own`` / ``out`` / ``in`` 三个子命名空间（消除歧义）。
 
-        * ``角色::名字``      = **生效值**（自身 + 收进来的拐，保持原有行为）
+        * ``角色::名字``      = **生效值**（自己写的那个值）
         * ``角色::own::名字`` = **纯自身**（不含拐）
-        * ``角色::out::名字`` = **对外提供的**（= 自身，"宏就是对外值"）
+        * ``角色::out::名字`` = **对外提供的**：**只有显式写过 ``out::名字`` 才有值**，
+          否则是 0（用户口径：面板里的普通项与卡片字段本身都不发拐力）
         * ``角色::in::名字``  = **收进来的拐**（多来源相加；没被拐就是 0）
 
         名字取"本角色自己定义过的变量" ∪ "固定词表的面板宏"，所以任意变量都支持子命名空间
-        （只有面板宏会被箭头拐到，其余变量的 ``in`` 就是 0）。
+        （没声明 ``out::`` 的变量 ``out`` / ``in`` 都是 0）。
         ``own_vars`` 是**拐力生效前**的变量表（自身值），由调用方在合适的时机拍快照。
         """
         roles = set()
@@ -447,11 +463,12 @@ class Graph:
                 own = float(own_vars.get(prefix + name, 0.0) or 0.0)
                 inc = float(grants.get(name, 0.0) or 0.0)
                 out_key = prefix + SUB_OUT + NS_JOIN + name
-                if out_key in self._user_sub_ns and out_key in own_vars:
-                    # 用户显式声明过 `out::X = ...`（"我对外提供这么多"）→ 以他写的为准
-                    out_val = float(own_vars.get(out_key, 0.0) or 0.0)
-                else:
-                    out_val = own                   # 默认：宏就是对外值
+                # 只有显式写过 `out::名字 = ...` 才对外提供；否则 0（不发拐力）
+                out_val = (
+                    float(own_vars.get(out_key, 0.0) or 0.0)
+                    if out_key in self._user_sub_ns
+                    else 0.0
+                )
                 self.variables[prefix + SUB_OWN + NS_JOIN + name] = own
                 self.variables[out_key] = out_val
                 if role not in weapons:
@@ -519,13 +536,7 @@ class Graph:
             rb = _valid_role(b.fields.get("role_name"))
             if not ra or not rb or ra == rb:
                 continue
-            names = list(_nodes.PANEL_MACRO_KEYS)
-            out_prefix = ra + NS_JOIN + SUB_OUT + NS_JOIN
-            for key in base_vars:
-                if key.startswith(out_prefix):
-                    nm = key[len(out_prefix):]
-                    if NS_JOIN not in nm and nm not in names:
-                        names.append(nm)
+            names = self._out_names(base_vars, ra)
             for macro in names:
                 val = self.role_out_value(base_vars, ra, macro)
                 if not val:
