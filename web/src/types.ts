@@ -76,6 +76,13 @@ export interface Schema {
   resultVarFields: { key: string; label: string }[];
   /** 「角色面板」的固定宏词表（前端不硬编码中文标签） */
   panelMacros: { key: string; label: string; feed: string }[];
+  /**
+   * 自定义面板项（`out::名字`）的命名规则（正则源码）。
+   *
+   * 规则的后端权威是 `nodes.valid_panel_custom_name`，前端只拿它做输入校验
+   * （不在 TS 里另立一套规则）；后端版本过旧时可能没有这个字段。
+   */
+  panelCustomPattern?: string;
   zoom: { min: number; max: number; step: number };
   history: { max: number };
 }

@@ -31,6 +31,10 @@ import {
   roleOfNode,
   spreadChain,
   validRoleName,
+  validCustomOut,
+  nextCustomOutName,
+  parseRolePanel,
+  formatRolePanel,
   wouldCycle,
 } from "./model";
 import type { CardNode, GraphJSON, Schema } from "./types";
@@ -408,6 +412,40 @@ describe("角色容器（抽象角色命名空间）", () => {
     const text = formatPanel({ res_shred: "40", atk: "2000", atk_pct: "" }, keys);
     expect(text).toBe("atk = 2000\nres_shred = 40");
     expect(parsePanel(text, keys)).toEqual({ atk: "2000", res_shred: "40" });
+  });
+
+  it("角色面板自定义对外项：解析 out::名字（固定宏按词表顺序、自定义按出现顺序）", () => {
+    const keys = ["atk", "atk_pct"];
+    const text = ["atk = 2000", "out::gift = 40", "out::Bad = 1", "乱写的 = 9"].join("\n");
+    const parsed = parseRolePanel(text, keys);
+    expect(parsed.values).toEqual({ atk: "2000", "out::gift": "40" });
+    expect(parsed.custom).toEqual(["gift"]);          // 非法名与陌生名字都不收
+    // 回写：固定宏在前、自定义项在后，且往返稳定
+    const back = formatRolePanel(parsed.values, keys, parsed.custom);
+    expect(back).toBe("atk = 2000\nout::gift = 40");
+    expect(parseRolePanel(back, keys)).toEqual(parsed);
+    // 空值不写
+    expect(formatRolePanel({ atk: "1", "out::gift": "" }, keys, ["gift"])).toBe("atk = 1");
+    // 顺序：换一个自定义顺序，回写跟着变
+    expect(
+      formatRolePanel({ atk: "1", "out::a": "2", "out::b": "3" }, keys, ["b", "a"]),
+    ).toBe("atk = 1\nout::b = 3\nout::a = 2");
+  });
+
+  it("自定义对外项名字规则来自 schema（不在前端另立一套）", () => {
+    // 兜底正则 + __ 段
+    expect(validCustomOut("gift_2")).toBe(true);
+    expect(validCustomOut("Bad")).toBe(false);
+    expect(validCustomOut("a__b")).toBe(false);
+    expect(validCustomOut("")).toBe(false);
+    // schema 给什么就用什么
+    expect(validCustomOut("拐力A", "^[\\w\\u4e00-\\u9fa5]+$")).toBe(true);
+    // schema 给的正则坏掉时不至于炸掉界面 → 退回兜底规则
+    expect(validCustomOut("gift", "([")).toBe(true);
+    // 新增一行时的建议名字：避开已占用的
+    expect(nextCustomOutName([])).toBe("buff");
+    expect(nextCustomOutName(["buff"])).toBe("buff2");
+    expect(nextCustomOutName(["buff", "buff2"])).toBe("buff3");
   });
 
   it("画布面板的显示名单：解析空格/逗号/顿号分隔，回写用空格", () => {

@@ -1631,6 +1631,7 @@
       "feed": "增幅反应 / 剧变反应 → 反应增伤%"
     }
   ],
+  "panelCustomPattern": "^[a-z][a-z0-9_]*$",
   "tables": {
     "relic": {
       "header": [

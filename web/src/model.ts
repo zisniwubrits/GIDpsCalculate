@@ -163,24 +163,42 @@ export function normalizeSchema(raw: Schema | null | undefined): Schema | null {
     tables: raw.tables ?? {},
     resultVarFields: raw.resultVarFields ?? [],
     panelMacros: raw.panelMacros ?? [],
+    panelCustomPattern: raw.panelCustomPattern ?? DEFAULT_PANEL_CUSTOM_PATTERN,
   };
 }
 
 // ---------------------------------------------------------------- 角色面板宏
+/**
+ * 角色面板里一行 ``名字 = 值``（与后端 split_var_line 同规则）。
+ *
+ * 分隔符按 ``=`` → ``：`` → ``:`` 的**先后**找，而不是找最靠前的那个：
+ * ``out::gift = 40`` 里的第一个 ``:`` 属于命名空间 ``::``，不能当分隔符
+ * （否则名字会被切成 ``out``）。
+ */
+function panelLines(text: string): [string, string][] {
+  const out: [string, string][] = [];
+  for (const raw of (text ?? "").split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith("#")) continue;
+    for (const sep of ["=", "：", ":"]) {
+      const i = line.indexOf(sep);
+      if (i <= 0) continue;
+      out.push([line.slice(0, i).trim(), line.slice(i + sep.length).trim()]);
+      break;
+    }
+  }
+  return out;
+}
+
 /**
  * 解析角色卡「面板」字段里的 ``宏 = 值`` 多行文本（与后端 split_var_line 同规则：
  * 认 ``=`` / ``：`` / ``:``，跳过空行与 ``#`` 注释，只保留词表里的宏）。
  */
 export function parsePanel(text: string, keys: readonly string[]): Record<string, string> {
   const out: Record<string, string> = {};
-  for (const raw of (text ?? "").split(/\r?\n/)) {
-    const line = raw.trim();
-    if (!line || line.startsWith("#")) continue;
-    const i = line.search(/[=:：]/);
-    if (i <= 0) continue;
-    const key = line.slice(0, i).trim();
+  for (const [key, value] of panelLines(text)) {
     if (!keys.includes(key)) continue;
-    out[key] = line.slice(i + 1).trim();
+    out[key] = value;
   }
   return out;
 }
@@ -196,6 +214,92 @@ export function formatPanel(
     if (v) lines.push(`${key} = ${v}`);
   }
   return lines.join("\n");
+}
+
+// ------------------------------------------------- 角色面板的自定义对外项（out::）
+/** 子命名空间前缀（与后端 expr.SUB_OUT 一致） */
+export const SUB_OUT = "out";
+
+/** 自定义对外项名字的兜底规则（后端 schema 会给 panelCustomPattern，这里只兜底）。 */
+export const DEFAULT_PANEL_CUSTOM_PATTERN = "^[a-z][a-z0-9_]*$";
+
+/**
+ * 自定义对外项的名字是否合法：正则（来自 schema）+ ``__`` 段。
+ *
+ * 为什么走 schema：名字规则的后端权威是 ``nodes.valid_panel_custom_name``，
+ * 前端只是提前拦一下，不该在 TS 里另立一套规则。
+ */
+export function validCustomOut(
+  name: string,
+  pattern = DEFAULT_PANEL_CUSTOM_PATTERN,
+): boolean {
+  const t = (name ?? "").trim();
+  if (!t || t.includes("__")) return false;
+  try {
+    return new RegExp(pattern).test(t);
+  } catch {
+    return new RegExp(DEFAULT_PANEL_CUSTOM_PATTERN).test(t);
+  }
+}
+
+/** 列出一个自定义对外项的重复名（新增时给个 suggestion） */
+export function nextCustomOutName(taken: readonly string[]): string {
+  const used = new Set(taken);
+  if (!used.has("buff")) return "buff";
+  let i = 2;
+  while (used.has(`buff${i}`)) i += 1;
+  return `buff${i}`;
+}
+
+/** 面板文本里 ``out::名字`` 的自定义对外项（按出现顺序，已过滤非法名）。 */
+export function parseCustomOuts(text: string, pattern?: string): string[] {
+  const out: string[] = [];
+  for (const [name] of panelLines(text)) {
+    if (!name.startsWith(`${SUB_OUT}::`)) continue;
+    const key = name.slice(SUB_OUT.length + 2).trim();
+    if (!validCustomOut(key, pattern) || out.includes(key)) continue;
+    out.push(key);
+  }
+  return out;
+}
+
+/** 解析角色卡「面板」字段：固定宏的值 + 自定义对外项（``out::名字``）的名字。 */
+export function parseRolePanel(
+  text: string,
+  keys: readonly string[],
+  pattern?: string,
+): { values: Record<string, string>; custom: string[] } {
+  const values: Record<string, string> = {};
+  const custom: string[] = [];
+  for (const [name, value] of panelLines(text)) {
+    if (keys.includes(name)) {
+      values[name] = value;
+      continue;
+    }
+    if (!name.startsWith(`${SUB_OUT}::`)) continue;   // 其它名字（乱写的）忽略
+    const key = name.slice(SUB_OUT.length + 2).trim();
+    if (!validCustomOut(key, pattern)) continue;
+    values[`${SUB_OUT}::${key}`] = value;
+    if (!custom.includes(key)) custom.push(key);
+  }
+  return { values, custom };
+}
+
+/** 反向：固定宏按词表顺序写，自定义对外项按 `custom` 顺序写（``out::名字``）。 */
+export function formatRolePanel(
+  values: Record<string, string>,
+  keys: readonly string[],
+  custom: readonly string[] = [],
+): string {
+  const fixed = keys
+    .map((key) => [key, (values[key] ?? "").trim()] as const)
+    .filter(([, v]) => v)
+    .map(([key, v]) => `${key} = ${v}`);
+  const extra = custom
+    .map((name) => [`${SUB_OUT}::${name}`, (values[`${SUB_OUT}::${name}`] ?? "").trim()] as const)
+    .filter(([, v]) => v)
+    .map(([key, v]) => `${key} = ${v}`);
+  return [...fixed, ...extra].join("\n");
 }
 
 /**
