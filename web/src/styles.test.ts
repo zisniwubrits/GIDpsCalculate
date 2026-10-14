@@ -214,7 +214,10 @@ describe("角色容器面板", () => {
       ".card-role-box > .card-body",
       ".card-role-box > .role-panel",
     ]) {
-      expect(ruleBodyInList(sel)).toMatch(/width:\s*200px/);
+      const body = ruleBodyInList(sel);
+      expect(body).toMatch(/width:\s*200px/);
+      // 不许纵向拉伸：否则 .card-body 会撑满整个角色区域（"纵向无限大"）
+      expect(body).toMatch(/flex:\s*0 0 auto/);
     }
     // DOM 顺序是 标牌 → 面板 → 角色名：上圆角在标牌、下圆角与底边在最后那块（角色名）
     const body = ruleBody(".card-role-box > .card-body");

@@ -452,6 +452,9 @@ textarea:focus {
 .card-role-box > .card-body,
 .card-role-box > .role-panel {
   align-self: flex-start;
+  /* 不许纵向拉伸：.card-body 默认 flex: 1 1 auto，会把这块撑满整个角色区域，
+     看起来就是"卡片纵向无限大"（用户反馈） */
+  flex: 0 0 auto;
   width: 200px;
   max-width: 100%;
   margin: 0 3px;
