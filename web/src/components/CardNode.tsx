@@ -34,16 +34,19 @@ export type MenuKind = "result" | "font" | "card";
 export type CardRFNode = Node<CardData, "card">;
 
 // ------------------------------------------------------------ 拐力端口的位置
-// 端口横向位置一律是**容器宽度的百分比**（不写像素）：整组以卡片水平中点
-// （50%）为中心等距展开，所以卡片多宽、缩放到多少倍，端口都稳稳在中间那一带 ——
-// "接入点靠中间，不要贴在左上角"。纵向位置由 styles.css 的 .role-port-* 定
-// （负偏移 = 抬到卡片上边缘之上）。
-/** 单个入度端口时的水平位置（卡片水平中点） */
-const PORT_IN_CENTER = 50;
-/** 入度端口之间的间距（占容器宽度的百分比） */
-const PORT_STEP = 4;
+// 位置是**像素**、锚在角色标记牌（左上角那张小卡）正上方那一小条上：
+//   * 不能写百分比 —— 端口的包含块是**整个角色节点**（角色卡宽 560px），
+//     写 50% 会落到整片区域的正中（实测 x≈523），而标记牌在 x≈270，
+//     箭头会停在空白里（这是实测抓到的错位）。
+//   * 标记牌宽度由角色名/面板内容决定（约 78px 起），所以这里用固定像素：
+//     牌心 ≈ 78px，多端口以牌心为中心等距展开、仍落在牌宽那一带。
+// 纵向由 styles.css 的 .role-port-* 定（负偏移 = 抬到卡片上边缘之上）。
+/** 单个入度端口时的水平位置（角色标记牌的中心附近） */
+const PORT_IN_CENTER = 78;
+/** 入度端口之间的间距 */
+const PORT_STEP = 20;
 /** 出度端口相对整组中心的偏移（在入度右侧一档） */
-const PORT_OUT_OFFSET = 4;
+const PORT_OUT_OFFSET = 20;
 
 /** 入度端口个数：默认 DEFAULTS，已经接满就再多给两个位置（不限制能收几份拐）。 */
 export function buffPortCount(current: number, defaults: number): number {
@@ -52,10 +55,10 @@ export function buffPortCount(current: number, defaults: number): number {
   return used < defaults ? defaults : used + 2;
 }
 
-/** 第 i 个端口的行内 left（百分比；整组以 center% 为中心等距展开）。 */
+/** 第 i 个端口的行内 left（整组以 center 为中心等距展开；px）。 */
 export function portOffset(i: number, count: number, center: number, step: number): string {
   const left = center - ((count - 1) / 2) * step + i * step;
-  return `${Math.max(2, left)}%`;
+  return `${Math.round(Math.max(10, left))}px`;
 }
 
 function FieldControl({
@@ -309,7 +312,10 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
           type="source"
           position={Position.Top}
           className="port port-out role-port-out"
-          style={{ left: portOffset(inCount, 2, PORT_IN_CENTER + PORT_OUT_OFFSET, PORT_STEP) }}
+          // 出度固定 1 个：放在"入度组中心再往右一档"（2 个端口的整组中心）
+          style={{
+            left: portOffset(1, 2, PORT_IN_CENTER + PORT_OUT_OFFSET, PORT_STEP),
+          }}
           title={outTitle}
         />,
       );

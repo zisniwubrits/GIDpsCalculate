@@ -360,17 +360,19 @@ textarea:focus {
   pointer-events: auto;
 }
 
-/* 拐力端口：横向一律用**百分比**，落在容器中间（用户要求"就在容器百分之 50 左右"）。
-   这里只写**基准值** —— 程序里每个端口的 left 由 CardNode.tsx 的 portOffset() 行内给出
-   （整组以 50% 为中心等距展开，1 个入度就是 50%），行内样式优先于这两条。
+/* 拐力端口：横向用**像素**锚在角色标记牌正上方（用户要求"靠中间、别贴左上角"）。
+   注意别写成百分比：端口的包含块是**整个角色节点**（角色卡 560px 宽），
+   写 50% 会落到整片区域的正中、离开标记牌一大截（实测过，箭头会停在空白里）。
+   这里只是**基准值**，实际每个端口的 left 由 CardNode.tsx 的 portOffset() 行内给出
+   （整组以标记牌中心为中心等距展开），行内样式优先。
    纵向：负偏移 = 抬到卡片上边缘之上（Position.Top 只管方向，位置在这里微调）。 */
 .react-flow__handle.role-port-in {
-  left: 50%;
+  left: 78px;
   top: -7px;
 }
 
 .react-flow__handle.role-port-out {
-  left: 54%;
+  left: 98px;
   top: -7px;
 }
 
