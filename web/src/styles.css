@@ -455,8 +455,11 @@ textarea:focus {
   /* 不许纵向拉伸：.card-body 默认 flex: 1 1 auto，会把这块撑满整个角色区域，
      看起来就是"卡片纵向无限大"（用户反馈） */
   flex: 0 0 auto;
-  width: 200px;
+  /* 宽度要放得下「角色名 + 输入框」（84 + 5 + 140 + 内边距），
+     否则内容溢出会出现横向滚动条、还会把下圆角盖掉（用户反馈） */
+  width: 260px;
   max-width: 100%;
+  overflow: hidden;
   margin: 0 3px;
   background: var(--card-bg);
   border-left: 1px solid var(--line);

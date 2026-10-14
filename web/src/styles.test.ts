@@ -215,7 +215,9 @@ describe("角色容器面板", () => {
       ".card-role-box > .role-panel",
     ]) {
       const body = ruleBodyInList(sel);
-      expect(body).toMatch(/width:\s*200px/);
+      // 宽度要放得下「角色名 + 140px 输入框」，且不许出现横向滚动条
+      expect(body).toMatch(/width:\s*260px/);
+      expect(body).toMatch(/overflow:\s*hidden/);
       // 不许纵向拉伸：否则 .card-body 会撑满整个角色区域（"纵向无限大"）
       expect(body).toMatch(/flex:\s*0 0 auto/);
     }
