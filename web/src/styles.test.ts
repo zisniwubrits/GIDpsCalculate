@@ -229,6 +229,13 @@ describe("角色容器面板", () => {
     expect(input).toMatch(/padding:\s*6px/);
     // 「喂给哪张卡」直接显示
     expect(ruleBody(".pm-feed")).toMatch(/text-overflow:\s*ellipsis/);
+    // 行内五列**必须一行放下**：宏 / 属性 / 值 / 喂给哪张卡 / 显示（勾选框）
+    // （曾经因为另一处的 4 列声明排在后面覆盖，勾选框被挤到第二行）
+    const row = ruleBody(".panel-macro-row");
+    expect(row).toMatch(/grid-template-columns:[^;]*\)\s*40px/);
+    expect(row).toMatch(/align-items:\s*center/);
+    // 表头列宽与数据行一致，否则标题对不上
+    expect(ruleBody(".panel-macro-head")).toMatch(/grid-template-columns:[^;]*\)\s*40px/);
   });
 
   it("拐力端口并排在左上角标签正上方（箭头的始末都落在标签上方）", () => {

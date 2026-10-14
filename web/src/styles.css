@@ -419,22 +419,7 @@ textarea:focus {
   font-weight: 700;
 }
 
-/* 面板弹窗里的「显示」勾选列 */
-.panel-macro-head,
-.panel-macro-row {
-  grid-template-columns: 108px 84px minmax(150px, 1fr) minmax(170px, 1.05fr) 44px;
-}
-
-.panel-macro-head {
-  display: grid;
-  align-items: center;
-  gap: 10px;
-  padding: 0 6px 4px;
-  border-bottom: 1px solid var(--line);
-  font-size: 12px;
-  color: var(--muted);
-}
-
+/* 面板弹窗里的「显示」勾选列（列宽定义在弹窗那一节，这里只管居中与尺寸） */
 .pm-show,
 .pm-show-head {
   justify-self: center;
@@ -971,12 +956,26 @@ textarea:focus {
 
 .panel-macro-row {
   display: grid;
-  grid-template-columns: 108px 84px minmax(150px, 1fr) minmax(170px, 1.05fr);
+  /* 宏 / 属性 / 值 / 喂给哪张卡 / 显示（勾选）—— 五列**必须一行放下**，
+     否则勾选框会被挤到第二行（曾经因为另一处 4 列声明在后面覆盖而翻车） */
+  grid-template-columns: 108px 84px minmax(150px, 1fr) minmax(170px, 1.05fr) 40px;
   align-items: center;
   gap: 10px;
   padding: 3px 6px;
   border-radius: 6px;
   font-size: 13px;
+}
+
+/* 表头行：与数据行同样的列宽，标签对齐才有意义 */
+.panel-macro-head {
+  display: grid;
+  grid-template-columns: 108px 84px minmax(150px, 1fr) minmax(170px, 1.05fr) 40px;
+  align-items: center;
+  gap: 10px;
+  padding: 0 6px 4px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--muted);
 }
 
 .panel-macro-row:hover {
