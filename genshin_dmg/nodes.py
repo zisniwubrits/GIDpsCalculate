@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import contextvars
+import re
 
 from genshin_dmg import damage
 from genshin_dmg.expr import eval_expr, fmt_num, parse_num, parse_pct
@@ -143,6 +144,25 @@ PANEL_MACROS = (
 )
 
 PANEL_MACRO_KEYS = tuple(m[0] for m in PANEL_MACROS)
+
+# 角色卡「面板」里**自定义对外项**（``out::名字``）的命名规则，同时发给前端做输入校验
+# （前端不硬编码正则）。名字必须是小写 ASCII 标识符，且不含 ``__``（``__`` 是内部
+# 拼接符，``角色::out::a`` 与 ``角色::o__ut::a`` 会撞键）。
+PANEL_CUSTOM_PATTERN = r"^[a-z][a-z0-9_]*$"
+_PANEL_CUSTOM_RE = re.compile(PANEL_CUSTOM_PATTERN)
+
+
+def valid_panel_custom_name(name) -> str:
+    """校验自定义面板项的名字，返回**规范化的展示名**；非法时返回空串。
+
+    合法：小写 ASCII 标识符、不含 ``__``、不是固定词表里的宏（词表走原路径）。
+    """
+    t = str(name or "").strip()
+    if not _PANEL_CUSTOM_RE.match(t):
+        return ""
+    if "__" in t or t in PANEL_MACRO_KEYS:
+        return ""
+    return t
 
 # (卡片类型, 字段 key) → 该字段对应的面板宏（可以有多个：月增伤与基础提升都喂「基础提升%」）
 FIELD_MACROS = {
@@ -773,6 +793,8 @@ def schema() -> dict:
                  for name, items in PRESETS.items()},
         panelMacros=[dict(key=k, label=label, feed=feed)
                      for k, label, feed in PANEL_MACROS],
+        # 自定义面板项（out::名字）的命名规则：前端用它校验输入，不在 TS 里硬编码
+        panelCustomPattern=PANEL_CUSTOM_PATTERN,
         tables={
             "relic": dict(header=list(RELIC_HEADER),
                           rows=[list(r) for r in RELIC_ROWS]),

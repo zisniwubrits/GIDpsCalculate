@@ -492,6 +492,84 @@ class TestRoleCardPanel(unittest.TestCase):
         self.assertFalse(info2["buffed"])
 
 
+class TestPanelCustomOut(unittest.TestCase):
+    """角色卡面板里的**自定义对外项**：``out::名字 = 值``。
+
+    场景（用户要求）：「角色面板…」弹窗里能直接加一行"我对外提供多少"，
+    不必再拖一张变量卡手写 ``out::名字``。名字规则由后端定
+    （``nodes.valid_panel_custom_name`` / schema 的 ``panelCustomPattern``）。
+    """
+
+    def build(self, panel_a="out::atk_pct = 40", panel_b=""):
+        g = Graph()
+        g.add(GraphNode("ra", "role", fields={"role_name": "辅助", "panel": panel_a}))
+        g.add(GraphNode("rb", "role", fields={"role_name": "火神", "panel": panel_b}))
+        g.links.append(Link("ra", "rb", 0))
+        return g
+
+    def test_custom_out_row_grants(self):
+        """面板里写 ``out::atk_pct = 40`` 与变量卡写 ``out::atk_pct = 40`` 等效。"""
+        g = self.build()
+        g.add(GraphNode("c1", "calc", fields={"expr": "in::atk_pct"}, role="火神"))
+        g.add(GraphNode("c2", "calc", fields={"expr": "out::atk_pct"}, role="辅助"))
+        out = g.evaluate()
+        self.assertEqual(out["nodes"]["c1"]["values"]["noncrit"], 40)   # 目标收到拐
+        self.assertEqual(out["nodes"]["c2"]["values"]["noncrit"], 40)   # 源对外就是这个值
+
+    def test_custom_out_row_is_not_a_panel_macro(self):
+        """自定义项不是面板宏：目标角色**不会**自动拿到 ``火神::atk_pct``，要走 in::。"""
+        g = self.build()
+        g.add(GraphNode("c1", "calc", fields={"expr": "atk_pct"}, role="火神"))
+        out = g.evaluate()
+        self.assertNotIn("火神::atk_pct", {v["name"] for v in out["variables"]})
+        self.assertIn("未定义变量", out["nodes"]["c1"]["display"])
+
+    def test_custom_name_can_differ_from_own(self):
+        """自定义项可以有自己的值：对面收到的是这一行，不是面板里的宏。"""
+        g = self.build(panel_a="atk_pct = 10\nout::atk_pct = 40")
+        g.add(GraphNode("c1", "calc", fields={"expr": "in::atk_pct"}, role="火神"))
+        out = g.evaluate()
+        self.assertEqual(out["nodes"]["c1"]["values"]["noncrit"], 40)
+        self.assertIn(("辅助::atk_pct", "10"), {(v["name"], v["text"]) for v in out["variables"]})
+
+    def test_custom_row_shows_up_in_buff_stats(self):
+        """自定义名字一样进「角色面板…」弹窗的 OUT / IN 统计（label 回退成名字本身）。"""
+        g = self.build()
+        stats = g.evaluate()["buffStats"]
+        self.assertEqual(
+            stats["辅助"]["out"],
+            [dict(macro="atk_pct", label="攻击%", value=40.0, role="火神")],
+        )
+
+    def test_custom_row_rejects_bad_names(self):
+        """非法名字（大写 / ``__`` / 空）不定义，也不参与拐力。"""
+        g = self.build(panel_a="out::Bad = 1\nout::a__b = 2\nout:: = 3\nout::good_one = 4")
+        g.add(GraphNode("c1", "calc", fields={"expr": "in::good_one"}, role="火神"))
+        out = g.evaluate()
+        names = {v["name"] for v in out["variables"]}
+        self.assertIn("辅助::good_one", names)          # 变量表里显示的是短名
+        self.assertNotIn("辅助::Bad", names)
+        self.assertNotIn("辅助::a__b", names)
+        self.assertEqual(out["nodes"]["c1"]["values"]["noncrit"], 4)
+
+    def test_panel_custom_name_rule(self):
+        ok = nd.valid_panel_custom_name
+        self.assertEqual(ok("atk_gift"), "atk_gift")
+        self.assertEqual(ok("  buff2  "), "buff2")
+        for bad in ("", "  ", "Bad", "2x", "a__b", "a b", "atk", "atk_pct", "拐力A", "a::b"):
+            self.assertEqual(ok(bad), "", bad)
+
+    def test_weapon_panel_not_used(self):
+        """武器没有面板字段 —— 它的自定义对外项仍走变量卡（回归保护）。"""
+        g = Graph()
+        g.add(GraphNode("rw", "weapon", fields={"role_name": "护摩", "panel": "out::x = 9"}))
+        g.add(GraphNode("ra", "role", fields={"role_name": "火神"}))
+        g.add(var_card("vw", "out::x = 9", role="护摩"))
+        g.links.append(Link("rw", "ra", 0))
+        g.add(GraphNode("c1", "calc", fields={"expr": "in::x"}, role="火神"))
+        self.assertEqual(g.evaluate()["nodes"]["c1"]["values"]["noncrit"], 9)
+
+
 class TestSubNamespaces(unittest.TestCase):
     """子命名空间（``own`` / ``out`` / ``in``）：消除"生效值/自身/给出去/收进来"的歧义。
 

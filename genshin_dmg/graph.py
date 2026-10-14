@@ -360,7 +360,9 @@ class Graph:
         """把每张角色卡「面板」字段里的宏登记成该角色的变量（``角色::宏``）。
 
         优先级：**角色卡上的面板覆盖同名变量** —— 它是"面板"的正主（右键弹窗里编辑的
-        就是它）。只认固定词表里的宏名，值支持算式（在本角色作用域里求值）。
+        就是它）。认固定词表里的宏名；另外允许 ``out::名字`` 这种**自定义对外项**
+        （名字合法即可，用于"面板外拐"：本角色没有该属性，但对外提供这份拐力）。
+        值支持算式（在本角色作用域里求值）。
         """
         for node in self.nodes.values():
             if not self._is_ns(node):
@@ -375,10 +377,13 @@ class Graph:
                     if parsed is None:
                         continue
                     kind, _explicit, macro = parse_sub_ns(parsed[0].strip())
-                    if macro not in _nodes.PANEL_MACRO_KEYS:
-                        continue                    # 只认固定词表
                     if kind == SUB_IN:
                         continue                    # in:: 派生，写它无意义
+                    if macro not in _nodes.PANEL_MACRO_KEYS:
+                        # 不在词表里：只有 ``out::名字`` 才收（自定义对外项），
+                        # 光写一个陌生名字仍然忽略（避免面板变成"什么都能定义"的变量卡）
+                        if kind != SUB_OUT or not _nodes.valid_panel_custom_name(macro):
+                            continue
                     own_key = env_key(qualify(macro, role))
                     key = own_key
                     if kind == SUB_OUT:
