@@ -430,10 +430,11 @@ textarea:focus {
   border: 1px dashed #a9c2d8;
   border-radius: 12px;
   box-shadow: none;
-  /* 标记牌与面板用**单列网格**排版：列宽 = 内容最宽的那块（两块因此同宽），
-     最少 150px、随内容变宽 → 长宏名/长数值不会被截断，也不会出现滚动条 */
+  /* 标记牌与面板用**单列网格**排版：列宽 = 内容最宽的那块（两块因此同宽）。
+     用 max-content 而**不设 min-width**：卡片贴紧内容，数值与宏名之间才不会空出一大段
+     （设了最小值时，多出来的空间会被数值那一列的 1fr 吃掉，值被推到右边 → 间距变大） */
   display: grid;
-  grid-template-columns: minmax(150px, max-content);
+  grid-template-columns: max-content;
   align-content: start;
   justify-content: start;
 }

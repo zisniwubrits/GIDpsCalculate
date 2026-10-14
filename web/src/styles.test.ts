@@ -207,11 +207,12 @@ describe("角色容器面板", () => {
     expect(head).toMatch(/font-size:\s*12px/);
     // 不重排（相对位置与 DOM 顺序一致）
     expect(ruleBody(".card-role-box > .role-panel")).not.toMatch(/order:/);
-    // 两块同宽靠**单列网格**：列宽 minmax(150px, max-content) —— 宽度随内容自适应，
-    // 因此长宏名/长数值既不会被截断、也不会出现滚动条
+    // 两块同宽靠**单列网格**：列宽 max-content（贴紧内容，不设最小值）
+    // —— 设了最小值时多出来的空间会被数值列的 1fr 吃掉，宏名与数值之间就会空一大段
     const box = ruleBody(".card-role-box");
     expect(box).toMatch(/display:\s*grid/);
-    expect(box).toMatch(/grid-template-columns:\s*minmax\(150px,\s*max-content\)/);
+    expect(box).toMatch(/grid-template-columns:\s*max-content/);
+    expect(box).not.toMatch(/minmax\(/);
     for (const sel of [".card-role-box > .card-head", ".card-role-box > .role-panel"]) {
       const piece = ruleBodyInList(sel);
       expect(piece).not.toMatch(/overflow:\s*hidden/);   // 不许裁切
