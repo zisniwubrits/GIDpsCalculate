@@ -1057,13 +1057,13 @@
         {
           "key": "defs",
           "label": "定义",
-          "default": "攻击力 = 1000\n倍率 = 200\n基础伤害 = 攻击力 * 倍率",
+          "default": "",
           "kind": "textbox"
         }
       ],
       "defaults": {
-        "defs": "攻击力 = 1000\n倍率 = 200\n基础伤害 = 攻击力 * 倍率",
-        "show_vars": true,
+        "defs": "",
+        "show_vars": false,
         "card_name": ""
       },
       "isolated": true,

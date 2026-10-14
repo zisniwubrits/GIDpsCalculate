@@ -614,11 +614,14 @@ NODE_TYPES: dict = {
     "var": dict(title="变量", label="变量", group="工具", inputs=0, compute=_t_text,
                 isolated=True, vars_card=True, resizable=True, wide_fields=True,
                 bare=True, fields=[
-        _F("defs", "定义",
-           "攻击力 = 1000\n倍率 = 200\n基础伤害 = 攻击力 * 倍率", "textbox"),
+        # 默认**空白**：新建一张变量卡就是一张白纸（写什么由用户决定；
+        # 拖进角色区域时程序会填面板预设代码，见 web/src/model.ts 的 panelPreset）
+        _F("defs", "定义", "", "textbox"),
     ], hidden_fields=[
-        # 卡片底部是否显示"算出来的变量值"（右键菜单里切换；默认显示，兼容旧工程）
-        _F("show_vars", "显示变量值", True, "check"),
+        # 卡片底部是否显示"算出来的变量值"（右键菜单里切换）。
+        # 默认**隐藏**（用户要求：卡片默认干净，要看值时右键打开）；
+        # 旧工程里那个字段是显式布尔值，往返不受影响。
+        _F("show_vars", "显示变量值", False, "check"),
     ]),
     # 理想圣遗物卡片只有表格（用户要求去掉原来那张多行文本框）：
     # 表格本身可点选/框选并用 Ctrl+C 复制，卡片右键也有「复制整表」。
