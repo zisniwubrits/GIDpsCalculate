@@ -44,6 +44,8 @@ export type CardRFNode = Node<CardData, "card">;
 export const ROLE_PORT_IN_LEFT = "48%";
 /** 出度端口的水平位置（50% 那条线右侧一档） */
 export const ROLE_PORT_OUT_LEFT = "52%";
+/** 正好落在 50% 那条线上（武器只有出度一个端口，就放这儿） */
+export const ROLE_PORT_CENTER = "50%";
 
 /**
  * 拖动角色区域**压到别的区域**时给它的临时样式（描红）。
@@ -308,6 +310,8 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
     //
     // 注意这里**不能**写 `if (!isWeapon)` —— 那会把武器的出度端口也一起砍掉，
     // 武器就彻底没有端口了（用户报过"武器卡片的输出端口看不见"）。
+    // 位置：武器只有这一个端口，就放在 50% 那条线上（用户要求）；
+    // 角色的出度与入度成对，所以仍在 52%（50% 右侧一档）。
     handles.push(
       <Handle
         key="out"
@@ -315,7 +319,7 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
         type="source"
         position={Position.Top}
         className="port port-out role-port-out"
-        style={{ left: ROLE_PORT_OUT_LEFT }}
+        style={{ left: isWeapon ? ROLE_PORT_CENTER : ROLE_PORT_OUT_LEFT }}
         title={outTitle}
       />,
     );
