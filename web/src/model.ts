@@ -203,6 +203,30 @@ export function panelPreset(macros: readonly { key: string }[]): string {
 }
 
 /** 这张变量卡是不是"刚拖进角色区域、内容还空着"（该填预设代码） */
+/**
+ * 拖拽结束时的落位处理：变量卡**落进角色区域**且内容为空 → 填入面板预设代码。
+ *
+ * 返回新节点数组与"这次真正填了哪些 id"（调用方把 id 记下来，避免用户在清空后又反复被填）。
+ * 纯函数，便于单测。
+ */
+export function fillPresetForDropped(
+  nodes: CardNode[],
+  ids: readonly string[],
+  macros: readonly { key: string }[],
+  filledIds: readonly string[] = [],
+): { nodes: CardNode[]; filled: string[] } {
+  const boxes = roleBoxes(nodes);
+  const filled: string[] = [];
+  const next = nodes.map((n) => {
+    if (!ids.includes(n.id)) return n;
+    const role = roleOfNode(n, boxes);
+    if (!needsPanelPreset(n, role, filledIds.includes(n.id))) return n;
+    filled.push(n.id);
+    return { ...n, fields: { ...n.fields, defs: panelPreset(macros) } };
+  });
+  return { nodes: next, filled };
+}
+
 export function needsPanelPreset(
   node: { type: string; fields: Record<string, unknown> },
   role: string,

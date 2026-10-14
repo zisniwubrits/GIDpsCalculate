@@ -317,7 +317,17 @@ class TestBuffArrows(unittest.TestCase):
     用户确认：多来源**相加**；**不传递**（源的值只看它自己的面板）。
     """
 
+    @staticmethod
+    def preset(defs):
+        """模拟"程序填进变量卡的预设代码"，只补用户没写过的宏（用户写的优先）。"""
+        lines = [defs] if defs else []
+        for k in nd.PANEL_MACRO_KEYS:
+            if ("%s =" % k) not in defs:
+                lines.append("%s = own::%s + in::%s" % (k, k, k))
+        return "\n".join(lines)
+
     def build(self, grants, target_defs="atk = 1000", target="火神", source="辅助"):
+        target_defs = self.preset(target_defs)
         g = Graph()
         g.add(GraphNode("r_src", "role", fields={"role_name": source}))
         g.add(GraphNode("r_dst", "role", fields={"role_name": target}))
@@ -438,6 +448,8 @@ class TestRoleCardPanel(unittest.TestCase):
 
     def test_panel_grants_through_arrow(self):
         g = self.build()
+        # 面板属性不自动计算：目标角色自己写一行（= 预设代码的形状）才会吃到拐
+        g.add(var_card("vb", "atk_pct = own::atk_pct + in::atk_pct", role="火神"))
         g.add(GraphNode("b", "base",
                         fields={"stat_base": "1000", "stat_big": "", "multiplier": "100"},
                         role="火神"))
@@ -667,8 +679,9 @@ class TestOutDeclarations(unittest.TestCase):
         return g
 
     def test_out_declaration_grants(self):
-        """b 只声明 out::atk_pct = 40，箭头 b→a；a 什么都不用写就吃 40。"""
+        """b 声明 out::atk_pct = 40，箭头 b→a；a 写一行预设代码即可用上。"""
         g = self.build()
+        g.add(var_card("va2", "atk_pct = own::atk_pct + in::atk_pct", role="a"))
         # 属性源的大增益% 写 atk_pct → 1000×(1+0.40) = 1400
         self.assertEqual(g.evaluate()["nodes"]["base"]["values"]["noncrit"], 1400)
         g.add(GraphNode("c1", "calc", fields={"expr": "in::atk_pct"}, role="a"))
@@ -717,7 +730,47 @@ class TestCustomOutNames(unittest.TestCase):
         # 自定义名字也要进「角色面板」弹窗的 OUT / IN 统计
         self.assertEqual([r["macro"] for r in out["buffStats"]["辅助"]["out"]], ["拐力A"])
         self.assertEqual([r["macro"] for r in out["buffStats"]["火神"]["in"]], ["拐力A"])
-        self.assertEqual(dict(out["nodes"]["t"]["rows"])["火神::拐力A"], "20")   # 没写自身 → 直接吃
+        # 面板属性不自动计算：目标自己写一行（预设代码的形状）才用得上
+        g.add(var_card("vb", "拐力A = own::拐力A + in::拐力A", role="火神"))
+        self.assertEqual(g.evaluate()["nodes"]["c1"]["values"]["noncrit"], 20)
+
+
+class TestNoAutoPanelValue(unittest.TestCase):
+    """面板属性**不自动计算**：不写定义就没有该值；写了定义（预设代码的形状）才有。"""
+
+    def test_undefined_without_definition(self):
+        g = Graph()
+        g.add(GraphNode("ra", "role", fields={"role_name": "辅助"}))
+        g.add(var_card("va", "out::atk_pct = 40", role="辅助"))
+        g.add(GraphNode("rb", "role", fields={"role_name": "火神"}))
+        g.add(GraphNode("c1", "calc", fields={"expr": "atk_pct"}, role="火神"))
+        g.add(GraphNode("c2", "calc", fields={"expr": "in::atk_pct"}, role="火神"))
+        g.links.append(Link("ra", "rb", 0))
+        out = g.evaluate()
+        self.assertIn("未定义变量", out["nodes"]["c1"]["display"])   # 没定义就没有
+        self.assertEqual(out["nodes"]["c2"]["values"]["noncrit"], 40)  # 拐力仍在 in:: 里
+
+    def test_preset_code_makes_it_work(self):
+        """把预设代码（X = own::X + in::X）填进变量卡后就正常了。"""
+        g = Graph()
+        g.add(GraphNode("ra", "role", fields={"role_name": "辅助"}))
+        g.add(var_card("va", "out::atk_pct = 40", role="辅助"))
+        g.add(GraphNode("rb", "role", fields={"role_name": "火神"}))
+        g.add(var_card("vb", "atk_pct = own::atk_pct + in::atk_pct", role="火神"))
+        g.add(GraphNode("c1", "calc", fields={"expr": "atk_pct"}, role="火神"))
+        g.links.append(Link("ra", "rb", 0))
+        self.assertEqual(g.evaluate()["nodes"]["c1"]["values"]["noncrit"], 40)
+
+    def test_own_value_still_wins_with_preset(self):
+        """预设代码里 own:: + in:: 会把自身和拐力加起来（这才是"叠加"的写法）。"""
+        g = Graph()
+        g.add(GraphNode("ra", "role", fields={"role_name": "辅助"}))
+        g.add(var_card("va", "out::atk_pct = 40", role="辅助"))
+        g.add(GraphNode("rb", "role", fields={"role_name": "火神"}))
+        g.add(var_card("vb", "atk_pct = 10\natk_pct = own::atk_pct + in::atk_pct", role="火神"))
+        g.add(GraphNode("c1", "calc", fields={"expr": "in::atk_pct"}, role="火神"))
+        g.links.append(Link("ra", "rb", 0))
+        self.assertEqual(g.evaluate()["nodes"]["c1"]["values"]["noncrit"], 40)
 
 
 class TestRoleNameValidation(unittest.TestCase):

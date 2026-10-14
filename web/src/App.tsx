@@ -42,6 +42,7 @@ import {
   buildRoleMap,
   connect,
   estimateSize,
+  fillPresetForDropped,
   formatPanel,
   formatPanelShow,
   freeSlot,
@@ -289,6 +290,13 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
 
   /** 打开「新建项目」弹窗 */
   const [newDialog, setNewDialog] = useState(false);
+  /** 已经被程序自动填过预设代码的变量卡（用户在清空后不会再被反复填） */
+  const presetFilled = useRef<Set<string>>(new Set());
+  /** schema 的引用：拖拽回调里要用 panelMacros，但不想因为它频繁重建回调 */
+  const schemaRef = useRef(schema);
+  useEffect(() => {
+    schemaRef.current = schema;
+  }, [schema]);
 
   /**
    * 新建项目：**先问工程名，再完整重置** —— 画布、工程名、撤销历史、
@@ -351,6 +359,17 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
           if (ch.type === "position" && ch.position) {
             const pos = ch.position;
             next = next.map((n) => (n.id === ch.id ? { ...n, pos: [pos.x, pos.y] } : n));
+            if (!ch.dragging) {
+              // 拖拽结束：空白的变量卡落进角色区域 → 程序填入面板预设代码
+              const res = fillPresetForDropped(
+                next,
+                [ch.id],
+                schemaRef.current.panelMacros,
+                Array.from(presetFilled.current),
+              );
+              next = res.nodes;
+              res.filled.forEach((fid) => presetFilled.current.add(fid));
+            }
           } else if (ch.type === "select") {
             next = next.map((n) =>
               n.id === ch.id &&

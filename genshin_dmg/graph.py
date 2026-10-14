@@ -469,25 +469,14 @@ class Graph:
         """按 ``own``（拐力生效前的自身值）重算：拐力、生效值、子命名空间。
 
         * 拐力来源值取 ``own``（保证"不传递"）
-        * **不再自动相加**：自身写了的以自身为准；只有没写自身时才把拐力（in）写进去。
-          想要"自身 + 拐"就自己写 ``X = own::X + in::X``
+        * **面板属性一律不自动计算**（用户口径）：`角色::X` 只来自你自己写的定义
+          （变量卡 / 面板）；拐力只以 `in::X` 的形式提供，要用就自己写
+          ``X = own::X + in::X``（拖一张变量卡进角色区域时程序会自动填这段预设代码）
         * 顺带刷新 ``own`` / ``out`` / ``in`` 三个子命名空间
         """
         self.buffs = self.buff_sources(own)
         self._buff_stats = self.buff_stats(own)
-        self._buff_totals = {}
-        for role, grants in self.buffs.items():
-            self._buff_totals[role] = {
-                macro: self.role_own_value(own, role, macro) + extra
-                for macro, extra in grants.items()
-            }
-        for role, totals in self._buff_totals.items():
-            for macro, total in totals.items():
-                # 只写全名键（角色::宏名），不往全局塞裸名，免得拐力漏给别的角色；
-                # **自身已定义就跳过**（不再自动相加），totals 此时就等于 in
-                key = env_key(qualify(macro, role))
-                if key not in self.variables:
-                    self.variables[key] = total
+        # 面板属性不写进变量表（不自动计算）：拐力只通过 in:: 暴露
         self._apply_sub_namespaces(own)
 
     def buff_stats(self, base_vars: dict) -> dict:
@@ -637,11 +626,6 @@ class Graph:
             for key, val in base.items():
                 if key.startswith(prefix):
                     out[key[len(prefix):]] = val        # 就近：本角色覆盖同名全局
-            for macro, extra in (self._buff_totals.get(role) or {}).items():
-                if macro in out:
-                    continue        # 自身已定义 → 以自身为准（要"自身+拐"自己写 own:: + in::）
-                out[macro] = extra  # 自身没写 → 吃拐（此时 extra 就等于 in）
-                out[prefix + macro] = extra
             # 子命名空间（own / out / in）的就近别名：不管 base 是什么表都补上，
             # 否则"第二轮解析变量"时（base 是空表）变量定义里引用不到 in::/own::
             for key, val in self.variables.items():
@@ -738,6 +722,9 @@ class Graph:
         self.buffs = {}
         self._buff_totals = {}
         self._buff_stats = {}
+        # 变量表也要清：否则 scoped_env 会读到上一次求值残留的子命名空间值，
+        # 让 "X = own::X + in::X" 这类定义在第一轮"假成功"（拿到过期值）而不再补算
+        self.variables = {}
         try:
             # 第一轮：只解析「变量」卡片的定义
             self._parse_var_cards(env)
@@ -763,33 +750,16 @@ class Graph:
             # 拐力 + 生效值 + 子命名空间（own/out/in）——第二轮解析变量时就能引用它们。
             # 拐力值取 own（不含拐）以保证"不传递"。
             self._finalize_buffs(own)
-            if self.buffs:
-                # 有拐力：带着拐力（与子命名空间）重跑一轮变量登记，
-                # 让目标角色里以面板项写的算式也能看到"含拐"的值
-                env = {}
-                self._parse_var_cards(env)
-                rvars = self._result_vars()
-                if rvars:
-                    env.update(rvars)
-                svars = self._assigned_vars()
-                if svars:
-                    env.update(svars)
-                if rvars or svars:
-                    self._parse_var_cards(env, locked=set(rvars) | set(svars))
-                    env.update(rvars)
-                    env.update(svars)
-                self._apply_role_panels(env)
-                own = dict(env)                 # 第二轮解析出来的自身值
-                self.variables = dict(env)
-                self._finalize_buffs(own)
             if self._deferred:
-                # 还有引用了 in::/own:: 这类名字、当时没算出来的定义 → 现在补算，
-                # 再按新的自身值刷新一次拐力（只刷新这一次，不再迭代）
+                # 还有引用了 in::/own:: 这类名字、当时没算出来的定义 → 现在补算一次
+                # （子命名空间已就绪）。注意：**不**重算拐力 —— 拐力来源仍取"拐力前的
+                # 自身值"快照，否则对外提供的值会跟着收到的拐走，等于变相传递。
                 locked = set(rvars) | set(svars)
                 self._retry_deferred(env, locked)
-                own = dict(env)
                 self.variables = dict(env)
-                self._finalize_buffs(own)
+                # 用**补算后**的值刷新子命名空间（own:: 要反映你定义的那个值）；
+                # 拐力来源不重算（仍是拐力前的快照），所以不会变相传递
+                self._apply_sub_namespaces(self.variables)
             # 变量表已就绪，逐个节点求值
             first = self.result_node()
             out = dict(

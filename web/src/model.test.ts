@@ -24,6 +24,7 @@ import {
   normalizeSchema,
   panelPreset,
   needsPanelPreset,
+  fillPresetForDropped,
   roleBoxes,
   roleOfNode,
   spreadChain,
@@ -433,6 +434,41 @@ describe("角色容器（抽象角色命名空间）", () => {
     expect(needsPanelPreset(varNode, "火神", true)).toBe(false);       // 已经填过
     expect(needsPanelPreset({ type: "var", fields: { defs: "x = 1" } }, "火神", false)).toBe(false);
     expect(needsPanelPreset({ type: "role", fields: { defs: "" } }, "火神", false)).toBe(false);
+  });
+
+  it("变量卡拖进角色区域且内容为空 → 自动填面板预设代码（区域外不填、填过不重复填）", () => {
+    const graph = jsonToGraph(
+      {
+        version: 1,
+        app: "GenshinDamageCalc",
+        zoom: 1,
+        name: "",
+        nodes: [
+          { id: "r1", type: "role", pos: [0, 0], size: null, font_size: null, inputs: 0,
+            fields: { role_name: "火神" } },
+          { id: "v1", type: "var", pos: [100, 100], size: null, font_size: null, inputs: 0,
+            fields: { defs: "" } },
+          { id: "v2", type: "var", pos: [3000, 3000], size: null, font_size: null, inputs: 0,
+            fields: { defs: "" } },
+        ],
+        links: [],
+      } as unknown as GraphJSON,
+      schema,
+    );
+
+    const res = fillPresetForDropped(graph.nodes, ["v1", "v2"], schema.panelMacros, []);
+    const defs = (id: string) =>
+      String(res.nodes.find((n) => n.id === id)?.fields.defs ?? "");
+    expect(defs("v1")).toContain("atk = own::atk + in::atk");   // 区域内 → 填
+    expect(defs("v2")).toBe("");                                 // 区域外 → 不填
+    expect(res.filled).toEqual(["v1"]);
+
+    // 已经填过的 id 不再回填（用户把卡片清空后不该被反复填）
+    const again = fillPresetForDropped(res.nodes, ["v1"], schema.panelMacros, ["v1"]);
+    expect(again.filled).toEqual([]);
+    expect(String(again.nodes.find((n) => n.id === "v1")?.fields.defs)).toBe(
+      defs("v1"),
+    );
   });
 
   it("normalizeSchema 给旧后端缺的字段补默认值（否则界面会白屏）", () => {
