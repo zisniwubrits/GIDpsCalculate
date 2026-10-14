@@ -833,14 +833,21 @@ export function wouldCycle(
   return false;
 }
 
-/** 加/替换一条连线（同一个输入端口只保留最后一条）。 */
+/**
+ * 加一条连线。
+ *
+ * 去重按 (源, 目标) —— **不是** (目标, 端口)：角色卡只有一个入度端口，
+ * 多来源的拐力箭头要**都汇聚到同一个点**上（用户口径："多个箭头可以往一个点指"），
+ * 所以同一个入度端口允许多条线；同一个源到同一个目标只保留最后一条。
+ * （伤害链上的卡片本来就是一个端口一条线，行为不变。）
+ */
 export function connect(
   links: GraphLinkJSON[],
   src: string,
   dst: string,
   port: number,
 ): GraphLinkJSON[] {
-  const kept = links.filter((l) => !(l.dst === dst && l.port === port));
+  const kept = links.filter((l) => !(l.src === src && l.dst === dst));
   return [...kept, { src, dst, port }];
 }
 
@@ -924,15 +931,22 @@ export function jsonToGraph(
     const src = String((l as { src?: unknown })?.src ?? "");
     const dst = String((l as { dst?: unknown })?.dst ?? "");
     if (!ids.has(src) || !ids.has(dst) || src === dst) continue;
-    const port = Number((l as { port?: unknown })?.port ?? 0);
-    // 端口号必须落在目标卡片真实的输入端口范围内（旧存档里多余的端口会被丢弃）；
-    // **角色卡例外**：它没有伤害端口，但「拐力箭头」（角色→角色）走 port 0，
-    // 不能按 inputs=0 被丢掉。
     const target = byId.get(dst);
     const srcNode = byId.get(src);
-    const isBuff = Boolean(target && srcNode && target.type === "role" && srcNode.type === "role");
-    const maxPort = isBuff ? 1 : (target ? target.inputs : 0);
-    if (!Number.isFinite(port) || port < 0 || port >= maxPort) continue;
+    const isBuff = Boolean(
+      target && srcNode && isNamespaceNode(target) && isNamespaceNode(srcNode),
+    );
+    if (isBuff) {
+      // 「拐力箭头」：目标除了角色卡不是别的，且**入度只有一个点** ——
+      // 旧工程里可能写着 port 1 / 2（那时每个来源一个端口），一律归到 0，
+      // 不然箭头会去找一个不存在的端口、直接画不出来。
+      if (!target || target.type !== "role") continue;
+      links.push({ src, dst, port: 0 });
+      continue;
+    }
+    // 伤害链：端口号必须落在目标卡片真实的输入端口范围内（旧存档里多余的端口会被丢弃）
+    const port = Number((l as { port?: unknown })?.port ?? 0);
+    if (!Number.isFinite(port) || port < 0 || port >= (target ? target.inputs : 0)) continue;
     links.push({ src, dst, port });
   }
   const zoomRaw = Number(raw.zoom);

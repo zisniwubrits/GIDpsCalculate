@@ -257,23 +257,16 @@ describe("角色容器面板", () => {
     expect(ruleBody(".panel-macro-head")).toMatch(/grid-template-columns:[^;]*\)\s*40px/);
   });
 
-  it("拐力端口的基准位置在角色标记牌正上方（像素、不写百分比）", () => {
+  it("拐力端口的基准位置在卡片顶部中间（百分比、入度正中）", () => {
     const portIn = ruleBody(".react-flow__handle.role-port-in");
     const portOut = ruleBody(".react-flow__handle.role-port-out");
     expect(portIn).toMatch(/top:\s*-\d+px/);        // 负偏移 = 在卡片上边缘之上
     expect(portOut).toMatch(/top:\s*-\d+px/);
-    // 必须是像素：百分比会按整个角色节点（560px）解析，跑到整片区域正中，
-    // 离开标记牌一大截（实测错位就是这么来的）
-    expect(portIn).toMatch(/left:\s*\d+px/);
-    expect(portOut).toMatch(/left:\s*\d+px/);
-    expect(portIn).not.toMatch(/left:\s*[\d.]+%/);
-    expect(portOut).not.toMatch(/left:\s*[\d.]+%/);
-    const inLeft = Number(/left:\s*(\d+)px/.exec(portIn)?.[1] ?? NaN);
-    const outLeft = Number(/left:\s*(\d+)px/.exec(portOut)?.[1] ?? NaN);
-    // 落在标记牌那一带（左上角约 10–100px），且"靠中间"而不是贴在左边缘
-    expect(inLeft).toBeGreaterThanOrEqual(40);
-    expect(outLeft).toBeLessThanOrEqual(120);
-    expect(outLeft).toBeGreaterThan(inLeft);
+    // 百分比：卡片多宽都落在中间那一带（一个入度点固定不动）
+    expect(portIn).toMatch(/left:\s*50%/);
+    const outLeft = Number(/([\d.]+)%/.exec(portOut)?.[1] ?? NaN);
+    expect(outLeft).toBeGreaterThan(50);            // 出度在入度右侧
+    expect(outLeft).toBeLessThanOrEqual(60);        // 挨着，算"同一组"
   });
 
   it("拐力箭头画成蓝色虚线，与伤害连线区分（不用暖色）", () => {

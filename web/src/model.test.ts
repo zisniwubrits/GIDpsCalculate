@@ -168,11 +168,47 @@ describe("对齐", () => {
 });
 
 describe("连线", () => {
-  it("同一端口只保留最后一条", () => {
+  it("多来源可以汇聚到同一个入度端口（但同一个源到同一目标只留一条）", () => {
     let links = connect([], "a", "c", 0);
     links = connect(links, "b", "c", 0);
-    expect(links).toEqual([{ src: "b", dst: "c", port: 0 }]);
-    expect(connect(links, "b", "c", 1)).toHaveLength(2);
+    // 角色卡只有一个入度点，多个来源的拐力箭头都指向它 —— 两条线并存
+    expect(links).toEqual([
+      { src: "a", dst: "c", port: 0 },
+      { src: "b", dst: "c", port: 0 },
+    ]);
+    // 同一个源再连一次：替换掉原来那条（不重复）
+    expect(connect(links, "a", "c", 0)).toEqual([
+      { src: "b", dst: "c", port: 0 },
+      { src: "a", dst: "c", port: 0 },
+    ]);
+    expect(connect(links, "a", "c", 0)).toHaveLength(2);
+  });
+
+  it("旧工程里带旧端口号的拐力箭头，一律收敛到同一个入度点", () => {
+    const g = jsonToGraph(
+      {
+        version: 1,
+        app: "GenshinDamageCalc",
+        zoom: 1,
+        name: "",
+        nodes: [
+          { id: "a", type: "role", pos: [0, 0], fields: { role_name: "多莉" } },
+          { id: "b", type: "role", pos: [600, 0], fields: { role_name: "九条" } },
+          { id: "t", type: "role", pos: [300, 500], fields: { role_name: "火神" } },
+        ],
+        // 那时"每个来源一个端口"，旧存档里可能写着 0 / 1 / 2
+        links: [
+          { src: "a", dst: "t", port: 0 },
+          { src: "b", dst: "t", port: 2 },
+        ],
+      } as unknown as GraphJSON,
+      schema,
+    );
+    // 现在入度只有一个点：端口号全部归 0，不然箭头会去找不存在的端口
+    expect(g.links).toEqual([
+      { src: "a", dst: "t", port: 0 },
+      { src: "b", dst: "t", port: 0 },
+    ]);
   });
 
   it("环路检测", () => {

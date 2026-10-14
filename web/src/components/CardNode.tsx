@@ -34,32 +34,16 @@ export type MenuKind = "result" | "font" | "card";
 export type CardRFNode = Node<CardData, "card">;
 
 // ------------------------------------------------------------ 拐力端口的位置
-// 位置是**像素**、锚在角色标记牌（左上角那张小卡）正上方那一小条上：
-//   * 不能写百分比 —— 端口的包含块是**整个角色节点**（角色卡宽 560px），
-//     写 50% 会落到整片区域的正中（实测 x≈523），而标记牌在 x≈270，
-//     箭头会停在空白里（这是实测抓到的错位）。
-//   * 标记牌宽度由角色名/面板内容决定（约 78px 起），所以这里用固定像素：
-//     牌心 ≈ 78px，多端口以牌心为中心等距展开、仍落在牌宽那一带。
+// 一个入度 + 一个出度，横向用**百分比**（相对角色节点宽度）居中：
+//   * 入度就放在水平中点，出度往右一档（两个点一进一出、挨着）；
+//   * 位置固定，不随"收到几份拐"变化 —— 多来源的箭头**都汇聚到同一个入度点**上
+//     （用户口径："多个箭头可以往一个点指"）。早前按来源数量摆多个端口，
+//     端口会随数量重新展开、箭头落点看着总在错位，现在这套逻辑整个删掉了。
 // 纵向由 styles.css 的 .role-port-* 定（负偏移 = 抬到卡片上边缘之上）。
-/** 单个入度端口时的水平位置（角色标记牌的中心附近） */
-const PORT_IN_CENTER = 78;
-/** 入度端口之间的间距 */
-const PORT_STEP = 20;
-/** 出度端口相对整组中心的偏移（在入度右侧一档） */
-const PORT_OUT_OFFSET = 20;
-
-/** 入度端口个数：默认 DEFAULTS，已经接满就再多给两个位置（不限制能收几份拐）。 */
-export function buffPortCount(current: number, defaults: number): number {
-  if (defaults <= 0) return 0;
-  const used = Math.max(0, current);
-  return used < defaults ? defaults : used + 2;
-}
-
-/** 第 i 个端口的行内 left（整组以 center 为中心等距展开；px）。 */
-export function portOffset(i: number, count: number, center: number, step: number): string {
-  const left = center - ((count - 1) / 2) * step + i * step;
-  return `${Math.round(Math.max(10, left))}px`;
-}
+/** 入度端口的水平位置（容器宽度的百分比，即正中） */
+export const ROLE_PORT_IN_LEFT = "50%";
+/** 出度端口的水平位置（往右一档，与入度挨着但不重叠） */
+export const ROLE_PORT_OUT_LEFT = "56%";
 
 function FieldControl({
   field,
@@ -283,13 +267,16 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
 
   const handles = [];
   if (isRole) {
-    // 角色卡的拐力端口：**在卡片中间偏上一带横向排开**，连线的始末都落在标签上方
-    // 那一小块里，箭头不会横跨整片区域。
+    // 角色卡的拐力端口：**入度一个点、出度一个点**，都在卡片顶部居中那一带。
     //
-    // 入度是**多个**（角色能吃多个其他角色的拐，多来源相加）：每个接收端口
-    // 对应一条连线，端口一律居中排布 + 等距展开（最左/最右也离卡片中点不远），
-    // 所以 1 个端口的卡片和 3 个端口看起来都是"居中那一组"。
-    const inCount = buffPortCount(buffIn.length, isWeapon ? 0 : 3);
+    // 为什么只有一个入度（用户要求"改成多个箭头可以往一个点指"）：原来按"几个来源
+    // 就摆几个端口"（3 个起步），可多端口会随来源数量重新展开、位置也跟着变，
+    // 箭头落点看起来就总在错位。收成一个点之后，多来源的箭头都汇聚到同一个点上，
+    // 既不会再错位，也不用再维护"端口个数"这套逻辑。
+    //
+    // 横向仍是**百分比**（相对"整个角色节点"的宽度）—— 只有一个端口、位置固定，
+    // 百分比才安全；之前的多端口用百分比会按 560px 的节点宽度展开，跑到区域正中。
+    const inCount = isWeapon ? 0 : 1;
     for (let i = 0; i < inCount; i += 1) {
       handles.push(
         <Handle
@@ -298,7 +285,7 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
           type="target"
           position={Position.Top}
           className="port port-in role-port-in"
-          style={{ left: portOffset(i, inCount, PORT_IN_CENTER, PORT_STEP) }}
+          style={{ left: ROLE_PORT_IN_LEFT }}
           title={inTitle}
         />,
       );
@@ -312,10 +299,7 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
           type="source"
           position={Position.Top}
           className="port port-out role-port-out"
-          // 出度固定 1 个：放在"入度组中心再往右一档"（2 个端口的整组中心）
-          style={{
-            left: portOffset(1, 2, PORT_IN_CENTER + PORT_OUT_OFFSET, PORT_STEP),
-          }}
+          style={{ left: ROLE_PORT_OUT_LEFT }}
           title={outTitle}
         />,
       );
