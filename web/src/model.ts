@@ -191,6 +191,27 @@ export function parsePanelShow(text: string): string[] {
     .filter(Boolean);
 }
 
+/**
+ * 「面板变量卡」的**预设代码**（拖进角色区域时由程序填进变量卡片的 `defs`）。
+ *
+ * 口径（用户确认）：面板属性**不自动计算**，全部由变量卡里的这些定义算出来；
+ * 公式用 `own::`（自己写的）`+ in::`（收进来的拐）—— `out::` 是给出去的。
+ * 宏名一律取自后端 schema 的 `panelMacros`，前端不硬编码。
+ */
+export function panelPreset(macros: readonly { key: string }[]): string {
+  return macros.map((m) => `${m.key} = own::${m.key} + in::${m.key}`).join("\n");
+}
+
+/** 这张变量卡是不是"刚拖进角色区域、内容还空着"（该填预设代码） */
+export function needsPanelPreset(
+  node: { type: string; fields: Record<string, unknown> },
+  role: string,
+  alreadyFilled: boolean,
+): boolean {
+  if (alreadyFilled || node.type !== "var" || !role) return false;
+  return String(node.fields.defs ?? "").trim() === "";
+}
+
 export function formatPanelShow(keys: readonly string[]): string {
   return keys.join(" ");
 }

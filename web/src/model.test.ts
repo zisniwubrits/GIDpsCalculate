@@ -22,6 +22,8 @@ import {
   nextNodeId,
   nextRoleName,
   normalizeSchema,
+  panelPreset,
+  needsPanelPreset,
   roleBoxes,
   roleOfNode,
   spreadChain,
@@ -413,6 +415,24 @@ describe("角色容器（抽象角色命名空间）", () => {
     // 往返稳定
     expect(parsePanelShow(formatPanelShow(["atk_pct", "res_shred"])))
       .toEqual(["atk_pct", "res_shred"]);
+  });
+
+  it("面板变量卡的预设代码：每项 own:: + in::（宏名来自 schema，不硬编码）", () => {
+    const text = panelPreset([{ key: "atk" }, { key: "em" }]);
+    expect(text).toBe("atk = own::atk + in::atk\nem = own::em + in::em");
+    // 14 个面板宏按 schema 顺序各来一行
+    expect(panelPreset(schema.panelMacros).split("\n")).toHaveLength(
+      schema.panelMacros.length,
+    );
+  });
+
+  it("只有「拖进角色区域且内容为空」的变量卡才需要填预设", () => {
+    const varNode = { type: "var", fields: { defs: "" } };
+    expect(needsPanelPreset(varNode, "火神", false)).toBe(true);
+    expect(needsPanelPreset(varNode, "", false)).toBe(false);          // 不在角色里
+    expect(needsPanelPreset(varNode, "火神", true)).toBe(false);       // 已经填过
+    expect(needsPanelPreset({ type: "var", fields: { defs: "x = 1" } }, "火神", false)).toBe(false);
+    expect(needsPanelPreset({ type: "role", fields: { defs: "" } }, "火神", false)).toBe(false);
   });
 
   it("normalizeSchema 给旧后端缺的字段补默认值（否则界面会白屏）", () => {
