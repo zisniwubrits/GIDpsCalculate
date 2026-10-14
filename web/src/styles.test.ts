@@ -228,7 +228,11 @@ describe("角色容器面板", () => {
     expect(key).toMatch(/color:\s*var\(--muted\)/);
     expect(key).not.toMatch(/text-overflow:\s*ellipsis/);
     expect(ruleBody(".role-panel .rp-val")).toMatch(/text-align:\s*right/);
-    expect(ruleBody(".role-panel .rp-buffed")).toMatch(/color:\s*var\(--warn\)/);
+    // 拐力相关一律蓝色（用户要求不要暖色）
+    expect(ruleBody(".role-panel .rp-buffed")).toMatch(/color:\s*var\(--link\)/);
+    const chip = ruleBody(".foot-chip-buff");
+    expect(chip).toMatch(/color:\s*var\(--link\)/);
+    expect(chip).not.toMatch(/--warn/);
   });
 
   it("角色面板弹窗放大、宏表一行一个（便于交互）", () => {

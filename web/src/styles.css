@@ -406,9 +406,9 @@ textarea:focus {
   color: var(--text);
 }
 
-/* 含拐的面板项（自身 + 收进来的）用暖色标出来 */
+/* 含拐的面板项（自身 + 收进来的拐）：用**蓝色**标出来（用户要求拐力别用暖色） */
 .role-panel .rp-buffed {
-  color: var(--warn);
+  color: var(--link);
   font-weight: 700;
 }
 
@@ -709,8 +709,8 @@ textarea:focus {
 }
 
 .foot-chip-buff {
-  background: rgba(184, 134, 11, 0.16);
-  color: var(--warn);
+  background: rgba(47, 111, 167, 0.16);
+  color: var(--link);
 }
 
 /* ------------------------------------------------------- 端口 / 连线 */
