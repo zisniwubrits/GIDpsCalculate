@@ -812,7 +812,9 @@ textarea:focus {
   background: #fbfcfe;
   border: 1px solid var(--line);
   border-radius: 6px;
-  font-family: Consolas, "Courier New", monospace;
+  /* 不指定字体族：Consolas / Courier New 都没有中文字形，中文会被浏览器回退成宋体，
+     与界面其它文字不一致（用户报过两次：文本框一次、教程一次）。
+     white-space: pre-wrap 已经保证教程里的缩进与排版，不需要等宽字体。 */
   font-size: 12px;
   line-height: 1.75;
   white-space: pre-wrap;

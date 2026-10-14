@@ -98,6 +98,10 @@ describe("字体", () => {
     expect(body).toMatch(/font-family/);
     expect(body).toMatch(/Microsoft YaHei/);
   });
+  it("F1 教程也不单独指定字体族（否则中文会回退成宋体，与界面不一致）", () => {
+    // 同 .f-area：Consolas / Courier New 没有中文字形；教程靠 pre-wrap 保排版，不需要等宽。
+    expect(ruleBody(".help-text")).not.toMatch(/font-family/);
+  });
 });
 
 describe("表格：列宽对齐 + 表头吸顶 + 填满卡片", () => {
