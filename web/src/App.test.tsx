@@ -445,6 +445,13 @@ describe("App 集成（假后端 + 真 schema）", () => {
     expect(screen.queryByTestId("stale-hint")).not.toBeInTheDocument();
   });
 
+  it("状态区显示前端产物构建时间（用来确认浏览器加载的是不是最新包）", async () => {
+    await renderApp();
+    await waitFor(() =>
+      expect(screen.getByTestId("build-time")).toHaveTextContent("构建 10-10 01:30"),
+    );
+  });
+
   it("导出结果由后端写成 txt，并显示落地路径", async () => {
     const user = userEvent.setup();
     await renderApp();

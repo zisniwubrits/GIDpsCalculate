@@ -243,6 +243,14 @@ textarea:focus {
   color: var(--accent);
 }
 
+/* 前端产物构建时间（状态区，muted）：用来确认浏览器加载的是不是最新包 */
+.tb-build {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  cursor: help;
+}
+
 /* 前端产物过期警告（鼠标悬停看 title 里的修复命令） */
 .tb-stale {
   font-size: 12px;

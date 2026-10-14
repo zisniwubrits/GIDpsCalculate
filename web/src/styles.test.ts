@@ -176,8 +176,16 @@ describe("角色容器面板", () => {
   });
 });
 
-describe("画布水印", () => {
-  it("铺满整块画布：必须显式 width/height 100%，否则 <svg> 只用固有尺寸 300×150", () => {
+describe("工具栏状态区", () => {
+  it("构建时间是小号 muted 文本（不抢眼，但核对旧包时要用）", () => {
+    const body = ruleBody(".tb-build");
+    expect(body).toMatch(/font-size:\s*11px/);
+    expect(body).toMatch(/color:\s*var\(--muted\)/);
+    expect(body).toMatch(/white-space:\s*nowrap/);
+  });
+});
+
+describe("画布水印", () => {  it("铺满整块画布：必须显式 width/height 100%，否则 <svg> 只用固有尺寸 300×150", () => {
     // 实测踩过：<svg> 是替换元素，只写 inset:0 而宽高 auto 时按规范取固有尺寸
     // 300×150 → 水印只画在左上角一小块，用户"看不到水印"。
     const body = ruleBody(".canvas-watermark");

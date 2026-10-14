@@ -111,6 +111,8 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
   const [saveDir, setSaveDir] = useState("");
   /** 前端产物过期的提示文案（后端 /api/health 判定，空串表示正常） */
   const [staleHint, setStaleHint] = useState("");
+  /** 后端报的前端产物构建时间：显示在状态区，用来确认浏览器加载的是不是最新包 */
+  const [buildTime, setBuildTime] = useState("");
   const [savedZoom, setSavedZoom] = useState(initial.zoom);
   const [dirty, setDirty] = useState(false);
   const [menu, setMenu] = useState<{ id: string; kind: MenuKind; x: number; y: number } | null>(
@@ -204,6 +206,7 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
     const ctrl = new AbortController();
     health(ctrl.signal)
       .then((h) => {
+        setBuildTime(h.webBuildTime ?? "");
         if (!h.webStale) return;
         setStaleHint(
           h.webBuilt
@@ -698,6 +701,7 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
         onName={setName}
         saveDir={saveDir}
         staleHint={staleHint}
+        buildTime={buildTime}
         dirty={dirty}
         canUndo={history.canUndo}
         canRedo={history.canRedo}

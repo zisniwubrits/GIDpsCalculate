@@ -6,6 +6,8 @@ export interface ToolbarProps {
   saveDir: string;
   /** 前端产物过期提示（非空时在工具栏显示一条警告） */
   staleHint?: string;
+  /** 后端报的前端产物构建时间：显示出来便于确认浏览器加载的是不是最新包 */
+  buildTime?: string;
   dirty: boolean;
   canUndo: boolean;
   canRedo: boolean;
@@ -90,6 +92,15 @@ export default function Toolbar(props: ToolbarProps) {
         {props.staleHint ? (
           <span className="tb-stale" title={props.staleHint} data-testid="stale-hint">
             ⚠ 前端产物过期
+          </span>
+        ) : null}
+        {props.buildTime ? (
+          <span
+            className="tb-build"
+            data-testid="build-time"
+            title={`当前这一步前端产物的构建时间：${props.buildTime}。若浏览器里显示的不是最新改动，先 Ctrl+F5 强制刷新（旧包会被浏览器缓存）。`}
+          >
+            构建 {props.buildTime.slice(5, 16)}
           </span>
         ) : null}
         <button type="button" className="tb-help" onClick={props.onHelp} title="F1">
