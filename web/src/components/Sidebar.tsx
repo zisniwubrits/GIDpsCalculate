@@ -8,7 +8,6 @@ export interface SidebarProps {
   onAdd: (type: string) => void;
   onPreset: (name: string) => void;
   onAlign: (mode: AlignMode) => void;
-  onClear: () => void;
   onClearSelection: () => void;
 }
 
@@ -25,7 +24,6 @@ export default function Sidebar({
   onAdd,
   onPreset,
   onAlign,
-  onClear,
   onClearSelection,
 }: SidebarProps) {
   return (
@@ -64,9 +62,6 @@ export default function Sidebar({
             </button>
           ))}
         </div>
-        <button type="button" className="side-btn side-danger" onClick={onClear}>
-          清空画布
-        </button>
       </section>
 
       <section className="side-group">

@@ -16,7 +16,7 @@ export interface ToolbarProps {
   onSave: () => void;
   onOpen: () => void;
   onExport: () => void;
-  onClear: () => void;
+  onNewProject: () => void;
   onHelp: () => void;
   zoom: number;
   onZoomIn: () => void;
@@ -67,8 +67,13 @@ export default function Toolbar(props: ToolbarProps) {
         <button type="button" onClick={props.onExport} title="导出可读文本报告">
           导出结果…
         </button>
-        <button type="button" onClick={props.onClear} title="清空画布（可撤销）">
-          清空
+        <button
+          type="button"
+          onClick={props.onNewProject}
+          data-testid="new-project"
+          title="新建项目：先问工程名，再清空画布 / 撤销历史 / 本地自动存档"
+        >
+          新建…
         </button>
         <span className="tb-sep" />
         <button type="button" onClick={props.onZoomOut} title="缩小 (Ctrl+滚轮)">

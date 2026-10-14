@@ -819,6 +819,51 @@ describe("App 集成（假后端 + 真 schema）", () => {
     expect(within(dialog).getByText("40")).toBeInTheDocument();     // 数值
   });
 
+  it("新建项目：先问工程名，再完整重置（画布 / 工程名 / 历史 / 本地存档）", async () => {
+    const user = userEvent.setup();
+    await renderApp();
+    await addCard(user, "dmg");
+    await user.type(screen.getByTestId("project-name"), "旧工程");
+    await waitFor(() => expect(screen.getByText("● 未保存")).toBeInTheDocument());
+
+    await user.click(screen.getByTestId("new-project"));
+    const dialog = await screen.findByTestId("new-project-dialog");
+    // 预填当前工程名，并提示将有卡片被清空
+    expect(within(dialog).getByTestId("new-project-name")).toHaveValue("旧工程");
+    expect(within(dialog).getByText(/当前画布上有 1 张卡片/)).toBeInTheDocument();
+
+    fireEvent.change(within(dialog).getByTestId("new-project-name"), {
+      target: { value: "雷神直伤" },
+    });
+    await user.click(within(dialog).getByRole("button", { name: "新建" }));
+
+    // 画布清空、工程名换成新的、状态回到"已保存"
+    await waitFor(() => expect(screen.getByText("画布是空的")).toBeInTheDocument());
+    expect(screen.getByTestId("project-name")).toHaveValue("雷神直伤");
+    await waitFor(() => expect(screen.getByText("○ 已保存")).toBeInTheDocument());
+    // 本地自动存档也跟着重置（存的是 {graph, savedAt} 包裹结构）
+    await waitFor(() => {
+      const saved = JSON.parse(
+        window.localStorage.getItem("genshin-dmg-calc:project:v1") ?? "{}",
+      ) as { graph?: { name?: string; nodes?: unknown[] } };
+      expect(saved.graph?.name).toBe("雷神直伤");
+      expect(saved.graph?.nodes).toEqual([]);
+    });
+  });
+
+  it("新建项目弹窗可以取消（什么都不改）", async () => {
+    const user = userEvent.setup();
+    await renderApp();
+    await addCard(user, "dmg");
+
+    await user.click(screen.getByTestId("new-project"));
+    const dialog = await screen.findByTestId("new-project-dialog");
+    await user.click(within(dialog).getByRole("button", { name: "取消" }));
+
+    expect(screen.queryByTestId("new-project-dialog")).toBeNull();
+    expect(screen.getByTestId("card-n1")).toBeInTheDocument();
+  });
+
   it("卡片底部标注「含面板」与「含拐」——让人一眼看出在吃面板/拐力", async () => {
     const user = userEvent.setup();
     await renderApp();

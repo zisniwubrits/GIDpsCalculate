@@ -25,7 +25,13 @@ import CardNode, { type CardData, type CardRFNode, type MenuKind } from "./compo
 import CardEdge, { type CardRFEdge } from "./components/CardEdge";
 import CanvasWatermark from "./components/CanvasWatermark";
 import ContextMenu, { type MenuItem } from "./components/ContextMenu";
-import { HelpDialog, NameCardDialog, ResultVarsDialog, RolePanelDialog } from "./components/Dialogs";
+import {
+  HelpDialog,
+  NameCardDialog,
+  NewProjectDialog,
+  ResultVarsDialog,
+  RolePanelDialog,
+} from "./components/Dialogs";
 import Sidebar from "./components/Sidebar";
 import Toolbar from "./components/Toolbar";
 import {
@@ -276,10 +282,33 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
     [apply, schema, sizeOf],
   );
 
-  const clearBoard = useCallback(() => {
-    history.reset({ nodes: [], links: [] });
-    setSelectedEdge(null);
-  }, [history]);
+  /** 打开「新建项目」弹窗 */
+  const [newDialog, setNewDialog] = useState(false);
+
+  /**
+   * 新建项目：**先问工程名，再完整重置** —— 画布、工程名、撤销历史、
+   * 浏览器本地自动存档（由持久化 effect 自动写回空白状态）。
+   * 磁盘上的文件不动；保存目录也不动（那是后端记忆的偏好）。
+   */
+  const doNewProject = useCallback(
+    (projectName: string) => {
+      history.reset({ nodes: [], links: [] });
+      setName(projectName);
+      setSelectedEdge(null);
+      setMenu(null);
+      setResultDialog(null);
+      setNameDialog(null);
+      setPanelDialog(null);
+      setNewDialog(false);
+      setSavedZoom(1);
+      rf.setViewport({ x: 0, y: 0, zoom: 1 });
+      // 让下一次序列化比较被当成"首次装载"，于是新工程是干净状态（不显示未保存）
+      lastSignature.current = null;
+      setDirty(false);
+      setToast(projectName ? `已新建项目：${projectName}` : "已新建空白项目");
+    },
+    [history, rf],
+  );
 
   const onAlign = useCallback(
     (mode: AlignMode) => {
@@ -733,7 +762,7 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
         onSave={doSave}
         onOpen={() => void doOpen()}
         onExport={() => void doExport()}
-        onClear={clearBoard}
+        onNewProject={() => setNewDialog(true)}
         onHelp={() => setShowHelp(true)}
         zoom={liveZoom}
         onZoomIn={() => rf.zoomIn({ duration: 120 })}
@@ -750,7 +779,6 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
           onAdd={addNode}
           onPreset={onPreset}
           onAlign={onAlign}
-          onClear={clearBoard}
           onClearSelection={clearSelection}
         />
         <div className="canvas" data-testid="canvas">
@@ -867,6 +895,15 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
           />
         );
       })() : null}
+
+      {newDialog ? (
+        <NewProjectDialog
+          initialName={name}
+          cardCount={nodes.length}
+          onCreate={doNewProject}
+          onClose={() => setNewDialog(false)}
+        />
+      ) : null}
 
       {showHelp ? (
         <HelpDialog text={help.text} sections={help.sections} onClose={() => setShowHelp(false)} />

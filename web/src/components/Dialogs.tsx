@@ -259,6 +259,76 @@ export function RolePanelDialog({
   );
 }
 
+export interface NewProjectDialogProps {
+  /** 当前工程名（预填，方便"另存为新项目"式的改名） */
+  initialName: string;
+  /** 当前画布上有几张卡片（用来提示会被清空） */
+  cardCount: number;
+  onCreate: (name: string) => void;
+  onClose: () => void;
+}
+
+/**
+ * 新建项目：**先问工程名，再完整重置**（画布 / 工程名 / 撤销历史 / 浏览器本地存档）。
+ * 这是工具栏唯一的重置入口（原来的「清空画布」已并进来）。
+ */
+export function NewProjectDialog({
+  initialName,
+  cardCount,
+  onCreate,
+  onClose,
+}: NewProjectDialogProps) {
+  const [name, setName] = useState(initialName);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div className="modal-mask" onMouseDown={onClose}>
+      <div
+        className="modal"
+        role="dialog"
+        aria-label="新建项目"
+        data-testid="new-project-dialog"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <h2>新建项目</h2>
+        <p className="modal-hint">
+          会清空当前画布并重置工程名、撤销历史与浏览器里的本地自动存档（文件不会被动到）。
+          {cardCount > 0 ? ` 当前画布上有 ${cardCount} 张卡片。` : ""}
+        </p>
+        <label className="modal-row">
+          <span>工程名</span>
+          <input
+            value={name}
+            data-testid="new-project-name"
+            placeholder="例如 雷神直伤"
+            autoFocus
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") onCreate(name.trim());
+            }}
+          />
+        </label>
+        <div className="modal-actions">
+          <span className="grow" />
+          <button type="button" onClick={onClose}>
+            取消
+          </button>
+          <button type="button" className="primary" onClick={() => onCreate(name.trim())}>
+            新建
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export interface HelpDialogProps {
   text: string;
   sections: string[];
