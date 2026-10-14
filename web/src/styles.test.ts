@@ -133,6 +133,15 @@ describe("角色容器面板", () => {
     expect(body).toMatch(/font-size:\s*11px/);
   });
 
+  it("面板主体不吃鼠标事件（否则在面板上方拖不出框选），里面的输入框单独放行", () => {
+    expect(ruleBody(".card-role-box .card-body")).toMatch(/pointer-events:\s*none/);
+    // 输入框与其它控件在同一个选择器列表里（单行选择器列表 ruleBody 匹配不到），
+    // 所以这里直接对整段 CSS 断言：逗号分隔的选择器组也要放行鼠标事件。
+    expect(css).toMatch(
+      /\.card-role-box \.card-body input[^{]*\{[^}]*pointer-events:\s*auto/,
+    );
+  });
+
   it("命名卡片的徽标同样是小胶囊，且用等宽字形（显示的是要敲的前缀 `名字::`）", () => {
     const body = ruleBody(".card-name-chip");
     expect(body).toMatch(/border-radius/);

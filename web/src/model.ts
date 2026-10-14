@@ -107,6 +107,17 @@ export function buildRoleMap(nodes: CardNode[]): Record<string, string> {
   return out;
 }
 
+/**
+ * 框选时要不要**忽略**这张卡片的选中。
+
+ * 角色容器是一大块面板，任意框选矩形几乎总会与它相交 —— 而 React Flow 的
+ * `getNodesInside` 不看 `selectable`，所以框选一定把它一起选中（随后 Delete 会连
+ * 面板一起删掉）。这条规则让「框选」不选中面板：想选它请点它的标题栏。
+ */
+export function ignoredByBoxSelect(node: CardNode): boolean {
+  return node.type === "role";
+}
+
 /** 生成不重复的节点 id：n1、n2… */
 export function nextNodeId(nodes: CardNode[]): string {
   let max = 0;

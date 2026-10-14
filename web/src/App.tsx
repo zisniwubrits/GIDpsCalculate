@@ -37,6 +37,7 @@ import {
   estimateSize,
   freeSlot,
   graphToJSON,
+  ignoredByBoxSelect,
   jsonToGraph,
   makeNode,
   nextNodeId,
@@ -125,6 +126,8 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
   const rf = useReactFlow<CardRFNode, CardRFEdge>();
   const { zoom: liveZoom } = useViewport();
   const lastSignature = useRef<string | null>(null);
+  /** 正在拖框选：此时忽略「角色容器」的选中变化（见 model.ignoredByBoxSelect） */
+  const boxSelecting = useRef(false);
 
   // -- 求值载荷：不含位置 / 尺寸（拖动卡片不该触发重新计算）-----------------
   // 角色归属（role）由位置推导：useEvaluate 按**序列化内容**去重，所以拖动时只有
@@ -308,7 +311,12 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
             const pos = ch.position;
             next = next.map((n) => (n.id === ch.id ? { ...n, pos: [pos.x, pos.y] } : n));
           } else if (ch.type === "select") {
-            next = next.map((n) => (n.id === ch.id ? { ...n, selected: ch.selected } : n));
+            next = next.map((n) =>
+              n.id === ch.id &&
+              !(ch.selected && boxSelecting.current && ignoredByBoxSelect(n))
+                ? { ...n, selected: ch.selected }
+                : n,
+            );
           } else if (ch.type === "dimensions" && ch.dimensions) {
             const dim = ch.dimensions;
             // resizing / setAttributes 都是「用户在缩放」的信号；挂载时的首次测量
@@ -723,6 +731,13 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
             onNodeMouseLeave={() => setHoverId(null)}
             onMoveEnd={(_, vp) => setSavedZoom(vp.zoom)}
             onPaneClick={() => setMenu(null)}
+            // 框选期间：忽略角色容器的选中变化（它是一大块面板，否则框选必把它卷进来）
+            onSelectionStart={() => {
+              boxSelecting.current = true;
+            }}
+            onSelectionEnd={() => {
+              boxSelecting.current = false;
+            }}
             defaultViewport={{ x: 0, y: 0, zoom: initial.zoom }}
             minZoom={0.25}
             maxZoom={2.5}

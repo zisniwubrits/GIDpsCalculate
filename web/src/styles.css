@@ -336,6 +336,18 @@ textarea:focus {
   border-bottom: 1px dashed #b9cde0;
 }
 
+/* 面板主体**不吃鼠标事件**：它是一大块底板，若把事件吃掉就没法在它上面拖框选了
+   （面板只保留标题栏拖动与四角缩放手柄）。面板里的输入框单独放行，仍可正常编辑。 */
+.card-role-box .card-body {
+  pointer-events: none;
+}
+
+.card-role-box .card-body input,
+.card-role-box .card-body textarea,
+.card-role-box .card-body select {
+  pointer-events: auto;
+}
+
 /* 标题栏上的角色徽标：一眼看出这张卡属于哪个角色（显示成 `火神::`，就是该敲的前缀） */
 .card-role-chip {
   margin-left: 6px;

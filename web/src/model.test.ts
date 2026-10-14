@@ -12,6 +12,7 @@ import {
   estimateSize,
   freeSlot,
   graphToJSON,
+  ignoredByBoxSelect,
   jsonToGraph,
   makeNode,
   nextNodeId,
@@ -353,5 +354,12 @@ describe("角色容器（抽象角色命名空间）", () => {
     const json = graphToJSON([role, inside], [], 1, "测试");
 
     expect(json.nodes.every((n) => !("role" in n))).toBe(true);
+  });
+
+  it("框选要忽略角色容器（它是一大块面板，否则框选必把它卷进来）", () => {
+    // React Flow 的 getNodesInside 不看 selectable，所以这条规则只能由我们自己守
+    expect(ignoredByBoxSelect(node("r1", "role", [0, 0]))).toBe(true);
+    expect(ignoredByBoxSelect(node("n1", "dmg", [0, 0]))).toBe(false);
+    expect(ignoredByBoxSelect(node("n2", "text", [0, 0]))).toBe(false);
   });
 });
