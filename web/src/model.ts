@@ -135,6 +135,81 @@ export function ignoredByBoxSelect(node: CardNode): boolean {
   return isNamespaceNode(node);
 }
 
+// ------------------------------------------------- 一键隐藏区域内的卡片
+/** 有没有开「隐藏区域内的卡片」（角色卡上的字段） */
+export function cardsHidden(node: CardNode): boolean {
+  return Boolean(node.fields?.cards_hidden);
+}
+
+/**
+ * 哪些卡片因为所在角色开了「隐藏」而看不见。
+ *
+ * 隐藏是**界面状态**（不进 /api/evaluate 载荷，隐藏不改变计算结果），
+ * 但跟着工程 JSON 存 —— 藏好的东西刷新后不该又冒出来。
+ * 只作用于**非容器**卡片：同区域里嵌套的另一个角色标记仍然可见（还能点它、展开它）。
+ */
+export function hiddenCardsFor(nodes: CardNode[]): Set<string> {
+  const out = new Set<string>();
+  const hidden = nodes.filter(cardsHidden);
+  if (!hidden.length) return out;
+  const boxes = roleBoxes(nodes);
+  for (const n of nodes) {
+    if (isNamespaceNode(n)) continue;
+    const owner = roleOfNode(n, boxes);
+    if (owner && hidden.some((h) => String(h.fields.role_name ?? "").trim() === owner)) {
+      out.add(n.id);
+    }
+  }
+  return out;
+}
+
+/**
+ * 右键「隐藏/显示区域内的卡片」：开隐藏时**顺手把状态切到另一头**
+ * （用户要求：隐藏后只剩一张最小的牌子，折叠由调用方一起做）。
+ * 返回新节点数组（纯函数，方便单测）。
+ */
+export function toggleRoleCardsHidden(nodes: CardNode[], id: string): CardNode[] {
+  return nodes.map((n) =>
+    n.id === id ? { ...n, fields: { ...n.fields, cards_hidden: !cardsHidden(n) } } : n,
+  );
+}
+
+/** 区域内有多少张卡片（右键菜单里报个数；不含容器自己） */
+export function cardsInside(nodes: CardNode[], id: string): number {
+  const target = nodes.find((n) => n.id === id);
+  const name = String(target?.fields.role_name ?? "").trim();
+  if (!name) return 0;
+  const boxes = roleBoxes(nodes);
+  return nodes.filter((n) => !isNamespaceNode(n) && roleOfNode(n, boxes) === name).length;
+}
+
+/**
+ * 「隐藏区域内的卡片」能不能做：区域内卡片**不能有连到区域外的连线**。
+ *
+ * 为什么（用户要求）：藏起区域内卡片时，跨区域的线会只剩半截、指向看不见的卡片。
+ * 与其画一条断头线，不如直接拒绝隐藏，并说清是哪几张卡连到外面。
+ * 返回**区域外那些卡片的 id**（空数组 = 允许隐藏），文案由调用方按 schema 拼。
+ */
+export function cardsBlockingHide(nodes: CardNode[], links: GraphLinkJSON[], id: string): string[] {
+  const target = nodes.find((n) => n.id === id);
+  const name = String(target?.fields.role_name ?? "").trim();
+  if (!name) return [];
+  const boxes = roleBoxes(nodes);
+  const inside = new Set(
+    nodes.filter((n) => !isNamespaceNode(n) && roleOfNode(n, boxes) === name).map((n) => n.id),
+  );
+  if (!inside.size) return [];
+  const blocked: string[] = [];
+  for (const l of links) {
+    const cross =
+      (inside.has(l.src) && !inside.has(l.dst)) || (inside.has(l.dst) && !inside.has(l.src));
+    if (!cross) continue;
+    const outsideId = inside.has(l.src) ? l.dst : l.src;
+    if (!blocked.includes(outsideId)) blocked.push(outsideId);
+  }
+  return blocked;
+}
+
 // ---------------------------------------------------------------- schema 兜底
 /**
  * 给后端 schema 补齐缺省结构。

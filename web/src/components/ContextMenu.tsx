@@ -6,6 +6,8 @@ export interface MenuItem {
   onClick: () => void;
   danger?: boolean;
   disabled?: boolean;
+  /** 悬停说明（例如"为什么这一项不能点"） */
+  title?: string;
 }
 
 export interface ContextMenuProps {
@@ -58,6 +60,7 @@ export default function ContextMenu({ x, y, items, onClose, testId }: ContextMen
           key={item.label}
           className={`ctx-item${item.danger ? " ctx-danger" : ""}`}
           disabled={item.disabled}
+          title={item.title}
           onClick={() => {
             item.onClick();
             onClose();

@@ -9,7 +9,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
-import { CARD_DRAG_HANDLE } from "./model";
+import { CARD_DRAG_HANDLE, ROLE_H, ROLE_W } from "./model";
 import type { EvaluateResult, GraphJSON, Schema } from "./types";
 import fixture from "./test/schema.fixture.json";
 
@@ -853,6 +853,112 @@ describe("App 集成（假后端 + 真 schema）", () => {
     await waitFor(() => expect(lastBody?.nodes[0].fields.defs).toBe(""));
     const box = within(card).getByRole("textbox");
     expect(box).toHaveValue("");
+  });
+
+  it("右键角色 →「隐藏区域内的卡片」：区域内卡片与连线一起消失、容器折叠成最小", async () => {
+    const user = userEvent.setup();
+    // jsdom 里拖不动卡片（d3-drag 是桩），所以直接预置一份「卡片已经放在角色区域里」的工程；
+    // 角色容器固定成默认尺寸 → "卡片在区域里"只由坐标决定，不受 jsdom 量不到尺寸影响
+    window.localStorage.setItem(
+      "genshin-dmg-calc:project:v1",
+      JSON.stringify({
+        graph: {
+          version: 1,
+          app: "GenshinDamageCalc",
+          zoom: 1,
+          name: "隐藏自检",
+          nodes: [
+            { id: "n1", type: "role", pos: [0, 0], size: [ROLE_W, ROLE_H], font_size: null, inputs: 0,
+              fields: { role_name: "火神", panel: "", panel_show: "", card_name: "" } },
+            { id: "n2", type: "dmg", pos: [120, 70], size: null, font_size: null, inputs: 1,
+              fields: {} },
+            { id: "n3", type: "crit", pos: [120, 240], size: null, font_size: null, inputs: 1,
+              fields: {} },
+          ],
+          // 两张卡之间的伤害连线：端点在区域内 → 隐藏卡片时这条线也该消失
+          links: [{ src: "n2", dst: "n3", port: 0 }],
+        },
+        savedAt: new Date().toISOString(),
+      }),
+    );
+
+    await renderApp();
+    const roleCard = await screen.findByTestId("card-n1");
+    expect(screen.getByTestId("card-n2")).toBeInTheDocument();
+    expect(screen.getByTestId("card-n3")).toBeInTheDocument();
+    await waitFor(() => expect(lastBody?.nodes.map((n) => n.id)).toEqual(["n1", "n2", "n3"]));
+    await waitFor(() => expect(document.querySelectorAll(".react-flow__edge").length).toBe(1));
+
+    // 菜单里报出区域内的卡片数
+    fireEvent.contextMenu(within(roleCard).getByText("火神"));
+    const item = await screen.findByText(/隐藏区域内的卡片/);
+    expect(item).toHaveTextContent("2 张");
+    await user.click(item);
+
+    // 字段写进角色卡；区域内的卡片与连线不再渲染
+    await waitFor(() =>
+      expect(lastBody?.nodes.find((n) => n.id === "n1")?.fields.cards_hidden).toBe(true),
+    );
+    await waitFor(() => expect(screen.queryByTestId("card-n2")).toBeNull());
+    expect(screen.queryByTestId("card-n3")).toBeNull();
+    expect(document.querySelectorAll(".react-flow__edge").length).toBe(0);
+    // 只是不渲染：求值载荷里这些卡片还在（隐藏不影响计算）
+    expect(lastBody?.nodes.map((n) => n.id)).toEqual(["n1", "n2", "n3"]);
+
+    // 角色容器折叠成最小（只留一张牌子）
+    expect(screen.getByTestId("card-n1")).toHaveAttribute("data-collapsed", "1");
+    expect((screen.getByTestId("card-n1").closest(".react-flow__node") as HTMLElement).style.height)
+      .toBe("auto");
+
+    // 再右键 →「显示区域内的卡片」→ 卡片回来
+    // （折叠后标题栏文字变成卡片类型名，所以按卡片类型名找标题栏）
+    fireEvent.contextMenu(within(screen.getByTestId("card-n1")).getByText("角色"));
+    await user.click(await screen.findByText(/显示区域内的卡片/));
+    await waitFor(() =>
+      expect(lastBody?.nodes.find((n) => n.id === "n1")?.fields.cards_hidden).toBe(false),
+    );
+    await waitFor(() => expect(screen.getByTestId("card-n2")).toBeInTheDocument());
+  });
+
+  it("区域内的卡片和区域外有连线时：菜单项禁用并说明是哪张卡（不隐藏）", async () => {
+    const user = userEvent.setup();
+    window.localStorage.setItem(
+      "genshin-dmg-calc:project:v1",
+      JSON.stringify({
+        graph: {
+          version: 1,
+          app: "GenshinDamageCalc",
+          zoom: 1,
+          name: "跨区连线自检",
+          nodes: [
+            { id: "n1", type: "role", pos: [0, 0], size: [ROLE_W, ROLE_H], font_size: null, inputs: 0,
+              fields: { role_name: "火神", panel: "", panel_show: "", card_name: "" } },
+            { id: "n2", type: "dmg", pos: [120, 70], size: null, font_size: null, inputs: 1,
+              fields: {} },
+            // 远在角色区域之外
+            { id: "n3", type: "crit", pos: [900, 700], size: null, font_size: null, inputs: 1,
+              fields: {} },
+          ],
+          links: [{ src: "n2", dst: "n3", port: 0 }],
+        },
+        savedAt: new Date().toISOString(),
+      }),
+    );
+
+    await renderApp();
+    const roleCard = await screen.findByTestId("card-n1");
+    await waitFor(() => expect(lastBody?.nodes.map((n) => n.id)).toEqual(["n1", "n2", "n3"]));
+
+    fireEvent.contextMenu(within(roleCard).getByText("火神"));
+    const item = await screen.findByText(/隐藏区域内的卡片/);
+    expect(item).toBeDisabled();
+    // 说清是哪张卡连到外面（暴击区的中文名来自后端 schema）
+    expect(item.getAttribute("title")).toContain("暴击区");
+
+    // 点了也不会隐藏
+    await user.click(item);
+    expect(screen.getByTestId("card-n2")).toBeInTheDocument();
+    expect(screen.getByTestId("card-n1")).not.toHaveAttribute("data-collapsed");
   });
 
   it("右键角色标签 →「角色面板…」：宏表可编辑、并显示拐力统计（OUT/IN）", async () => {    const user = userEvent.setup();

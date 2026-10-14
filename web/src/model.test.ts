@@ -35,6 +35,11 @@ import {
   nextCustomOutName,
   parseRolePanel,
   formatRolePanel,
+  cardsBlockingHide,
+  cardsHidden,
+  cardsInside,
+  hiddenCardsFor,
+  toggleRoleCardsHidden,
   wouldCycle,
 } from "./model";
 import type { CardNode, GraphJSON, Schema } from "./types";
@@ -564,5 +569,62 @@ describe("角色容器（抽象角色命名空间）", () => {
     expect(s?.nodeTypes.dmg.defaults).toEqual({});
     // 完全拿不到 schema 时返回 null（由调用方决定怎么提示）
     expect(normalizeSchema(null)).toBeNull();
+  });
+});
+
+describe("角色区域一键隐藏卡片", () => {
+  const roleNode = (id: string, name: string, extra: Record<string, unknown> = {}) => {
+    const n = node(id, "role", [0, 0]);
+    n.fields = { ...n.fields, role_name: name, ...extra };
+    n.size = [560, 380];            // 固定尺寸：谁在谁里面只由坐标决定
+    return n;
+  };
+  const inside = (id: string, type: string, pos: [number, number]) => {
+    const n = node(id, type, pos);
+    n.size = [200, 120];
+    return n;
+  };
+  const build = (extra: Record<string, unknown> = {}) => [
+    roleNode("r1", "火神", extra),
+    inside("c1", "dmg", [20, 20]),
+    inside("c2", "crit", [20, 200]),
+    inside("c3", "dmg", [900, 20]),          // 在区域外
+  ];
+
+  it("角色开了「隐藏」后，区域内的卡片进隐藏名单（容器自己不算）", () => {
+    expect([...hiddenCardsFor(build())]).toEqual([]);            // 默认不隐藏
+    expect([...hiddenCardsFor(build({ cards_hidden: true }))].sort()).toEqual(["c1", "c2"]);
+    expect(cardsHidden(build({ cards_hidden: true })[0])).toBe(true);
+  });
+
+  it("切换一次打开、再切一次关闭（字段跟着走）", () => {
+    const once = toggleRoleCardsHidden(build(), "r1");
+    expect(once[0].fields.cards_hidden).toBe(true);
+    expect([...hiddenCardsFor(once)].sort()).toEqual(["c1", "c2"]);
+    const twice = toggleRoleCardsHidden(once, "r1");
+    expect(twice[0].fields.cards_hidden).toBe(false);
+    expect([...hiddenCardsFor(twice)]).toEqual([]);
+  });
+
+  it("菜单里报的区域卡片数只算区域内的（外面的卡片不算）", () => {
+    expect(cardsInside(build(), "r1")).toBe(2);
+    expect(cardsInside(build(), "nope")).toBe(0);
+  });
+
+  it("有跨区域连线时拒绝隐藏：报出区域外那几张卡", () => {
+    const list = build();
+    expect(cardsBlockingHide(list, [{ src: "c1", dst: "c2", port: 0 }], "r1")).toEqual([]);
+    // c1 → c3（c3 在区域外）
+    expect(cardsBlockingHide(list, [{ src: "c1", dst: "c3", port: 0 }], "r1")).toEqual(["c3"]);
+    // 反方向也算，同一张卡只报一次
+    expect(
+      cardsBlockingHide(
+        list,
+        [{ src: "c3", dst: "c1", port: 0 }, { src: "c3", dst: "c2", port: 1 }],
+        "r1",
+      ),
+    ).toEqual(["c3"]);
+    // 完全在外面的连线与本次隐藏无关
+    expect(cardsBlockingHide(list, [{ src: "c3", dst: "c3", port: 0 }], "r1")).toEqual([]);
   });
 });

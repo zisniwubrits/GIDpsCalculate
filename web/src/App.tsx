@@ -40,6 +40,9 @@ import {
   addPreset,
   alignPositions,
   buildRoleMap,
+  cardsBlockingHide,
+  cardsHidden,
+  cardsInside,
   connect,
   estimateSize,
   fillPresetForDropped,
@@ -47,6 +50,7 @@ import {
   formatPanelShow,
   freeSlot,
   graphToJSON,
+  hiddenCardsFor,
   ignoredByBoxSelect,
   jsonToGraph,
   makeNode,
@@ -55,6 +59,7 @@ import {
   isNamespaceNode,
   isPanelNode,
   parsePanelShow,
+  toggleRoleCardsHidden,
   wouldCycle,
   type AlignMode,
   type SizeOf,
@@ -631,6 +636,43 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
       });
       if (!spec.weapon_card) {
         items.push({ label: "角色面板…", onClick: () => setPanelDialog(menu.id) });
+        // 一键藏起区域内的卡片：藏完这只剩一张最小的牌子（再次右键点回来）
+        const hiddenNow = cardsHidden(node);
+        const count = cardsInside(nodes, menu.id);
+        // 区域内卡片连到区域外 → 拒绝隐藏（否则那条线只剩半截）
+        const blockers = hiddenNow ? [] : cardsBlockingHide(nodes, links, menu.id);
+        const blockedNames = blockers.map((bid) => {
+          const n = nodes.find((x) => x.id === bid);
+          if (!n) return bid;
+          const cardName = String(n.fields.card_name ?? "").trim();
+          const typeLabel = schema.nodeTypes[n.type]?.label ?? n.type;
+          return cardName ? `${cardName}（${typeLabel}）` : typeLabel;
+        });
+        items.push({
+          label: hiddenNow
+            ? `显示区域内的卡片${count ? `（${count} 张）` : ""}`
+            : `隐藏区域内的卡片${count ? `（${count} 张）` : ""}`,
+          // 有跨区域连线时不给点：鼠标悬停能看到是哪几张卡连到外面
+          disabled: blockedNames.length > 0,
+          title: blockedNames.length
+            ? `区域内的卡片和区域外有连线（${blockedNames.join("、")}），先断开再隐藏`
+            : undefined,
+          onClick: () =>
+            apply((s) => {
+              let next = { ...s, nodes: toggleRoleCardsHidden(s.nodes, menu.id) };
+              // 隐藏后顺手把本容器折叠成最小（用户要求：藏起来就只留一张小牌）；
+              // 再点「显示」时保持折叠，要不要展开由用户自己决定
+              if (!hiddenNow) {
+                next = {
+                  ...next,
+                  nodes: next.nodes.map((n) =>
+                    n.id === menu.id ? { ...n, collapsed: true } : n,
+                  ),
+                };
+              }
+              return next;
+            }),
+        });
       }
     } else {
       items.push({ label: "命名卡片…", onClick: () => setNameDialog(menu.id) });
@@ -641,8 +683,8 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
     });
     items.push({ label: "删除卡片", danger: true, onClick: () => removeNode(menu.id) });
     return items;
-  }, [menu, nodes, schema, results, copyNodeValue, removeNode, setFontSize, setResultVars,
-      toggleCollapse, onField, setRoleNameDialog, setPanelDialog, setNameDialog]);
+  }, [menu, nodes, links, schema, results, copyNodeValue, removeNode, setFontSize, setResultVars,
+      toggleCollapse, onField, setRoleNameDialog, setPanelDialog, setNameDialog, apply]);
 
   // -- 键盘快捷键 --------------------------------------------------------
   useEffect(() => {
@@ -689,6 +731,8 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
     () => [...nodes].sort((a, b) => Number(b.type === "role") - Number(a.type === "role")),
     [nodes],
   );
+  /** 一键隐藏区域内卡片：这些卡片（以及它们参与的连线）不渲染 */
+  const hiddenCards = useMemo(() => hiddenCardsFor(nodes), [nodes]);
   const rfNodes = useMemo<CardRFNode[]>(
     () =>
       orderedNodes.map((n) => {
@@ -746,6 +790,11 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
           // 区域本身不该吃鼠标事件，否则鼠标落在上面会命中节点（光标变抓手）也拖不出框选。
           // 写在**内联样式**上最稳：不受任何 CSS 优先级/顺序影响（样式表那两条只是文档与兜底）。
           style = { ...(style ?? {}), pointerEvents: "none" };
+          if (n.collapsed && !n.resizing) {
+            // 折叠成**最小**（一键隐藏后只剩一张牌子）：撤掉存下来的高度，
+            // 否则那块虚线区域仍占着原来的大小，看着像没折叠
+            style = { ...style, height: "auto", minHeight: 0 };
+          }
         }
         return {
           id: n.id,
@@ -753,6 +802,8 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
           position: { x: n.pos[0], y: n.pos[1] },
           data,
           style,
+          // 一键隐藏区域内卡片：只是不渲染（模型/工程 JSON 里都还在）
+          hidden: hiddenCards.has(n.id),
           selected: Boolean(n.selected),
           measured: n.measured,
           // 角色容器：整个节点不吃鼠标事件（见 styles.css 的 .node-role-box）——
@@ -763,20 +814,23 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
         };
       }),
     [orderedNodes, schema, results, roles, onField, removeNode, onCopy, onResize,
-     evaluation.data],
+     evaluation.data, hiddenCards],
   );
 
   const rfEdges = useMemo<CardRFEdge[]>(
     () =>
-      links.map((l) => {
-        const id = edgeId(l.src, l.dst, l.port);
-        const buff = isBuffPair(l.src, l.dst);
-        return {
-          id,
-          type: "card" as const,
-          source: l.src,
-          target: l.dst,
-          sourceHandle: "out",
+      links
+        // 端点在「隐藏区域内卡片」里的连线一起藏起来（否则箭头悬在半空）
+        .filter((l) => !hiddenCards.has(l.src) && !hiddenCards.has(l.dst))
+        .map((l) => {
+          const id = edgeId(l.src, l.dst, l.port);
+          const buff = isBuffPair(l.src, l.dst);
+          return {
+            id,
+            type: "card" as const,
+            source: l.src,
+            target: l.dst,
+            sourceHandle: "out",
           targetHandle: `in-${l.port}`,
           selected: selectedEdge === id,
           interactionWidth: 18,
@@ -787,17 +841,17 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
             // 拐力箭头也用蓝色（用户要求）；靠虚线区分它不是伤害连线
             color: "#2f6fa7",
           },
-          data: {
-            src: l.src,
-            dst: l.dst,
-            port: l.port,
-            buff,
-            dim: Boolean(hoverId && l.src !== hoverId && l.dst !== hoverId),
-            onDelete: removeLink,
-          },
-        };
-      }),
-    [links, selectedEdge, hoverId, removeLink, isBuffPair],
+            data: {
+              src: l.src,
+              dst: l.dst,
+              port: l.port,
+              buff,
+              dim: Boolean(hoverId && l.src !== hoverId && l.dst !== hoverId),
+              onDelete: removeLink,
+            },
+          };
+        }),
+    [links, selectedEdge, hoverId, removeLink, isBuffPair, hiddenCards],
   );
 
   const selectedCount = nodes.filter((n) => n.selected).length;

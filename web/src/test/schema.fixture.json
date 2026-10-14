@@ -1236,7 +1236,8 @@
       "defaults": {
         "role_name": "",
         "panel": "",
-        "panel_show": ""
+        "panel_show": "",
+        "cards_hidden": false
       },
       "isolated": true,
       "no_output": true,
@@ -1256,7 +1257,8 @@
       "hidden_fields": [
         "role_name",
         "panel",
-        "panel_show"
+        "panel_show",
+        "cards_hidden"
       ]
     },
     "result": {
