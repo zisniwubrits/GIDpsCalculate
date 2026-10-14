@@ -745,7 +745,7 @@ describe("App 集成（假后端 + 真 schema）", () => {
     expect(card).toHaveClass("card-role-box");
     expect(card.closest(".react-flow__node")).toHaveClass("node-role-box");
     // 默认名 角色1（抽象角色，名字随用户改）
-    expect(within(card).getByText("角色 · 角色1")).toBeInTheDocument();
+    expect(within(card).getByText("角色1")).toBeInTheDocument();
     // 画布上**不再显示**那句长说明（已写进 F1 教程），区域里只留「角色名」输入框
     expect(within(card).queryByText(/这是背景标记/)).toBeNull();
     expect(within(card).queryByText(/当前 \d+ 张卡片/)).toBeNull();
@@ -757,7 +757,7 @@ describe("App 集成（假后端 + 真 schema）", () => {
     // 真实浏览器里 `.react-flow__node.node-role-box input { pointer-events: auto }` 会放行它。
     const nameInput = within(card).getByDisplayValue("角色1");
     fireEvent.change(nameInput, { target: { value: "主C" } });
-    await waitFor(() => expect(within(card).getByText("角色 · 主C")).toBeInTheDocument());
+    await waitFor(() => expect(within(card).getByText("主C")).toBeInTheDocument());
   });
 
   it("求值载荷里每张卡都带 role 字段（默认空串），容器自身也是空串", async () => {    const user = userEvent.setup();
@@ -803,7 +803,7 @@ describe("App 集成（假后端 + 真 schema）", () => {
     expect(panel).not.toHaveTextContent("crit_rate");
 
     // 在「角色面板…」里勾上 crit_rate → 确定 → 写进 panel_show，画布面板按勾选显示
-    fireEvent.contextMenu(within(card).getByText("角色 · 角色1"));
+    fireEvent.contextMenu(within(card).getByText("角色1"));
     await user.click(await screen.findByText("角色面板…"));
     const dialog = await screen.findByTestId("role-panel-dialog");
     await user.click(within(dialog).getByTestId("panel-show-crit_rate"));
@@ -820,7 +820,7 @@ describe("App 集成（假后端 + 真 schema）", () => {
     await addCard(user, "role");
     const card = await screen.findByTestId("card-n1");
 
-    fireEvent.contextMenu(within(card).getByText("角色 · 角色1"));
+    fireEvent.contextMenu(within(card).getByText("角色1"));
     await user.click(await screen.findByText("角色面板…"));
 
     const dialog = await screen.findByTestId("role-panel-dialog");
@@ -848,7 +848,7 @@ describe("App 集成（假后端 + 真 schema）", () => {
 
     // 把角色名改成 火神（假后端对「火神」有统计数据）
     fireEvent.change(within(card).getByDisplayValue("角色1"), { target: { value: "火神" } });
-    fireEvent.contextMenu(within(card).getByText("角色 · 火神"));
+    fireEvent.contextMenu(within(card).getByText("火神"));
     await user.click(await screen.findByText("角色面板…"));
 
     const dialog = await screen.findByTestId("role-panel-dialog");
@@ -918,7 +918,7 @@ describe("App 集成（假后端 + 真 schema）", () => {
     await addCard(user, "role");
     const card = await screen.findByTestId("card-n1");
 
-    fireEvent.contextMenu(within(card).getByText("角色 · 角色1"));
+    fireEvent.contextMenu(within(card).getByText("角色1"));
     await user.click(await screen.findByText("角色面板…"));
 
     const dialog = await screen.findByTestId("role-panel-dialog");

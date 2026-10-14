@@ -149,7 +149,7 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
   );
 
   // 标题栏文案：
-  //  * 角色容器 → 「角色 · 自定义角色名」
+  //  * 角色容器 → 只显示角色名（用户要求：顶部不要再挂「角色 · 」前缀）
   //  * 计算卡 → 它自己的标题（历史行为）
   //  * 其余 → 卡片类型（命名后的名字另挂徽标，见下面的 card-name-chip）
   const cardName = String(node.fields.card_name ?? "").trim();
@@ -158,7 +158,7 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
   const title = collapsed
     ? spec.label
     : node.type === "role"
-      ? `角色 · ${String(node.fields.role_name ?? "").trim() || "未命名"}`
+      ? String(node.fields.role_name ?? "").trim() || "未命名"
       : baseTitle;
 
   const body = collapsed ? null : (

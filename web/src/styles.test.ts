@@ -205,10 +205,13 @@ describe("角色容器面板", () => {
     const head = ruleBody(".card-role-box > .card-head");
     expect(head).toMatch(/border-radius:\s*8px 8px 0 0/);
     expect(head).toMatch(/font-size:\s*12px/);
-    // 角色名一行排到面板之前（order），面板收下圆角
-    expect(ruleBody(".card-role-box > .card-body")).toMatch(/order:\s*1/);
+    // 相对位置保持原样：**不重排**（曾经用 order 把角色名提到面板前，用户要求改回来）
+    expect(ruleBody(".card-role-box > .card-body")).not.toMatch(/order:/);
+    expect(ruleBody(".card-role-box > .role-panel")).not.toMatch(/order:/);
+    // 角色名一行只带左右描边 → 与标牌、面板连成一张卡片
+    expect(ruleBody(".card-role-box > .card-body")).toMatch(/padding:\s*4px 7px/);
     const panel = ruleBody(".card-role-box > .role-panel");
-    expect(panel).toMatch(/order:\s*2/);
+    expect(panel).toMatch(/border-bottom:\s*1px solid var\(--line\)/);
     expect(panel).toMatch(/border-radius:\s*0 0 8px 8px/);
     // 面板内部：一行一个属性，字段名灰、数值右对齐，含拐暖色
     expect(ruleBody(".role-panel .rp-row")).toMatch(/grid-template-columns:\s*84px 1fr/);

@@ -469,15 +469,13 @@ textarea:focus {
   color: var(--accent);
 }
 
-/* 角色名一行：紧跟标记牌，排在面板之前 */
+/* 角色名一行：只带左右描边，与上下两块连成一张卡片（位置保持原样，不重排） */
 .card-role-box > .card-body {
-  order: 1;
   padding: 4px 7px;
 }
 
-/* 快速查看面板：在最后，收底部的圆角 */
+/* 快速查看面板：收底部的圆角（位置保持原样，不重排） */
 .card-role-box > .role-panel {
-  order: 2;
   margin-bottom: 3px;
   border-bottom: 1px solid var(--line);
   border-radius: 0 0 8px 8px;
