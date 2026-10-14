@@ -161,7 +161,9 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
       ? String(node.fields.role_name ?? "").trim() || "未命名"
       : baseTitle;
 
-  const body = collapsed ? null : (
+  // 角色卡没有可见字段（角色名改成右键「设置角色名…」了）→ 不渲染空的卡片体
+  const body =
+    collapsed || (spec.fields.length === 0 && !spec.table) ? null : (
     <div
       className={`card-body${spec.bare ? " card-body-bare" : ""}${
         spec.table ? " card-body-table" : ""

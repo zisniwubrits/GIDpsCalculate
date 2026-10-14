@@ -620,9 +620,9 @@ NODE_TYPES: dict = {
     # 变量作用域（角色::变量 的就近解析）由 graph.py 负责。
     "role": dict(title="角色", label="角色", group="工具", inputs=0,
                  compute=_t_text, isolated=True, no_output=True, resizable=True,
-                 role_card=True, fields=[
+                 role_card=True, fields=[], hidden_fields=[
+        # 角色名：改成右键标题栏「设置角色名…」里改（卡面上不再放输入框）
         _F("role_name", "角色名", "", "text"),
-    ], hidden_fields=[
         # 面板宏：右键「角色面板…」弹窗里编辑（写 `宏 = 值` 多行），只存不渲染
         _F("panel", "面板", "", "textbox"),
         # 画布上那块面板**显示哪些宏**（空格/逗号分隔的宏名；留空 = 只显示已有值的那些）

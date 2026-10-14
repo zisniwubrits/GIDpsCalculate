@@ -1169,14 +1169,7 @@
       "label": "角色",
       "group": "工具",
       "inputs": 0,
-      "fields": [
-        {
-          "key": "role_name",
-          "label": "角色名",
-          "default": "",
-          "kind": "text"
-        }
-      ],
+      "fields": [],
       "defaults": {
         "role_name": "",
         "panel": "",
@@ -1197,6 +1190,7 @@
       "sink": false,
       "table": null,
       "hidden_fields": [
+        "role_name",
         "panel",
         "panel_show"
       ]

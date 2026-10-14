@@ -751,12 +751,13 @@ describe("App 集成（假后端 + 真 schema）", () => {
     expect(within(card).queryByText(/当前 \d+ 张卡片/)).toBeNull();
     // 区域整体不吃鼠标事件（内联样式，最稳）—— 否则光标是抓手、也拖不出框选
     expect(card.closest(".react-flow__node")).toHaveStyle({ pointerEvents: "none" });
-    // 角色名可改，标题栏跟着变。
-    // 用 fireEvent 而不是 user.type：vitest 里不加载 styles.css（`css: false`），
-    // 于是输入框从节点内联样式**继承**到 pointer-events:none，user-event 会拒绝输入；
-    // 真实浏览器里 `.react-flow__node.node-role-box input { pointer-events: auto }` 会放行它。
-    const nameInput = within(card).getByDisplayValue("角色1");
-    fireEvent.change(nameInput, { target: { value: "主C" } });
+    // 角色名改到右键菜单里设置（卡面上不再有输入框）
+    expect(within(card).queryByDisplayValue("角色1")).toBeNull();
+    fireEvent.contextMenu(within(card).getByText("角色1"));
+    await user.click(await screen.findByText("设置角色名…"));
+    const dlg = await screen.findByTestId("role-name-dialog");
+    fireEvent.change(within(dlg).getByTestId("role-name-input"), { target: { value: "主C" } });
+    await user.click(within(dlg).getByRole("button", { name: "确定" }));
     await waitFor(() => expect(within(card).getByText("主C")).toBeInTheDocument());
   });
 
@@ -846,8 +847,15 @@ describe("App 集成（假后端 + 真 schema）", () => {
     await addCard(user, "role");
     const card = await screen.findByTestId("card-n1");
 
-    // 把角色名改成 火神（假后端对「火神」有统计数据）
-    fireEvent.change(within(card).getByDisplayValue("角色1"), { target: { value: "火神" } });
+    // 把角色名改成 火神（假后端对「火神」有统计数据）—— 现在走右键「设置角色名…」
+    fireEvent.contextMenu(within(card).getByText("角色1"));
+    await user.click(await screen.findByText("设置角色名…"));
+    const nameDlg = await screen.findByTestId("role-name-dialog");
+    fireEvent.change(within(nameDlg).getByTestId("role-name-input"), {
+      target: { value: "火神" },
+    });
+    await user.click(within(nameDlg).getByRole("button", { name: "确定" }));
+
     fireEvent.contextMenu(within(card).getByText("火神"));
     await user.click(await screen.findByText("角色面板…"));
 

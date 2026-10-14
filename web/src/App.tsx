@@ -30,6 +30,7 @@ import {
   NameCardDialog,
   NewProjectDialog,
   ResultVarsDialog,
+  RoleNameDialog,
   RolePanelDialog,
 } from "./components/Dialogs";
 import Sidebar from "./components/Sidebar";
@@ -133,6 +134,8 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
   const [nameDialog, setNameDialog] = useState<string | null>(null);
   /** 正在打开「角色面板…」的节点 id（null = 没打开） */
   const [panelDialog, setPanelDialog] = useState<string | null>(null);
+  /** 正在「设置角色名…」的节点 id（null = 没打开） */
+  const [roleNameDialog, setRoleNameDialog] = useState<string | null>(null);
   const [showHelp, setShowHelp] = useState(false);
   const [selectedEdge, setSelectedEdge] = useState<string | null>(null);
   const [hoverId, setHoverId] = useState<string | null>(null);
@@ -594,6 +597,7 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
       });
     }
     if (spec.role_card) {
+      items.push({ label: "设置角色名…", onClick: () => setRoleNameDialog(menu.id) });
       items.push({ label: "角色面板…", onClick: () => setPanelDialog(menu.id) });
     } else {
       items.push({ label: "命名卡片…", onClick: () => setNameDialog(menu.id) });
@@ -904,6 +908,19 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
             setNameDialog(null);
           }}
           onClose={() => setNameDialog(null)}
+        />
+      ) : null}
+
+      {roleNameDialog ? (
+        <RoleNameDialog
+          initialName={String(
+            nodes.find((n) => n.id === roleNameDialog)?.fields.role_name ?? "",
+          ).trim()}
+          onSave={(name) => {
+            onField(roleNameDialog, "role_name", name);
+            setRoleNameDialog(null);
+          }}
+          onClose={() => setRoleNameDialog(null)}
         />
       ) : null}
 

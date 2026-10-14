@@ -299,6 +299,69 @@ export function RolePanelDialog({
   );
 }
 
+export interface RoleNameDialogProps {
+  initialName: string;
+  onSave: (name: string) => void;
+  onClose: () => void;
+}
+
+/**
+ * 设置角色名（右键角色标记的标题栏打开）。
+ * 角色名原来放在卡面上的单行输入框里，用户要求改成右键设置 —— 卡面省下这一行，
+ * 也就能把卡片收窄。
+ */
+export function RoleNameDialog({ initialName, onSave, onClose }: RoleNameDialogProps) {
+  const [name, setName] = useState(initialName);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div className="modal-mask" onMouseDown={onClose}>
+      <div
+        className="modal"
+        role="dialog"
+        aria-label="设置角色名"
+        data-testid="role-name-dialog"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <h2>设置角色名</h2>
+        <p className="modal-hint">
+          角色名用来给这个命名空间里的变量加前缀（写 <code>角色名::变量名</code> 引用），
+          所以不能带空格、<code>::</code> 或连续下划线；名字同样会被「拐力箭头」引用。
+        </p>
+        <label className="modal-row">
+          <span>角色名</span>
+          <input
+            value={name}
+            data-testid="role-name-input"
+            placeholder="例如 火神 / 主C / 辅助"
+            autoFocus
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") onSave(name.trim());
+            }}
+          />
+        </label>
+        <div className="modal-actions">
+          <span className="grow" />
+          <button type="button" onClick={onClose}>
+            取消
+          </button>
+          <button type="button" className="primary" onClick={() => onSave(name.trim())}>
+            确定
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export interface NewProjectDialogProps {
   /** 当前工程名（预填，方便"另存为新项目"式的改名） */
   initialName: string;

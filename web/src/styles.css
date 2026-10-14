@@ -386,12 +386,13 @@ textarea:focus {
   line-height: 1.5;
 }
 
-/* 字段行与普通卡片的 .f-row 同构：左边字段名（灰）、右边值，数值右对齐一列对齐 */
+/* 字段行：宏名与值**挨在一起**（便于扫读；不再把值右推到卡片另一头） */
 .role-panel .rp-row {
   display: grid;
-  grid-template-columns: 84px 1fr;
-  align-items: center;
-  gap: 5px;
+  grid-template-columns: auto auto;
+  justify-content: start;
+  align-items: baseline;
+  gap: 6px;
 }
 
 .role-panel .rp-key {
@@ -404,7 +405,6 @@ textarea:focus {
 
 .role-panel .rp-val {
   color: var(--text);
-  text-align: right;
 }
 
 /* 含拐的面板项（自身 + 收进来的）用暖色标出来 */
@@ -455,9 +455,8 @@ textarea:focus {
   /* 不许纵向拉伸：.card-body 默认 flex: 1 1 auto，会把这块撑满整个角色区域，
      看起来就是"卡片纵向无限大"（用户反馈） */
   flex: 0 0 auto;
-  /* 宽度要放得下「角色名 + 输入框」（84 + 5 + 140 + 内边距），
-     否则内容溢出会出现横向滚动条、还会把下圆角盖掉（用户反馈） */
-  width: 260px;
+  /* 卡面只剩「标记牌 + 面板」两行，宽度可以收窄（角色名改成右键设置了） */
+  width: 150px;
   max-width: 100%;
   overflow: hidden;
   margin: 0 3px;
@@ -478,14 +477,10 @@ textarea:focus {
   color: var(--accent);
 }
 
-/* 面板行：卡片中段，只有左右描边（位置保持原样，不重排） */
+/* 面板行：卡片中段（位置保持原样，不重排）。
+   角色名改成右键设置了 → 卡面只剩「标记牌 + 面板」，所以收底就落在面板上 */
 .card-role-box > .role-panel {
   padding: 3px 7px;
-}
-
-/* 角色名一行：卡片最后一块，收下圆角与底边（位置保持原样，不重排） */
-.card-role-box > .card-body {
-  padding: 4px 7px;
   margin-bottom: 3px;
   border-bottom: 1px solid var(--line);
   border-radius: 0 0 8px 8px;
