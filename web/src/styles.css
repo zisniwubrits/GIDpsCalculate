@@ -386,24 +386,23 @@ textarea:focus {
   line-height: 1.5;
 }
 
-/* 字段行：宏名与值**挨在一起**（便于扫读；不再把值右推到卡片另一头） */
+/* 字段行：宏名在左、**数值右对齐**（一列对齐，便于纵向扫读）；
+   卡片宽度按内容自适应，所以长名字也不会被截断 */
 .role-panel .rp-row {
   display: grid;
-  grid-template-columns: auto auto;
-  justify-content: start;
+  grid-template-columns: auto 1fr;
   align-items: baseline;
   gap: 6px;
 }
 
 .role-panel .rp-key {
-  overflow: hidden;
   white-space: nowrap;
-  text-overflow: ellipsis;
   font-family: Consolas, "Courier New", "Microsoft YaHei", monospace;
   color: var(--muted);
 }
 
 .role-panel .rp-val {
+  text-align: right;
   color: var(--text);
 }
 
@@ -431,6 +430,12 @@ textarea:focus {
   border: 1px dashed #a9c2d8;
   border-radius: 12px;
   box-shadow: none;
+  /* 标记牌与面板用**单列网格**排版：列宽 = 内容最宽的那块（两块因此同宽），
+     最少 150px、随内容变宽 → 长宏名/长数值不会被截断，也不会出现滚动条 */
+  display: grid;
+  grid-template-columns: minmax(150px, max-content);
+  align-content: start;
+  justify-content: start;
 }
 
 .card-role-box .card-head {
@@ -452,13 +457,9 @@ textarea:focus {
 .card-role-box > .card-body,
 .card-role-box > .role-panel {
   align-self: flex-start;
-  /* 不许纵向拉伸：.card-body 默认 flex: 1 1 auto，会把这块撑满整个角色区域，
-     看起来就是"卡片纵向无限大"（用户反馈） */
-  flex: 0 0 auto;
-  /* 卡面只剩「标记牌 + 面板」两行，宽度可以收窄（角色名改成右键设置了） */
-  width: 150px;
+  /* 宽度交给上面的单列网格统一决定（两块同宽、按内容自适应）：
+     这里只负责"看起来是同一张卡片"的皮 */
   max-width: 100%;
-  overflow: hidden;
   margin: 0 3px;
   background: var(--card-bg);
   border-left: 1px solid var(--line);

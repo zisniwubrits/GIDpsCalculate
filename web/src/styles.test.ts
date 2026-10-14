@@ -207,22 +207,26 @@ describe("角色容器面板", () => {
     expect(head).toMatch(/font-size:\s*12px/);
     // 不重排（相对位置与 DOM 顺序一致）
     expect(ruleBody(".card-role-box > .role-panel")).not.toMatch(/order:/);
-    // 两块同宽（卡面只有两行，可以收窄）；不许纵向拉伸、不许出滚动条
+    // 两块同宽靠**单列网格**：列宽 minmax(150px, max-content) —— 宽度随内容自适应，
+    // 因此长宏名/长数值既不会被截断、也不会出现滚动条
+    const box = ruleBody(".card-role-box");
+    expect(box).toMatch(/display:\s*grid/);
+    expect(box).toMatch(/grid-template-columns:\s*minmax\(150px,\s*max-content\)/);
     for (const sel of [".card-role-box > .card-head", ".card-role-box > .role-panel"]) {
-      const body = ruleBodyInList(sel);
-      expect(body).toMatch(/width:\s*150px/);
-      expect(body).toMatch(/flex:\s*0 0 auto/);
-      expect(body).toMatch(/overflow:\s*hidden/);
+      const piece = ruleBodyInList(sel);
+      expect(piece).not.toMatch(/overflow:\s*hidden/);   // 不许裁切
+      expect(piece).toMatch(/max-width:\s*100%/);
     }
     // 最后一块（面板）收下圆角与底边
     const panel = ruleBody(".card-role-box > .role-panel");
     expect(panel).toMatch(/border-bottom:\s*1px solid var\(--line\)/);
     expect(panel).toMatch(/border-radius:\s*0 0 8px 8px/);
-    // 面板里"宏名 + 值"挨在一起（便于查看），不再把值推到另一头
-    expect(ruleBody(".role-panel .rp-row")).toMatch(/grid-template-columns:\s*auto auto/);
-    expect(ruleBody(".role-panel .rp-row")).toMatch(/justify-content:\s*start/);
-    expect(ruleBody(".role-panel .rp-key")).toMatch(/color:\s*var\(--muted\)/);
-    expect(ruleBody(".role-panel .rp-val")).not.toMatch(/text-align:\s*right/);
+    // 面板里"宏名在左、数值右对齐"，且宏名不省略号（不截断）
+    expect(ruleBody(".role-panel .rp-row")).toMatch(/grid-template-columns:\s*auto 1fr/);
+    const key = ruleBody(".role-panel .rp-key");
+    expect(key).toMatch(/color:\s*var\(--muted\)/);
+    expect(key).not.toMatch(/text-overflow:\s*ellipsis/);
+    expect(ruleBody(".role-panel .rp-val")).toMatch(/text-align:\s*right/);
     expect(ruleBody(".role-panel .rp-buffed")).toMatch(/color:\s*var\(--warn\)/);
   });
 
