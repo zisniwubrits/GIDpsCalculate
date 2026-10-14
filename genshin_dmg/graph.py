@@ -28,6 +28,7 @@ from genshin_dmg.expr import (
     env_key,
     fmt_num,
     is_sub_ns,
+    parse_sub_ns,
     plain_num,
     qualify,
     to_bool,
@@ -232,6 +233,8 @@ class Graph:
         self._buff_totals: dict = {}
         # 拐力统计（给「角色面板」弹窗）：{角色: {"out": [...], "in": [...]}}
         self._buff_stats: dict = {}
+        # 用户显式声明过 `out::X = ...` 的全名键（这些不做派生覆盖）
+        self._user_sub_ns: set = set()
         # 当时算不出来、等拐力就绪后再补算的定义（引用了 in::/own:: 等）
         self._deferred: list = []
 
@@ -297,25 +300,45 @@ class Graph:
                 continue
             grants = out.setdefault(role_to, {})
             for macro in _nodes.PANEL_MACRO_KEYS:
-                val = self.role_panel_value(base_vars, role_from, macro)
+                val = self.role_out_value(base_vars, role_from, macro)
                 if val:
                     grants[macro] = grants.get(macro, 0.0) + val
         return out
 
     @staticmethod
-    def role_panel_value(base_vars: dict, role: str, macro: str) -> float:
-        """某角色面板里某个宏的值（本角色命名空间优先，其次全局；没有则 0）。
+    def role_own_value(base_vars: dict, role: str, macro: str) -> float:
+        """某角色**自身**的面板值（own:: 优先，其次基础名，最后全局；没有则 0）。
 
-        用**第一轮**变量表算（不含拐力），从而保证"不传递"。
-        优先读 ``角色::own::宏``（语义最明确），没有才退回 ``角色::宏``。
+        用于"生效值 = 自身 + 收进来的"，所以**不**读 out::（对外值可能被单独声明）。
         """
-        for key in (env_key(qualify("%s%s%s" % (SUB_OWN, NS_SEP, macro), role)),
-                    env_key(qualify(macro, role)),
-                    env_key(macro)):
-            if key in base_vars:
-                val = base_vars[key]
+        return Graph._first_value(base_vars, (
+            env_key(qualify("%s%s%s" % (SUB_OWN, NS_SEP, macro), role)),
+            env_key(qualify(macro, role)),
+            env_key(macro),
+        ))
+
+    @staticmethod
+    def role_out_value(base_vars: dict, role: str, macro: str) -> float:
+        """某角色**对外提供**的值（拐力箭头用它）：显式声明的 out:: 优先，否则就是自身。"""
+        out = Graph._first_value(base_vars, (
+            env_key(qualify("%s%s%s" % (SUB_OUT, NS_SEP, macro), role)),
+        ), default=None)
+        if out is not None:
+            return out
+        return Graph.role_own_value(base_vars, role, macro)
+
+    @staticmethod
+    def _first_value(vars_: dict, keys, default: float = 0.0) -> float:
+        for key in keys:
+            if key in vars_:
+                val = vars_[key]
                 return float(val() if callable(val) else val)
-        return 0.0
+        return default
+
+    @staticmethod
+    def role_panel_value(base_vars: dict, role: str, macro: str) -> float:
+        """（兼容旧调用）某角色面板里某个宏的自身值。"""
+        return Graph.role_own_value(base_vars, role, macro)
 
     def _apply_role_panels(self, env: dict) -> None:
         """把每张角色卡「面板」字段里的宏登记成该角色的变量（``角色::宏``）。
@@ -335,17 +358,26 @@ class Graph:
                     parsed = split_var_line(line)
                     if parsed is None:
                         continue
-                    macro = parsed[0].strip()
+                    kind, _explicit, macro = parse_sub_ns(parsed[0].strip())
                     if macro not in _nodes.PANEL_MACRO_KEYS:
                         continue                    # 只认固定词表
+                    if kind == SUB_IN:
+                        continue                    # in:: 派生，写它无意义
+                    own_key = env_key(qualify(macro, role))
+                    key = own_key
+                    if kind == SUB_OUT:
+                        key = env_key(qualify("%s%s%s" % (SUB_OUT, NS_SEP, macro), role))
                     try:
                         value = _nodes.eval_field(parsed[1])
                     except ValueError:
                         # 同变量卡片：可能是引用了 in::/own::（拐力算完才有）→ 等会儿补算
-                        self._defer("panel", env_key(qualify(macro, role)), parsed[1],
-                                    node, role=role)
+                        self._defer("panel", key, parsed[1], node, role=role)
                         continue                    # 算不出来的行忽略
-                    env[env_key(qualify(macro, role))] = value
+                    env[key] = value
+                    if kind == SUB_OUT:
+                        self._user_sub_ns.add(key)
+                        if own_key not in env:
+                            env[own_key] = value
                     # 同一张角色卡里的后续面板项要能引用刚定义的（如 atk_pct = atk * 0.1）
                     _nodes.use_env(self.scoped_env(node, env, role=role))
             finally:
@@ -383,8 +415,14 @@ class Graph:
             for name in names:
                 own = float(own_vars.get(prefix + name, 0.0) or 0.0)
                 inc = float(grants.get(name, 0.0) or 0.0)
+                out_key = prefix + SUB_OUT + NS_JOIN + name
+                if out_key in self._user_sub_ns and out_key in own_vars:
+                    # 用户显式声明过 `out::X = ...`（"我对外提供这么多"）→ 以他写的为准
+                    out_val = float(own_vars.get(out_key, 0.0) or 0.0)
+                else:
+                    out_val = own                   # 默认：宏就是对外值
                 self.variables[prefix + SUB_OWN + NS_JOIN + name] = own
-                self.variables[prefix + SUB_OUT + NS_JOIN + name] = own   # 对外提供 = 自身
+                self.variables[out_key] = out_val
                 self.variables[prefix + SUB_IN + NS_JOIN + name] = inc
 
     # -- 延迟补算（引用了 in::/own:: 这类要等拐力才知道的名字）-----------------
@@ -427,7 +465,7 @@ class Graph:
         self._buff_totals = {}
         for role, grants in self.buffs.items():
             self._buff_totals[role] = {
-                macro: self.role_panel_value(own, role, macro) + extra
+                macro: self.role_own_value(own, role, macro) + extra
                 for macro, extra in grants.items()
             }
         for role, totals in self._buff_totals.items():
@@ -454,7 +492,7 @@ class Graph:
             if not ra or not rb or ra == rb:
                 continue
             for macro in _nodes.PANEL_MACRO_KEYS:
-                val = self.role_panel_value(base_vars, ra, macro)
+                val = self.role_out_value(base_vars, ra, macro)
                 if not val:
                     continue
                 row = dict(macro=macro, label=labels.get(macro, macro), value=val)
@@ -484,7 +522,8 @@ class Graph:
         return None
 
     def warnings(self) -> list:
-        out = []
+        # 「用 in::同名 定义自己」放最前：它是用户主动写的、最容易出乎意料的一条
+        out = self._double_count_warnings()
         if self.result_node() is None:
             out.append("没有「结果」卡片：请加一张 ★结果 卡片并把链条接到它上面")
         elif "crit" not in self.chain_types():
@@ -492,6 +531,38 @@ class Graph:
         dup = self.duplicate_card_names()
         if dup:
             out.append("卡片名重复（只有第一张生效）：%s" % "、".join(dup))
+        return out
+
+    def _double_count_warnings(self) -> list:
+        """提醒"用 in::同名 定义自己"会翻倍（自身 + 收进来的各算一次）。
+
+        这是四个名字的定义使然，不是 bug；但用户很容易这么写（以为 in:: 就是"我要的值"），
+        所以给一条可操作的提示：删掉这行，裸名本身就含拐。
+        """
+        seen, out = set(), []
+        for node in self.nodes.values():
+            if node.type == "var":
+                lines = (node.fields.get("defs") or "").splitlines()
+            elif node.type == "role":
+                lines = (node.fields.get("panel") or "").splitlines()
+            else:
+                continue
+            for line in lines:
+                parsed = split_var_line(line)
+                if parsed is None:
+                    continue
+                name = valid_var_name(parsed[0]) or parsed[0].strip()
+                kind, _explicit, base = parse_sub_ns(name)
+                if kind in (SUB_OUT, SUB_IN) or not base:
+                    continue
+                if ("%s%s%s" % (SUB_IN, NS_SEP, base)) not in parsed[1]:
+                    continue
+                if base in seen:
+                    continue
+                seen.add(base)
+                out.append(
+                    "「%s = …」里用了 in::%s 定义自己：生效值会翻倍（自身 + 收进来的各算一次）；"
+                    "这行通常不需要，删掉它 %s 本身就已经含拐" % (base, base, base))
         return out
 
     # -- 卡片命名（`卡片名::输出`）-----------------------------------------
@@ -670,6 +741,7 @@ class Graph:
         self._cardvars = None           # 每次求值重建命名卡片的惰性表
         self._card_stack = set()
         self._deferred = []             # 本次求值里"当时算不出来"的定义（稍后补算）
+        self._user_sub_ns = set()       # 本次求值里用户显式声明的 out:: 键
         # 清掉上一次求值的运行时缓存：同一个 Graph 对象可能被反复求值
         # （测试里就是这样），残留的拐力值会串进新一轮的解析
         self.buffs = {}
@@ -897,8 +969,18 @@ class Graph:
                     name = valid_var_name(parsed[0])
                     if not name:
                         continue                # 名字非法（含 __ 等）→ 不定义
-                    display = qualify(name, node.role)
+                    kind, explicit_role, base = parse_sub_ns(name)
+                    role_here = explicit_role or node.role
+                    if kind == SUB_IN:
+                        # in:: 是"收进来的"，由拐力派生出来；用户写它没有意义 → 忽略
+                        continue
+                    if kind:
+                        name = base
+                    display = qualify(name, role_here)
                     key = env_key(display)
+                    if kind == SUB_OUT:
+                        # 显式声明"对外提供的值"：用独立的全名键存（拐力箭头读它）
+                        key = env_key(qualify("%s%s%s" % (SUB_OUT, NS_SEP, base), role_here))
                     if key in locked:
                         continue
                     try:
@@ -909,6 +991,12 @@ class Graph:
                         self._defer("var", key, parsed[1], node)
                         continue
                     env[key] = value
+                    if kind == SUB_OUT:
+                        self._user_sub_ns.add(key)
+                        # 没另外定义自身值时，对外值同时就是自身值（"宏就是对外值"的默认）
+                        base_key = env_key(display)
+                        if base_key not in env:
+                            env[base_key] = value
                     # 同一张卡的后续行要能引用刚定义的变量：重建一次作用域
                     _nodes.use_env(self.scoped_env(node, env))
             finally:

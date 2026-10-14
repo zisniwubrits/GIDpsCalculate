@@ -128,6 +128,18 @@ def is_sub_ns(name: str) -> bool:
     return any(p in SUB_NS for p in parts[:-1]) if len(parts) > 1 else False
 
 
+def parse_sub_ns(name: str):
+    """拆出子命名空间写法：``b::out::atk`` → ``("out", "b", "atk")``。
+
+    没有子命名空间时返回 ``(None, "", 原名)``；``b::atk`` 这种普通限定名也走后者。
+    """
+    parts = split_ns(name)
+    if len(parts) >= 2 and parts[-2] in SUB_NS:
+        role = NS_SEP.join(parts[:-2]) if len(parts) > 2 else ""
+        return parts[-2], role, parts[-1]
+    return None, "", NS_SEP.join(parts)
+
+
 def env_key(name: str) -> str:
     """展示名 → 变量表内部键（``角色::变量`` → ``角色__变量``；普通名原样）。"""
     return mangle((name or "").strip())

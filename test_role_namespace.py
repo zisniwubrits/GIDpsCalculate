@@ -636,6 +636,71 @@ class TestDeferredDefinitions(unittest.TestCase):
         self.assertIn("未定义变量", g.evaluate()["nodes"]["c1"]["display"])
 
 
+class TestOutDeclarations(unittest.TestCase):
+    """显式声明"对外提供的值"：``out::X = 值``（角标：拐力箭头用它，默认才 = 自身）。
+
+    用户实战场景（面板外拐）：b 只写 ``out::atk_pct = 40``，拖箭头 b→a，
+    a 什么都不用写 —— a 的 ``atk_pct`` 本身就是 40。
+    """
+
+    def build(self, b_defs="out::atk_pct = 40", with_a_def=False):
+        g = Graph()
+        g.add(GraphNode("rb", "role", fields={"role_name": "b"}))
+        g.add(var_card("vb", b_defs, role="b"))
+        g.add(GraphNode("ra", "role", fields={"role_name": "a"}))
+        if with_a_def:
+            g.add(var_card("va", "atk_pct = in::atk_pct", role="a"))
+        g.add(GraphNode("base", "attr",
+                        fields={"stat_base": "1000", "stat_big": "atk_pct", "stat_flat": "0"},
+                        role="a"))
+        g.links.append(Link("rb", "ra", 0))
+        return g
+
+    def test_out_declaration_grants(self):
+        """b 只声明 out::atk_pct = 40，箭头 b→a；a 什么都不用写就吃 40。"""
+        g = self.build()
+        # 属性源的大增益% 写 atk_pct → 1000×(1+0.40) = 1400
+        self.assertEqual(g.evaluate()["nodes"]["base"]["values"]["noncrit"], 1400)
+        g.add(GraphNode("c1", "calc", fields={"expr": "in::atk_pct"}, role="a"))
+        g.add(GraphNode("x", "calc", fields={"expr": "atk_pct"}, role="a"))
+        out = g.evaluate()
+        self.assertEqual(out["nodes"]["c1"]["values"]["noncrit"], 40)   # 收进来的
+        self.assertEqual(out["nodes"]["x"]["values"]["noncrit"], 40)    # 生效值（自身 0 + 40）
+
+    def test_out_user_definition_is_not_overwritten(self):
+        """回归：以前 out:: 是派生键，用户写 40 会被覆盖成 0。"""
+        g = self.build()
+        names = {(v["name"], v["text"]) for v in g.evaluate()["variables"]}
+        self.assertIn(("b::atk_pct", "40"), names)      # 没另外定义自身 → 同时作为自身值
+
+    def test_out_can_differ_from_own(self):
+        """显式 out:: 与自身值可以不同：自己面板 10、对外提供 40。"""
+        g = self.build(b_defs="atk_pct = 10\nout::atk_pct = 40")
+        g.add(GraphNode("c1", "calc", fields={"expr": "own::atk_pct"}, role="b"))
+        g.add(GraphNode("c2", "calc", fields={"expr": "out::atk_pct"}, role="b"))
+        g.add(GraphNode("c3", "calc", fields={"expr": "in::atk_pct"}, role="a"))
+        out = g.evaluate()
+        self.assertEqual(out["nodes"]["c1"]["values"]["noncrit"], 10)     # 自身
+        self.assertEqual(out["nodes"]["c2"]["values"]["noncrit"], 40)     # 对外
+        self.assertEqual(out["nodes"]["c3"]["values"]["noncrit"], 40)     # 收进来的就是 out
+
+    def test_in_declaration_is_ignored(self):
+        """in:: 是"收进来的"，由拐力派生；用户写它不生效。"""
+        g = self.build()
+        g.add(var_card("vx", "in::atk_pct = 999", role="a"))
+        g.add(GraphNode("c1", "calc", fields={"expr": "in::atk_pct"}, role="a"))
+        self.assertEqual(g.evaluate()["nodes"]["c1"]["values"]["noncrit"], 40)
+
+    def test_double_count_warning(self):
+        """用 in::同名 定义自己 → 给一条可操作的告警（放最前，状态区看得到）。"""
+        g = self.build(with_a_def=True)
+        warns = g.evaluate()["warnings"]
+        self.assertIn("翻倍", warns[0])
+        self.assertIn("删掉它", warns[0])
+        # 没有这种写法时不该出现
+        self.assertFalse([w for w in self.build().evaluate()["warnings"] if "翻倍" in w])
+
+
 class TestRoleNameValidation(unittest.TestCase):
     def test_bad_role_is_treated_as_global(self):
         for bad in ("", "  ", "有 空格", "a__b", "雷神::x", "1abc"):
