@@ -1178,7 +1178,8 @@
         }
       ],
       "defaults": {
-        "role_name": ""
+        "role_name": "",
+        "panel": ""
       },
       "isolated": true,
       "no_output": true,
@@ -1194,7 +1195,9 @@
       "has_factor": false,
       "sink": false,
       "table": null,
-      "hidden_fields": []
+      "hidden_fields": [
+        "panel"
+      ]
     },
     "result": {
       "type": "result",
@@ -1495,6 +1498,78 @@
       }
     ]
   },
+  "panelMacros": [
+    {
+      "key": "atk",
+      "label": "攻击力",
+      "feed": "基础值 / 属性源 → 白值"
+    },
+    {
+      "key": "atk_pct",
+      "label": "攻击%",
+      "feed": "基础值 / 属性源 → 大增益%"
+    },
+    {
+      "key": "atk_flat",
+      "label": "小攻击",
+      "feed": "基础值 / 属性源 → 小增益"
+    },
+    {
+      "key": "crit_rate",
+      "label": "暴击率",
+      "feed": "暴击区 → 暴击率%"
+    },
+    {
+      "key": "crit_dmg",
+      "label": "暴击伤害",
+      "feed": "暴击区 → 暴击伤害%"
+    },
+    {
+      "key": "em",
+      "label": "元素精通",
+      "feed": "增幅反应 / 激化值 / 剧变反应 / 结晶护盾 / 精通增益 → 元素精通"
+    },
+    {
+      "key": "dmg",
+      "label": "增伤",
+      "feed": "增伤区 → 增伤区净%"
+    },
+    {
+      "key": "month_dmg",
+      "label": "月增伤",
+      "feed": "基础提升 → 基础提升%"
+    },
+    {
+      "key": "base_boost",
+      "label": "基础提升",
+      "feed": "基础提升 → 基础提升%"
+    },
+    {
+      "key": "res_shred",
+      "label": "减抗",
+      "feed": "抗性区 → 敌人抗性%（取负）"
+    },
+    {
+      "key": "def_shred",
+      "label": "减防",
+      "feed": "防御区 → 减防%"
+    },
+    {
+      "key": "ignore_def",
+      "label": "无视防御",
+      "feed": "防御区 → 无视防御%"
+    },
+    {
+      "key": "elevate",
+      "label": "擢升",
+      "feed": "擢升 → 擢升%"
+    },
+    {
+      "key": "reaction_dmg",
+      "label": "反应增伤",
+      "feed": "增幅反应 / 剧变反应 → 反应增伤%"
+    }
+  ],
   "tables": {
     "relic": {
       "header": [

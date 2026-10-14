@@ -14,6 +14,8 @@ import {
   graphToJSON,
   ignoredByBoxSelect,
   jsonToGraph,
+  formatPanel,
+  parsePanel,
   makeNode,
   nextNodeId,
   nextRoleName,
@@ -363,8 +365,7 @@ describe("角色容器（抽象角色命名空间）", () => {
     expect(ignoredByBoxSelect(node("n2", "text", [0, 0]))).toBe(false);
   });
 
-  it("拐力箭头（角色→角色）不会被端口范围检查丢掉", () => {
-    // 角色卡没有伤害端口（inputs=0），但拐力箭头走 port 0：
+  it("拐力箭头（角色→角色）不会被端口范围检查丢掉", () => {    // 角色卡没有伤害端口（inputs=0），但拐力箭头走 port 0：
     // 若按 inputs 检查就会被 jsonToGraph 丢掉，存档一保存拐力就没了
     const json = {
       version: 1,
@@ -384,5 +385,21 @@ describe("角色容器（抽象角色命名空间）", () => {
     } as unknown as GraphJSON;
     const back = jsonToGraph(json, schema);
     expect(back.links).toEqual([{ src: "r1", dst: "r2", port: 0 }]);
+  });
+
+  it("角色面板文本解析：认三种分隔符、跳过注释、只收词表里的宏", () => {
+    const keys = ["atk", "atk_pct", "res_shred"];
+    const text = ["# 注释", "atk = 2000", "atk_pct：40", "res_shred: 40", "怪东西 = 5", "", "坏行"].join(
+      "\n",
+    );
+    expect(parsePanel(text, keys)).toEqual({ atk: "2000", atk_pct: "40", res_shred: "40" });
+  });
+
+  it("角色面板文本回写：按词表顺序、空值不写（往返稳定）", () => {
+    const keys = ["atk", "atk_pct", "res_shred"];
+    const text = formatPanel({ res_shred: "40", atk: "2000", atk_pct: "" }, keys);
+    expect(text).toBe("atk = 2000\nres_shred = 40");
+    // 解析回来应该一模一样
+    expect(parsePanel(text, keys)).toEqual({ atk: "2000", res_shred: "40" });
   });
 });

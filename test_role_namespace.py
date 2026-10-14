@@ -379,6 +379,71 @@ class TestBuffArrows(unittest.TestCase):
         self.assertEqual(g.buff_edges(), [("辅助", "火神")])
 
 
+class TestRoleCardPanel(unittest.TestCase):
+    """角色卡自带的「面板」字段（右键「角色面板…」弹窗编辑）与拐力统计。"""
+
+    def build(self, panel_a="atk_pct = 40", panel_b="atk = 1000"):
+        g = Graph()
+        g.add(GraphNode("ra", "role", fields={"role_name": "辅助", "panel": panel_a}))
+        g.add(GraphNode("rb", "role", fields={"role_name": "火神", "panel": panel_b}))
+        return g
+
+    def test_panel_on_role_card_feeds_own_cards(self):
+        g = self.build()
+        g.add(GraphNode("b", "base", fields={"stat_base": "", "multiplier": "100"}, role="火神"))
+        self.assertEqual(g.evaluate()["nodes"]["b"]["values"]["noncrit"], 1000)
+
+    def test_role_card_panel_wins_over_variable_card(self):
+        """面板是"正主"：角色卡上的同名宏覆盖变量卡里的定义。"""
+        g = self.build(panel_b="atk = 1000")
+        g.add(var_card("v", "atk = 500", role="火神"))
+        g.add(GraphNode("b", "base", fields={"stat_base": "", "multiplier": "100"}, role="火神"))
+        self.assertEqual(g.evaluate()["nodes"]["b"]["values"]["noncrit"], 1000)
+
+    def test_panel_grants_through_arrow(self):
+        g = self.build()
+        g.add(GraphNode("b", "base",
+                        fields={"stat_base": "1000", "stat_big": "", "multiplier": "100"},
+                        role="火神"))
+        g.links.append(Link("ra", "rb", 0))
+        self.assertEqual(g.evaluate()["nodes"]["b"]["values"]["noncrit"], 1400)
+
+    def test_panel_ignores_unknown_macro_names(self):
+        g = self.build(panel_b="atk = 1000\n乱写的 = 999")
+        g.add(GraphNode("b", "base", fields={"stat_base": "", "multiplier": "100"}, role="火神"))
+        out = g.evaluate()
+        self.assertEqual(out["nodes"]["b"]["values"]["noncrit"], 1000)
+        self.assertNotIn("火神::乱写的", {v["name"] for v in out["variables"]})
+
+    def test_buff_stats_shape(self):
+        g = self.build()
+        g.links.append(Link("ra", "rb", 0))
+        stats = g.evaluate()["buffStats"]
+
+        self.assertEqual(stats["辅助"]["out"],
+                         [dict(macro="atk_pct", label="攻击%", value=40.0, role="火神")])
+        self.assertEqual(stats["火神"]["in"],
+                         [dict(macro="atk_pct", label="攻击%", value=40.0, role="辅助")])
+        self.assertEqual(stats["辅助"]["in"], [])
+        self.assertEqual(stats["火神"]["out"], [])
+
+    def test_panel_and_buff_markers(self):
+        """卡片上的可见标注：panelFields（哪些字段吃面板）与 buffed（是否含拐）。"""
+        g = self.build()
+        g.add(GraphNode("b", "base", fields={"stat_base": "", "multiplier": "100"}, role="火神"))
+        g.links.append(Link("ra", "rb", 0))
+        info = g.evaluate()["nodes"]["b"]
+
+        self.assertEqual(info["panelFields"], ["白值"])
+        self.assertTrue(info["buffed"])
+        # 没被拐、也没吃面板的卡片不标
+        g2 = self.build()
+        g2.add(GraphNode("b", "base", fields={"stat_base": "1000"}, role="火神"))
+        info2 = g2.evaluate()["nodes"]["b"]
+        self.assertEqual(info2["panelFields"], [])
+        self.assertFalse(info2["buffed"])
+
+
 class TestRoleNameValidation(unittest.TestCase):
     def test_bad_role_is_treated_as_global(self):
         for bad in ("", "  ", "有 空格", "a__b", "雷神::x", "1abc"):

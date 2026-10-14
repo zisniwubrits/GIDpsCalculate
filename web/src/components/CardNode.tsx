@@ -201,6 +201,25 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
     return (
       <div className={`card-foot${node.type === "result" ? " foot-result" : ""}`}>
         <span className="foot-text">{result.display || "—"}</span>
+        {/* 可见标注：这些字段是"留空→吃角色面板"的；本角色还收了拐 */}
+        {result.panelFields?.length ? (
+          <span
+            className="foot-chip"
+            data-testid={`panel-mark-${id}`}
+            title={`这些字段留空，值来自角色面板：${result.panelFields.join("、")}`}
+          >
+            含面板
+          </span>
+        ) : null}
+        {result.buffed ? (
+          <span
+            className="foot-chip foot-chip-buff"
+            data-testid={`buff-mark-${id}`}
+            title="本角色收到了别的角色拐过来的面板加成"
+          >
+            含拐
+          </span>
+        ) : null}
         {spec.copyable ? (
           <button
             type="button"

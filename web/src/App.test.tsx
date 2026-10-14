@@ -53,6 +53,10 @@ function evaluateStub(body: GraphJSON): EvaluateResult {
       boundNames: [],
       plain: "2000",
       plainTriple: ["2000", "4000", "3000"],
+      // 假数据：base 卡标成「含面板 + 含拐」，用来测卡片上的可见标注
+      // （真实判定在后端，见 test_role_namespace.py）
+      panelFields: n.type === "base" ? ["白值"] : [],
+      buffed: n.type === "base",
     };
   }
   const resultNode = body.nodes.find((n) => n.type === "result");
@@ -72,6 +76,11 @@ function evaluateStub(body: GraphJSON): EvaluateResult {
     nodes,
     chainTypes: [],
     warnings: resultNode ? [] : ["没有「结果」卡片：请加一张 ★结果 卡片并把链条接到它上面"],
+    // 「角色面板」弹窗要用的拐力统计（固定造一份：辅助把 攻击%40 拐给火神）
+    buffStats: {
+      辅助: { out: [{ macro: "atk_pct", label: "攻击%", value: 40, role: "火神" }], in: [] },
+      火神: { out: [], in: [{ macro: "atk_pct", label: "攻击%", value: 40, role: "辅助" }] },
+    },
   };
 }
 
@@ -757,8 +766,7 @@ describe("App 集成（假后端 + 真 schema）", () => {
     expect(domOrder[0]).toBe("card-n1");
   });
 
-  it("角色卡有一对拐力端口（左进右出），可以拖箭头把面板值拐给别的角色", async () => {
-    const user = userEvent.setup();
+  it("角色卡有一对拐力端口（左进右出），可以拖箭头把面板值拐给别的角色", async () => {    const user = userEvent.setup();
     await renderApp();
     await addCard(user, "role");
 
@@ -769,6 +777,61 @@ describe("App 集成（假后端 + 真 schema）", () => {
     expect(box.querySelectorAll(".react-flow__handle.port-out")).toHaveLength(1);
     // 端口上写明用途（拖过去 = 上拐）
     expect(box.querySelector(".port-out")?.getAttribute("title")).toContain("拐力");
+  });
+
+  it("右键角色标签 →「角色面板…」：宏表可编辑、并显示拐力统计（OUT/IN）", async () => {    const user = userEvent.setup();
+    await renderApp();
+    await addCard(user, "role");
+    const card = await screen.findByTestId("card-n1");
+
+    fireEvent.contextMenu(within(card).getByText("角色 · 角色1"));
+    await user.click(await screen.findByText("角色面板…"));
+
+    const dialog = await screen.findByTestId("role-panel-dialog");
+    // 宏表来自 schema（中文名也来自后端，不在前端硬编码）
+    expect(within(dialog).getByText("攻击力")).toBeInTheDocument();
+    expect(within(dialog).getByTestId("panel-atk_pct")).toBeInTheDocument();
+    // 拐力统计（角色1 在这份假数据里没有统计 → 两栏都是「无」）
+    expect(within(dialog).getAllByTestId("buff-empty").length).toBe(2);
+
+    // 填一个宏 → 确定 → 写进角色卡的隐藏字段 panel
+    fireEvent.change(within(dialog).getByTestId("panel-atk_pct"), { target: { value: "40" } });
+    await user.click(within(dialog).getByRole("button", { name: "确定" }));
+    await waitFor(() =>
+      expect(lastBody?.nodes[0].fields.panel).toBe("atk_pct = 40"),
+    );
+  });
+
+  it("角色面板弹窗在「火神」名下会显示后端给的 OUT/IN 统计", async () => {
+    const user = userEvent.setup();
+    await renderApp();
+    await addCard(user, "role");
+    const card = await screen.findByTestId("card-n1");
+
+    // 把角色名改成 火神（假后端对「火神」有统计数据）
+    fireEvent.change(within(card).getByDisplayValue("角色1"), { target: { value: "火神" } });
+    fireEvent.contextMenu(within(card).getByText("角色 · 火神"));
+    await user.click(await screen.findByText("角色面板…"));
+
+    const dialog = await screen.findByTestId("role-panel-dialog");
+    // 统计来自后端 /api/evaluate（首次求值完成前是空的，所以这里等它到位）
+    await waitFor(() => expect(within(dialog).getByText("辅助")).toBeInTheDocument());
+    expect(within(dialog).getByText("40")).toBeInTheDocument();     // 数值
+  });
+
+  it("卡片底部标注「含面板」与「含拐」——让人一眼看出在吃面板/拐力", async () => {
+    const user = userEvent.setup();
+    await renderApp();
+    await addCard(user, "base");
+    await addCard(user, "dmg");
+
+    const base = await screen.findByTestId("card-n1");
+    await waitFor(() => expect(within(base).getByTestId("panel-mark-n1")).toBeInTheDocument());
+    expect(within(base).getByTestId("buff-mark-n1")).toHaveTextContent("含拐");
+    // 后端没标的卡片不显示这两个标记
+    const dmg = await screen.findByTestId("card-n2");
+    expect(within(dmg).queryByTestId("buff-mark-n2")).toBeNull();
+    expect(within(dmg).queryByTestId("panel-mark-n2")).toBeNull();
   });
 
   it("右键「命名卡片…」给卡片起名：标题栏挂上名字徽标，名字进工程字段", async () => {

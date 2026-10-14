@@ -25,7 +25,7 @@ import CardNode, { type CardData, type CardRFNode, type MenuKind } from "./compo
 import CardEdge, { type CardRFEdge } from "./components/CardEdge";
 import CanvasWatermark from "./components/CanvasWatermark";
 import ContextMenu, { type MenuItem } from "./components/ContextMenu";
-import { HelpDialog, NameCardDialog, ResultVarsDialog } from "./components/Dialogs";
+import { HelpDialog, NameCardDialog, ResultVarsDialog, RolePanelDialog } from "./components/Dialogs";
 import Sidebar from "./components/Sidebar";
 import Toolbar from "./components/Toolbar";
 import {
@@ -35,12 +35,14 @@ import {
   buildRoleMap,
   connect,
   estimateSize,
+  formatPanel,
   freeSlot,
   graphToJSON,
   ignoredByBoxSelect,
   jsonToGraph,
   makeNode,
   nextNodeId,
+  parsePanel,
   wouldCycle,
   type AlignMode,
   type SizeOf,
@@ -121,6 +123,8 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
   const [resultDialog, setResultDialog] = useState<string | null>(null);
   /** 正在「命名卡片…」的节点 id（null = 没打开） */
   const [nameDialog, setNameDialog] = useState<string | null>(null);
+  /** 正在打开「角色面板…」的节点 id（null = 没打开） */
+  const [panelDialog, setPanelDialog] = useState<string | null>(null);
   const [showHelp, setShowHelp] = useState(false);
   const [selectedEdge, setSelectedEdge] = useState<string | null>(null);
   const [hoverId, setHoverId] = useState<string | null>(null);
@@ -558,8 +562,9 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
         },
       });
     }
-    if (!spec.role_card) {
-      // 角色容器卡不参与命名（它的身份是「角色名」）
+    if (spec.role_card) {
+      items.push({ label: "角色面板…", onClick: () => setPanelDialog(menu.id) });
+    } else {
       items.push({ label: "命名卡片…", onClick: () => setNameDialog(menu.id) });
     }
     items.push({
@@ -842,6 +847,26 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
           onClose={() => setNameDialog(null)}
         />
       ) : null}
+
+      {panelDialog ? (() => {
+        const node = nodes.find((n) => n.id === panelDialog);
+        const roleName = String(node?.fields.role_name ?? "").trim();
+        const keys = schema.panelMacros.map((m) => m.key);
+        const stats = roleName ? evaluation.data?.buffStats?.[roleName] : undefined;
+        return (
+          <RolePanelDialog
+            title={roleName || "未命名"}
+            macros={schema.panelMacros}
+            initial={parsePanel(String(node?.fields.panel ?? ""), keys)}
+            stats={stats}
+            onSave={(values) => {
+              onField(panelDialog, "panel", formatPanel(values, keys));
+              setPanelDialog(null);
+            }}
+            onClose={() => setPanelDialog(null)}
+          />
+        );
+      })() : null}
 
       {showHelp ? (
         <HelpDialog text={help.text} sections={help.sections} onClose={() => setShowHelp(false)} />

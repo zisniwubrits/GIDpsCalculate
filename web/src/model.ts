@@ -109,13 +109,44 @@ export function buildRoleMap(nodes: CardNode[]): Record<string, string> {
 
 /**
  * 框选时要不要**忽略**这张卡片的选中。
-
  * 角色容器是一大块面板，任意框选矩形几乎总会与它相交 —— 而 React Flow 的
  * `getNodesInside` 不看 `selectable`，所以框选一定把它一起选中（随后 Delete 会连
  * 面板一起删掉）。这条规则让「框选」不选中面板：想选它请点它的标题栏。
  */
 export function ignoredByBoxSelect(node: CardNode): boolean {
   return node.type === "role";
+}
+
+// ---------------------------------------------------------------- 角色面板宏
+/**
+ * 解析角色卡「面板」字段里的 ``宏 = 值`` 多行文本（与后端 split_var_line 同规则：
+ * 认 ``=`` / ``：`` / ``:``，跳过空行与 ``#`` 注释，只保留词表里的宏）。
+ */
+export function parsePanel(text: string, keys: readonly string[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const raw of (text ?? "").split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith("#")) continue;
+    const i = line.search(/[=:：]/);
+    if (i <= 0) continue;
+    const key = line.slice(0, i).trim();
+    if (!keys.includes(key)) continue;
+    out[key] = line.slice(i + 1).trim();
+  }
+  return out;
+}
+
+/** 反向：``{宏: 值}`` → 多行文本（空值不写；顺序按词表）。 */
+export function formatPanel(
+  values: Record<string, string>,
+  keys: readonly string[],
+): string {
+  const lines: string[] = [];
+  for (const key of keys) {
+    const v = (values[key] ?? "").trim();
+    if (v) lines.push(`${key} = ${v}`);
+  }
+  return lines.join("\n");
 }
 
 /** 生成不重复的节点 id：n1、n2… */

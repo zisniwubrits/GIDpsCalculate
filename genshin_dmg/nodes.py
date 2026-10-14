@@ -123,11 +123,26 @@ def _attr(get):
 #  1. **卡片字段留空 → 用本角色面板兜底**；字段写了值就以卡片为准。
 #  2. 拖「拐力箭头」A→B 时，把 A 的面板值**加到** B 的同名面板项上（多来源相加、不传递），
 #     因此注入变量表后，卡片、算式、面板兜底看到的都是"含拐"的值。
+# 固定 ASCII 词表：(宏, 中文名, 喂给哪张卡的哪个字段) —— 前端「角色面板」弹窗直接用它渲染，
+# 所以中文名放后端（前端不硬编码标签）。
 PANEL_MACROS = (
-    "atk", "atk_pct", "atk_flat", "crit_rate", "crit_dmg", "em", "dmg",
-    "month_dmg", "base_boost", "res_shred", "def_shred", "ignore_def",
-    "elevate", "reaction_dmg",
+    ("atk", "攻击力", "基础值 / 属性源 → 白值"),
+    ("atk_pct", "攻击%", "基础值 / 属性源 → 大增益%"),
+    ("atk_flat", "小攻击", "基础值 / 属性源 → 小增益"),
+    ("crit_rate", "暴击率", "暴击区 → 暴击率%"),
+    ("crit_dmg", "暴击伤害", "暴击区 → 暴击伤害%"),
+    ("em", "元素精通", "增幅反应 / 激化值 / 剧变反应 / 结晶护盾 / 精通增益 → 元素精通"),
+    ("dmg", "增伤", "增伤区 → 增伤区净%"),
+    ("month_dmg", "月增伤", "基础提升 → 基础提升%"),
+    ("base_boost", "基础提升", "基础提升 → 基础提升%"),
+    ("res_shred", "减抗", "抗性区 → 敌人抗性%（取负）"),
+    ("def_shred", "减防", "防御区 → 减防%"),
+    ("ignore_def", "无视防御", "防御区 → 无视防御%"),
+    ("elevate", "擢升", "擢升 → 擢升%"),
+    ("reaction_dmg", "反应增伤", "增幅反应 / 剧变反应 → 反应增伤%"),
 )
+
+PANEL_MACRO_KEYS = tuple(m[0] for m in PANEL_MACROS)
 
 # (卡片类型, 字段 key) → 该字段对应的面板宏（可以有多个：月增伤与基础提升都喂「基础提升%」）
 FIELD_MACROS = {
@@ -607,6 +622,9 @@ NODE_TYPES: dict = {
                  compute=_t_text, isolated=True, no_output=True, resizable=True,
                  role_card=True, fields=[
         _F("role_name", "角色名", "", "text"),
+    ], hidden_fields=[
+        # 面板宏：右键「角色面板…」弹窗里编辑（写 `宏 = 值` 多行），只存不渲染
+        _F("panel", "面板", "", "textbox"),
     ]),
     "result": dict(title="★ 结果", label="★结果", group="工具", inputs=1,
                    compute=_t_result, ctx_menu=True, hidden_fields=[
@@ -738,6 +756,8 @@ def schema() -> dict:
         nodeTypes={k: node_schema(k) for k in NODE_TYPES},
         presets={name: [dict(type=t, fields=f) for t, f in items]
                  for name, items in PRESETS.items()},
+        panelMacros=[dict(key=k, label=label, feed=feed)
+                     for k, label, feed in PANEL_MACROS],
         tables={
             "relic": dict(header=list(RELIC_HEADER),
                           rows=[list(r) for r in RELIC_ROWS]),

@@ -587,6 +587,23 @@ textarea:focus {
   font-size: 11px;
 }
 
+/* 卡片底部的可见标注：「含面板」（有字段是留空吃面板的）/「含拐」（本角色收了拐） */
+.foot-chip {
+  flex: 0 0 auto;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: rgba(47, 111, 167, 0.12);
+  color: var(--accent);
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: help;
+}
+
+.foot-chip-buff {
+  background: rgba(184, 134, 11, 0.16);
+  color: var(--warn);
+}
+
 /* ------------------------------------------------------- 端口 / 连线 */
 .react-flow__handle.port {
   width: 10px;
@@ -799,6 +816,66 @@ textarea:focus {
 
 .modal-actions .grow {
   flex: 1 1 auto;
+}
+
+/* 角色面板弹窗：可编辑的宏表 + 拐力统计（OUT / IN） */
+.modal-role-panel {
+  width: 660px;
+}
+
+.panel-macro-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 10px;
+  max-height: 40vh;
+  overflow: auto;
+  padding: 4px 2px;
+}
+
+.panel-macro-row {
+  display: grid;
+  grid-template-columns: 82px 62px 1fr;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.pm-key {
+  font-family: Consolas, "Courier New", "Microsoft YaHei", monospace;
+  color: var(--accent);
+}
+
+.pm-label {
+  color: var(--muted);
+}
+
+.buff-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.buff-stats h3 {
+  margin: 0 0 4px;
+  font-size: 12px;
+}
+
+.buff-list {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.buff-list .buff-val {
+  margin: 0 6px;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.buff-list .dim {
+  color: var(--muted);
 }
 
 .help-nav {

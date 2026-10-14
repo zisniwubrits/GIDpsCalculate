@@ -72,6 +72,8 @@ export interface Schema {
   presets: Record<string, PresetItem[]>;
   tables: Record<string, TableSpec>;
   resultVarFields: { key: string; label: string }[];
+  /** 「角色面板」的固定宏词表（前端不硬编码中文标签） */
+  panelMacros: { key: string; label: string; feed: string }[];
   zoom: { min: number; max: number; step: number };
   history: { max: number };
 }
@@ -111,6 +113,15 @@ export interface GraphLinkJSON {
   port: number;
 }
 
+/** 「角色面板」弹窗里的一行拐力统计（后端 buffStats 给的数据） */
+export interface BuffStatRow {
+  macro: string;
+  label: string;
+  value: number;
+  /** OUT 行里是目标角色，IN 行里是来源角色 */
+  role: string;
+}
+
 export interface GraphJSON {
   version: number;
   app: string;
@@ -140,6 +151,10 @@ export interface NodeResult {
   /** 未暴击值的纯数字字符串（复制用） */
   plain: string;
   plainTriple: string[];
+  /** 哪些字段是"留空 → 用角色面板兜底"的（卡片上标「含面板」） */
+  panelFields?: string[];
+  /** 本角色是否收了别的角色的拐（卡片上标「含拐」） */
+  buffed?: boolean;
 }
 
 export interface VariableEntry {
@@ -161,6 +176,8 @@ export interface EvaluateResult {
   nodes: Record<string, NodeResult>;
   chainTypes: string[];
   warnings: string[];
+  /** 拐力统计：{角色: {out: 给出去的, in: 收进来的}}（「角色面板」弹窗用） */
+  buffStats?: Record<string, { out: BuffStatRow[]; in: BuffStatRow[] }>;
   graph?: GraphJSON;
 }
 

@@ -226,6 +226,8 @@ class Graph:
         # 拐力生效后的面板值 {目标角色: {面板宏: 自身+拐力}}，用于**覆盖式**注入
         # （覆盖而不是相加，保证不管注入几次都不会重复计算）
         self._buff_totals: dict = {}
+        # 拐力统计（给「角色面板」弹窗）：{角色: {"out": [...], "in": [...]}}
+        self._buff_stats: dict = {}
 
     # -- 基础 -------------------------------------------------------------
     @staticmethod
@@ -288,7 +290,7 @@ class Graph:
             if not role_from or not role_to or role_from == role_to:
                 continue
             grants = out.setdefault(role_to, {})
-            for macro in _nodes.PANEL_MACROS:
+            for macro in _nodes.PANEL_MACRO_KEYS:
                 val = self.role_panel_value(base_vars, role_from, macro)
                 if val:
                     grants[macro] = grants.get(macro, 0.0) + val
@@ -305,6 +307,62 @@ class Graph:
                 val = base_vars[key]
                 return float(val() if callable(val) else val)
         return 0.0
+
+    def _apply_role_panels(self, env: dict) -> None:
+        """把每张角色卡「面板」字段里的宏登记成该角色的变量（``角色::宏``）。
+
+        优先级：**角色卡上的面板覆盖同名变量** —— 它是"面板"的正主（右键弹窗里编辑的
+        就是它）。只认固定词表里的宏名，值支持算式（在本角色作用域里求值）。
+        """
+        for node in self.nodes.values():
+            if node.type != "role":
+                continue
+            role = _valid_role(node.fields.get("role_name"))
+            if not role:
+                continue
+            token = _nodes.use_env(self.scoped_env(node, env))
+            try:
+                for line in (node.fields.get("panel") or "").splitlines():
+                    parsed = split_var_line(line)
+                    if parsed is None:
+                        continue
+                    macro = parsed[0].strip()
+                    if macro not in _nodes.PANEL_MACRO_KEYS:
+                        continue                    # 只认固定词表
+                    try:
+                        value = _nodes.eval_field(parsed[1])
+                    except ValueError:
+                        continue                    # 算不出来的行忽略
+                    env[env_key(qualify(macro, role))] = value
+                    _nodes.use_env(self.scoped_env(node, env))
+            finally:
+                _nodes.reset_env(token)
+
+    def buff_stats(self, base_vars: dict) -> dict:
+        """给「角色面板」弹窗用的拐力统计：``{角色: {"out": [...], "in": [...]}}``。
+
+        每条含 ``macro / label / value / role``：OUT 里的 role 是**目标角色**，
+        IN 里的 role 是**来源角色**。
+        """
+        labels = {k: label for k, label, _feed in _nodes.PANEL_MACROS}
+        out: dict = {}
+        for link in self.links:
+            a = self.nodes.get(link.src)
+            b = self.nodes.get(link.dst)
+            if a is None or b is None or a.type != "role" or b.type != "role":
+                continue
+            ra = _valid_role(a.fields.get("role_name"))
+            rb = _valid_role(b.fields.get("role_name"))
+            if not ra or not rb or ra == rb:
+                continue
+            for macro in _nodes.PANEL_MACRO_KEYS:
+                val = self.role_panel_value(base_vars, ra, macro)
+                if not val:
+                    continue
+                row = dict(macro=macro, label=labels.get(macro, macro), value=val)
+                out.setdefault(ra, {"out": [], "in": []})["out"].append(dict(row, role=rb))
+                out.setdefault(rb, {"out": [], "in": []})["in"].append(dict(row, role=ra))
+        return out
 
     def buff_edges(self) -> list:
         """拐力箭头列表 ``[(源角色名, 目标角色名)]``（给报告/自检用）。"""
@@ -517,9 +575,13 @@ class Graph:
                 env.update(rvars)
                 env.update(svars)               # 赋值卡优先级最高
             self.variables = dict(env)
+            # 角色卡自带的面板宏（右键「角色面板…」里编辑的那些）
+            self._apply_role_panels(env)
+            self.variables = dict(env)
             # 拐力：用这一轮（不含拐力）的结果算，保证"不传递"；有拐力则带着拐力重跑一轮，
             # 让**目标角色**里以面板项写的算式也能看到"含拐"的值（拐力值本身不变，不会来回震荡）
             self.buffs = self.buff_sources(self.variables)
+            self._buff_stats = self.buff_stats(self.variables)
             # 拐力生效后的面板值（自身 + 拐力）：覆盖式注入，重复注入也不会翻倍
             self._buff_totals = {}
             for role, grants in self.buffs.items():
@@ -541,6 +603,8 @@ class Graph:
                     env.update(rvars)
                     env.update(svars)
                 self.variables = dict(env)
+                self._apply_role_panels(env)
+                self.variables = dict(env)
                 # 变量表 / 报告里也显示"含拐"的面板值（只写全名键：角色::宏名，
                 # 不往全局塞裸名，免得拐力漏给别的角色）
                 for role, totals in self._buff_totals.items():
@@ -550,9 +614,11 @@ class Graph:
             first = self.result_node()
             out = dict(
                 ok=False, error=None, result=None,
+                # 与「变量表」卡片同源（self.variables），否则拐力写回的值只在表格里看得到
                 variables=[dict(name=demangle(k), value=float(v), text=plain_num(v))
-                           for k, v in env.items()],
+                           for k, v in self.variables.items()],
                 nodes={}, chainTypes=self.chain_types(), warnings=self.warnings(),
+                buffStats=self._buff_stats,
             )
             for nid in list(self.nodes):
                 out["nodes"][nid] = self._node_result(nid)
@@ -575,13 +641,28 @@ class Graph:
             _nodes.reset_env(token)
 
     # -- 内部 -------------------------------------------------------------
+    def panel_fields(self, node) -> list:
+        """本卡**由角色面板兜底**填上的字段标签（给卡片做可见标注）。
+
+        判定与 ``getter()`` 完全一致：字段为空且该字段对应的面板宏有值。
+        """
+        out = []
+        for f in field_specs(node.type):
+            field_key = f["key"]
+            raw = node.fields.get(field_key)
+            if raw is None or (isinstance(raw, str) and not raw.strip()):
+                if _nodes.panel_value(node.type, field_key) is not None:
+                    out.append(f["label"])
+        return out
+
     def _node_result(self, nid: str) -> dict:
         """单个节点的输出描述（前端据此渲染卡片底部）。"""
         node = self.nodes[nid]
         spec = NODE_TYPES[node.type]
         info = dict(type=node.type, title=node.title, factor=None, values=None,
                     isTriple=False, display="", error=None, rows=None,
-                    varsText=None, boundNames=[], plain="", plainTriple=[])
+                    varsText=None, boundNames=[], plain="", plainTriple=[],
+                    panelFields=[], buffed=False)
         if node.type == "vartable":
             info["rows"] = self.variable_rows()
             return info
@@ -641,6 +722,11 @@ class Graph:
             else:
                 parts.append("输出 %s" % fmt_num(v[0]))
         info["display"] = " ｜ ".join(parts)
+        # 可见标注：哪些字段是"留空→吃角色面板"的、本角色是否收了拐
+        # （用户反馈"没看到吃拐"，这两个标记就是让人一眼看出来的）
+        if not spec.get("no_output") and not spec.get("vars_card"):
+            info["panelFields"] = self._compute(node, lambda: self.panel_fields(node))
+            info["buffed"] = bool(self.buffs.get(node.role))
         return info
 
     def variable_rows(self) -> list:
