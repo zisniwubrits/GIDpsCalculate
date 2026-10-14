@@ -44,6 +44,7 @@ import {
   cardsHidden,
   cardsInside,
   connect,
+  duplicateRoleNames,
   estimateSize,
   fillPresetForDropped,
   formatRolePanel,
@@ -56,6 +57,9 @@ import {
   makeNode,
   nextNodeId,
   parseRolePanel,
+  roleBoxCollisions,
+  roleNameError,
+  resolveRoleOverlaps,
   isNamespaceNode,
   isPanelNode,
   parsePanelShow,
@@ -116,10 +120,14 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
   const initial = useMemo(() => {
     const stored = loadLocal();
     const parsed = stored ? jsonToGraph(stored, schema) : null;
+    // 旧工程里可能已经有两个角色区域压在一起（这条规则是后加的）：
+    // 打开时按顺序把后来的挪开，并把结果 / 提示一并向界面汇报（见下面的 useMemo）。
+    const fixed = parsed ? resolveRoleOverlaps(parsed.nodes) : null;
     return {
-      state: { nodes: parsed?.nodes ?? [], links: parsed?.links ?? [] } as GraphState,
+      state: { nodes: fixed?.nodes ?? [], links: parsed?.links ?? [] } as GraphState,
       name: parsed?.name ?? "",
       zoom: parsed?.zoom ?? 1,
+      overlapsMoved: fixed?.moved ?? [],
     };
   }, [schema]);
 
@@ -153,6 +161,21 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
   const lastSignature = useRef<string | null>(null);
   /** 正在拖框选：此时忽略「角色容器」的选中变化（见 model.ignoredByBoxSelect） */
   const boxSelecting = useRef(false);
+  /** 拖动角色区域被"重叠"规则挡回时，记下要写回 React Flow 的位置（apply 之后处理） */
+  const revertTo = useRef<{ id: string; pos: [number, number] } | null>(null);
+  /** 加载工程时自动挪开重叠角色区域的提示（只在第一次渲染后弹一次） */
+  const overlapNotice = useRef(
+    initial.overlapsMoved.length
+      ? `打开时发现角色区域互相压着，已自动挪开 ${initial.overlapsMoved.length} 个（角色区域不许重叠）`
+      : "",
+  );
+  useEffect(() => {
+    if (overlapNotice.current) {
+      setToast(overlapNotice.current);
+      setDirty(true);            // 位置被改过 → 提示"未保存"，让用户决定是否落盘
+      overlapNotice.current = "";
+    }
+  }, []);
 
   // -- 求值载荷：不含位置 / 尺寸（拖动卡片不该触发重新计算）-----------------
   // 角色归属（role）由位置推导：useEvaluate 按**序列化内容**去重，所以拖动时只有
@@ -367,6 +390,27 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
             const pos = ch.position;
             next = next.map((n) => (n.id === ch.id ? { ...n, pos: [pos.x, pos.y] } : n));
             if (!ch.dragging) {
+              // 角色区域**不许互相压**（用户硬规则）：拖完压上了就把这次拖动挡回去。
+              // 这里只算结果，真正的"回滚 + 写回 React Flow"放在 apply 之后做
+              // （apply 的 updater 要保持纯粹，不能在里面产生副作用）。
+              const moving = next.find((n) => n.id === ch.id);
+              if (moving && isNamespaceNode(moving)) {
+                const hit = roleBoxCollisions(
+                  next.filter((n) => n.id !== ch.id),
+                  ch.id,
+                  moving.pos,
+                  moving.size,
+                );
+                if (hit.length) {
+                  const old = s.nodes.find((n) => n.id === ch.id);
+                  if (old) {
+                    revertTo.current = { id: ch.id, pos: [old.pos[0], old.pos[1]] };
+                    next = next.map((n) =>
+                      n.id === ch.id ? { ...n, pos: [old.pos[0], old.pos[1]] } : n,
+                    );
+                  }
+                }
+              }
               // 拖拽结束：空白的变量卡落进角色区域 → 程序填入面板预设代码
               const res = fillPresetForDropped(
                 next,
@@ -399,6 +443,7 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
                   }
                 : n,
             );
+            // 缩放中角色区域压到别人：先允许（不然缩不动），在 onResize 结束时统一处理
           } else if (ch.type === "remove") {
             next = next.filter((n) => n.id !== ch.id);
             nextLinks = nextLinks.filter((l) => l.src !== ch.id && l.dst !== ch.id);
@@ -406,8 +451,15 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
         }
         return { nodes: next, links: nextLinks };
       });
+      // apply 之后的副作用：把被挡回去的角色位置同步回 React Flow（否则画布上还停在重叠处）
+      const back = revertTo.current;
+      if (back) {
+        revertTo.current = null;
+        rf.updateNode(back.id, { position: { x: back.pos[0], y: back.pos[1] } });
+        setToast("角色区域不许互相压：这次拖动已放回原处");
+      }
     },
-    [apply],
+    [apply, rf],
   );
 
   const onEdgesChange = useCallback(
@@ -485,13 +537,22 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
         return;
       }
       const parsed = jsonToGraph(res.graph, schema);
-      history.reset({ nodes: parsed.nodes, links: parsed.links });
+      // 旧工程可能有两个同名角色 / 两个压在一起的角色区域（这两条规则是后加的）：
+      // 压在一起的就挪开（并提示），重名只提示、不擅自改名（名字会写进 `名字::变量`）。
+      const fixed = resolveRoleOverlaps(parsed.nodes);
+      const dup = duplicateRoleNames(parsed.nodes);
+      history.reset({ nodes: fixed.nodes, links: parsed.links });
       setName(parsed.name);
       setSavedZoom(parsed.zoom);
       rf.setViewport({ x: 0, y: 0, zoom: parsed.zoom });
       if (res.dir) setSaveDir(res.dir);           // 从哪读就往哪存
-      setDirty(false);
-      setToast(`已打开 ${res.path}（${parsed.nodes.length} 张卡片）`);
+      setDirty(fixed.moved.length > 0);
+      const notes = [
+        `已打开 ${res.path}（${fixed.nodes.length} 张卡片）`,
+        fixed.moved.length ? `挪开了 ${fixed.moved.length} 个重叠的角色区域` : "",
+        dup.length ? `注意：有重名角色 ${dup.join("、")}（区域会互相干扰，建议改名）` : "",
+      ].filter(Boolean);
+      setToast(notes.join(" ｜ "));
     } catch (e) {
       setToast(`打开失败：${(e as Error).message}`);
     }
@@ -535,6 +596,23 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
   /** 缩放结束：把最终尺寸与左上角坐标写回模型（拖动缩放是界面行为，不进求值载荷）。 */
   const onResize = useCallback(
     (id: string, size: [number, number], pos: [number, number]) => {
+      // 角色区域不许互相压：缩放后压上了就退回原尺寸 / 原位置
+      const hit = isNamespaceNode(
+        nodes.find((n) => n.id === id) ?? ({ type: "" } as CardNodeModel),
+      )
+        ? roleBoxCollisions(nodes, id, pos, size)
+        : [];
+      if (hit.length) {
+        const old = nodes.find((n) => n.id === id);
+        if (old) {
+          rf.updateNode(id, {
+            position: { x: old.pos[0], y: old.pos[1] },
+            ...(old.size ? { width: old.size[0], height: old.size[1] } : {}),
+          });
+        }
+        setToast("角色区域不许互相压：这次缩放已撤销");
+        return;
+      }
       apply((s) => ({
         ...s,
         nodes: s.nodes.map((n) =>
@@ -542,7 +620,7 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
         ),
       }));
     },
-    [apply],
+    [apply, nodes, rf],
   );
 
   const setResultVars = useCallback(
@@ -658,20 +736,8 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
             ? `区域内的卡片和区域外有连线（${blockedNames.join("、")}），先断开再隐藏`
             : undefined,
           onClick: () =>
-            apply((s) => {
-              let next = { ...s, nodes: toggleRoleCardsHidden(s.nodes, menu.id) };
-              // 隐藏后顺手把本容器折叠成最小（用户要求：藏起来就只留一张小牌）；
-              // 再点「显示」时保持折叠，要不要展开由用户自己决定
-              if (!hiddenNow) {
-                next = {
-                  ...next,
-                  nodes: next.nodes.map((n) =>
-                    n.id === menu.id ? { ...n, collapsed: true } : n,
-                  ),
-                };
-              }
-              return next;
-            }),
+            // 一个动作同时切「卡片隐藏」与「容器折叠 / 展开」（见 toggleRoleCardsHidden）
+            apply((s) => ({ ...s, nodes: toggleRoleCardsHidden(s.nodes, menu.id) })),
         });
       }
     } else {
@@ -1003,6 +1069,18 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
           initialName={String(
             nodes.find((n) => n.id === roleNameDialog)?.fields.role_name ?? "",
           ).trim()}
+          check={(name) =>
+            roleNameError(
+              nodes,
+              name,
+              roleNameDialog,
+              schema.nodeTypes[
+                nodes.find((n) => n.id === roleNameDialog)?.type ?? ""
+              ]?.weapon_card
+                ? "武器"
+                : "角色",
+            )
+          }
           onSave={(name) => {
             onField(roleNameDialog, "role_name", name);
             setRoleNameDialog(null);

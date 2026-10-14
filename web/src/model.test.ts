@@ -38,7 +38,11 @@ import {
   cardsBlockingHide,
   cardsHidden,
   cardsInside,
+  duplicateRoleNames,
   hiddenCardsFor,
+  roleBoxCollisions,
+  roleNameError,
+  resolveRoleOverlaps,
   toggleRoleCardsHidden,
   wouldCycle,
 } from "./model";
@@ -597,13 +601,25 @@ describe("角色区域一键隐藏卡片", () => {
     expect(cardsHidden(build({ cards_hidden: true })[0])).toBe(true);
   });
 
-  it("切换一次打开、再切一次关闭（字段跟着走）", () => {
+  it("切换一次打开、再切一次关闭：隐藏=折叠成最小，显示=展开（不会留半截状态）", () => {
     const once = toggleRoleCardsHidden(build(), "r1");
     expect(once[0].fields.cards_hidden).toBe(true);
+    expect(once[0].collapsed).toBe(true);                        // 藏起来 → 折叠成一张小牌
     expect([...hiddenCardsFor(once)].sort()).toEqual(["c1", "c2"]);
+
+    // 回归：显示时**必须一起展开** —— 否则卡片回来了、容器还折着，看着像"卡片没了"
     const twice = toggleRoleCardsHidden(once, "r1");
     expect(twice[0].fields.cards_hidden).toBe(false);
+    expect(twice[0].collapsed).toBe(false);
     expect([...hiddenCardsFor(twice)]).toEqual([]);
+
+    // 本来折叠着的角色，点一下隐藏再显示，最终是展开状态（能看见卡片）
+    const collapsedFirst = build();
+    collapsedFirst[0].collapsed = true;
+    const hidden = toggleRoleCardsHidden(collapsedFirst, "r1");
+    expect(hidden[0].collapsed).toBe(true);
+    const shown = toggleRoleCardsHidden(hidden, "r1");
+    expect(shown[0].collapsed).toBe(false);
   });
 
   it("菜单里报的区域卡片数只算区域内的（外面的卡片不算）", () => {
@@ -626,5 +642,79 @@ describe("角色区域一键隐藏卡片", () => {
     ).toEqual(["c3"]);
     // 完全在外面的连线与本次隐藏无关
     expect(cardsBlockingHide(list, [{ src: "c3", dst: "c3", port: 0 }], "r1")).toEqual([]);
+  });
+
+  it("归属按容器身份：两个同名角色互不干扰（隐藏一个不影响另一个）", () => {
+    const sameName = [
+      roleNode("r1", "火神"),
+      inside("a1", "dmg", [20, 20]),
+      roleNode("r2", "火神"),                 // 另一个容器，名字一样，位置分开
+      inside("b1", "dmg", [20, 20]),
+    ];
+    sameName[2].pos = [900, 0];
+    sameName[3].pos = [920, 20];
+    const hidden = toggleRoleCardsHidden(sameName, "r1");
+    expect([...hiddenCardsFor(hidden)]).toEqual(["a1"]);       // 只有 r1 里的被藏
+    expect(buildRoleMap(hidden)["a1"]).toBe("火神");
+    expect(buildRoleMap(hidden)["b1"]).toBe("火神");
+  });
+});
+
+describe("角色命名空间的两条硬规则", () => {
+  const mk = (id: string, name: string, pos: [number, number], size: [number, number] | null = null) => {
+    const n = node(id, "role", pos);
+    n.fields = { ...n.fields, role_name: name };
+    n.size = size;
+    return n;
+  };
+
+  it("不许同名角色：改名时指出重名，自己不算冲突", () => {
+    const list = [mk("r1", "火神", [0, 0]), mk("r2", "辅助", [900, 0])];
+    expect(roleNameError(list, "辅助", "r1")).toContain("同名");
+    expect(roleNameError(list, "火神", "r1")).toBe("");        // 改回自己原来的名字 → 放行
+    expect(roleNameError(list, "雷神", "r1")).toBe("");
+    // 格式非法照样拦（与重名是两回事）
+    expect(roleNameError(list, "带 空格", "r1")).not.toBe("");
+    expect(roleNameError(list, "a__b", "r1")).not.toBe("");
+    expect(roleNameError(list, "", "r1")).not.toBe("");
+    // 旧工程带进来的重名能查出来（只提示、不擅自改名）
+    expect(duplicateRoleNames([mk("r1", "火神", [0, 0]), mk("r2", "火神", [900, 0])]))
+      .toEqual(["火神"]);
+    expect(duplicateRoleNames(list)).toEqual([]);
+  });
+
+  it("不许碰撞箱相压：拖到重叠位置会报出压到的容器", () => {
+    const list = [mk("r1", "火神", [0, 0], [560, 380]), mk("r2", "辅助", [700, 0], [560, 380])];
+    // 放到 100,100 → 压上 r1
+    expect(roleBoxCollisions(list, "r2", [100, 100]).map((n) => n.id)).toEqual(["r1"]);
+    // 放到 1400,0 → 谁都不压
+    expect(roleBoxCollisions(list, "r2", [1400, 0])).toEqual([]);
+    // 刚好贴边（从 560 开始 = r1 的右边界）不算压
+    expect(roleBoxCollisions(list, "r2", [560, 0])).toEqual([]);
+
+    // 缩放同样受这条规则管：r3 的框紧挨着 r1，横着拉长就会压上去
+    const tight = [mk("r1", "火神", [0, 0], [560, 380]), mk("r3", "奶", [700, 0], [560, 380])];
+    // 700 起点放 900 宽还在 r1 右边 → 不压
+    expect(roleBoxCollisions(tight, "r3", null, [900, 380])).toEqual([]);
+    // 挪到 400 起点再拉长 → 压上 r1
+    expect(roleBoxCollisions(tight, "r3", [400, 0], [900, 380]).map((n) => n.id)).toEqual(["r1"]);
+  });
+
+  it("打开旧工程时把压在一起的角色区域挪开（先来的不动）", () => {
+    const list = [
+      mk("r1", "火神", [0, 0], [560, 380]),
+      mk("r2", "辅助", [100, 100], [560, 380]),      // 和 r1 压着
+      mk("r3", "奶", [2000, 0], [560, 380]),          // 本来就没事
+    ];
+    const { nodes: fixed, moved } = resolveRoleOverlaps(list);
+    expect(moved).toEqual(["r2"]);
+    expect(fixed[0].pos).toEqual([0, 0]);             // 先来的不动
+    expect(fixed[1].pos).not.toEqual([100, 100]);     // 后来的被挪开
+    // 挪完谁也不压谁
+    expect(roleBoxCollisions(fixed, "r2", fixed[1].pos, fixed[1].size)).toEqual([]);
+    expect(roleBoxCollisions(fixed, "r1")).toEqual([]);
+    // 已经规规矩矩的工程：原样返回
+    const clean = resolveRoleOverlaps([mk("r1", "火神", [0, 0], [560, 380])]);
+    expect(clean.moved).toEqual([]);
   });
 });

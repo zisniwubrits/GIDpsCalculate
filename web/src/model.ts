@@ -119,10 +119,182 @@ export function roleOfNode(node: CardNode, boxes: RoleBox[]): string {
 
 /** 整张画布的「节点 id → 角色名」（给卡片徽标与求值载荷用）。 */
 export function buildRoleMap(nodes: CardNode[]): Record<string, string> {
-  const boxes = roleBoxes(nodes);
+  const owners = roleOwnerMap(nodes);
+  const byId = new Map(nodes.map((n) => [n.id, n]));
   const out: Record<string, string> = {};
-  for (const n of nodes) out[n.id] = roleOfNode(n, boxes);
+  for (const n of nodes) {
+    const owner = owners.get(n.id);
+    out[n.id] = owner ? String(byId.get(owner)?.fields.role_name ?? "").trim() : "";
+  }
   return out;
+}
+
+/**
+ * 「卡片 id → 所属容器 id」（不在任何容器里就是 undefined）。
+ *
+ * 与 {@link roleOfNode} 同一套判定（中心点、最小区域获胜），但返回的是**容器身份**：
+ * 隐藏、显示、清点区域卡片这些事都必须按容器算，不能按角色名 ——
+ * 否则两个同名角色会互相带累。
+ */
+export function roleOwnerMap(nodes: CardNode[]): Map<string, string> {
+  const containers = nodes
+    .filter(isNamespaceNode)
+    .map((n) => {
+      const { w, h } = estimateSize(n);
+      return { id: n.id, x: n.pos[0], y: n.pos[1], w, h };
+    });
+  const out = new Map<string, string>();
+  if (!containers.length) return out;
+  for (const n of nodes) {
+    if (isNamespaceNode(n)) continue;
+    const { w, h } = estimateSize(n);
+    const cx = n.pos[0] + w / 2;
+    const cy = n.pos[1] + h / 2;
+    let best: (typeof containers)[number] | null = null;
+    for (const b of containers) {
+      if (cx < b.x || cx > b.x + b.w || cy < b.y || cy > b.y + b.h) continue;
+      if (!best || b.w * b.h < best.w * best.h) best = b;
+    }
+    if (best) out.set(n.id, best.id);
+  }
+  return out;
+}
+
+// ------------------------------------------- 角色命名空间的两条硬规则
+// 用户要求：**不许同名角色**、**不许两个角色的碰撞箱互相压**。
+// 两条都做成纯函数，界面（改名弹窗、拖动/缩放、新建、打开工程）共用同一份判定。
+/**
+ * 角色名能不能用：格式要合法（能写进 `名字::变量`），且**不能和别的角色重名**。
+ * 返回错误文案，空串 = 可以。`ignoreId` 是"正在改名的那个容器"（自己不算冲突）。
+ */
+export function roleNameError(
+  nodes: CardNode[],
+  name: string,
+  ignoreId = "",
+  kind = "角色",
+): string {
+  const t = (name ?? "").trim();
+  if (!t) return `请填${kind}名`;
+  if (!validRoleName(t)) return "名字不能有空格 / :: / 连续下划线，也不能以数字开头";
+  const others = nodes.filter((n) => isNamespaceNode(n) && n.id !== ignoreId);
+  if (others.some((n) => String(n.fields.role_name ?? "").trim() === t)) {
+    return `已经有同名的${kind}了（名字要唯一，否则区域会互相干扰）`;
+  }
+  return "";
+}
+
+/** 已有的**重名**角色 / 武器（旧工程可能带进来；界面只提示，不擅自改名）。 */
+export function duplicateRoleNames(nodes: CardNode[]): string[] {
+  const seen = new Map<string, number>();
+  for (const n of nodes) {
+    if (!isNamespaceNode(n)) continue;
+    const name = String(n.fields.role_name ?? "").trim();
+    if (!name) continue;
+    seen.set(name, (seen.get(name) ?? 0) + 1);
+  }
+  return [...seen.entries()].filter(([, count]) => count > 1).map(([name]) => name);
+}
+
+/** 两块区域是否相压（接触不算，面积有重叠才算） */
+export function boxesOverlap(  a: { x: number; y: number; w: number; h: number },
+  b: { x: number; y: number; w: number; h: number },
+): boolean {
+  return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+}
+
+/**
+ * 把某个容器放到 `pos` 后，会不会和其他角色的区域相压。
+ * 返回**压到的那些容器**（空数组 = 可以放）。
+ */
+export function roleBoxCollisions(
+  nodes: CardNode[],
+  id: string,
+  pos: [number, number] | null = null,
+  size: [number, number] | null = null,
+  ignoreIds: readonly string[] = [],
+): CardNode[] {
+  const target = nodes.find((n) => n.id === id);
+  // 注意：`nodes` 里必须能找到这张卡（只看**已经在画布上**的容器）。
+  // 想试"换个尺寸会不会压"就传 `size`，别把节点从数组里删掉。
+  if (!target || !isNamespaceNode(target)) return [];
+  const mixed = { ...target, ...(pos ? { pos } : {}), ...(size ? { size } : {}) };
+  const own = estimateSize(mixed);
+  const box = { x: mixed.pos[0], y: mixed.pos[1], w: own.w, h: own.h };
+  const hit: CardNode[] = [];
+  for (const n of nodes) {
+    if (n.id === id || ignoreIds.includes(n.id) || !isNamespaceNode(n)) continue;
+    const { w, h } = estimateSize(n);
+    if (boxesOverlap(box, { x: n.pos[0], y: n.pos[1], w, h })) hit.push(n);
+  }
+  return hit;
+}
+
+/** 有没有和 `id` 这个容器相压的另一个角色区域（菜单提示用）。 */
+export function roleBoxCollides(nodes: CardNode[], id: string): CardNode[] {
+  return roleBoxCollisions(nodes, id);
+}
+
+/**
+ * 把**已经重叠**的角色区域挪开（打开旧工程时用）。
+ *
+ * 为什么要有：这条规则是后加的，旧工程里很可能已经压在一起；直接拒绝加载太粗暴，
+ * 所以按数组顺序（先来的不动）把后来的往下挪到不重叠的位置，并让调用方提示用户。
+ * 名字重复不在修复范围内（改名字是用户的事，界面只负责拦新的重名）。
+ */
+export function resolveRoleOverlaps(
+  nodes: CardNode[],
+  sizeOf: SizeOf = estimateSize,
+): { nodes: CardNode[]; moved: string[] } {
+  const next = nodes.map((n) => ({ ...n, pos: [n.pos[0], n.pos[1]] as [number, number] }));
+  const moved: string[] = [];
+  const done: CardNode[] = [];        // 已经摆好的容器（先来的不动，后来的挪开）
+  for (const n of next) {
+    if (!isNamespaceNode(n)) continue;
+    if (roleBoxCollidesWith(n, done, sizeOf)) {
+      const [x, y] = reparkRole(next, n.id, sizeOf);
+      n.pos = [x, y];
+      moved.push(n.id);
+    }
+    done.push(n);
+  }
+  return { nodes: next, moved };
+}
+
+/** 这个容器与给定的那些容器是否相压 */
+function roleBoxCollidesWith(node: CardNode, others: CardNode[], sizeOf: SizeOf): boolean {
+  const { w, h } = sizeOf(node);
+  const box = { x: node.pos[0], y: node.pos[1], w, h };
+  for (const o of others) {
+    const s = sizeOf(o);
+    if (boxesOverlap(box, { x: o.pos[0], y: o.pos[1], w: s.w, h: s.h })) return true;
+  }
+  return false;
+}
+
+/** 把一个容器挪到最近的空白位置（保住 x，优先往下；再不行往右）。 */
+function reparkRole(nodes: CardNode[], id: string, sizeOf: SizeOf): [number, number] {
+  const target = nodes.find((n) => n.id === id);
+  if (!target) return [40, 60];
+  const mine = sizeOf(target);
+  const others = nodes.filter((n) => n.id !== id && isNamespaceNode(n));
+  const free = (cand: [number, number]) => {
+    const box = { x: cand[0], y: cand[1], w: mine.w, h: mine.h };
+    return !others.some((o) => {
+      const s = sizeOf(o);
+      return boxesOverlap(box, { x: o.pos[0], y: o.pos[1], w: s.w, h: s.h });
+    });
+  };
+  const x0 = target.pos[0];
+  const y0 = target.pos[1];
+  for (let i = 1; i < 60; i += 1) {
+    const cand: [number, number] = [x0, y0 + i * 320];
+    if (free(cand)) return cand;
+  }
+  for (let i = 1; i < 40; i += 1) {
+    const cand: [number, number] = [x0 + i * 640, y0];
+    if (free(cand)) return cand;
+  }
+  return [x0, y0];
 }
 
 /**
@@ -147,40 +319,52 @@ export function cardsHidden(node: CardNode): boolean {
  * 隐藏是**界面状态**（不进 /api/evaluate 载荷，隐藏不改变计算结果），
  * 但跟着工程 JSON 存 —— 藏好的东西刷新后不该又冒出来。
  * 只作用于**非容器**卡片：同区域里嵌套的另一个角色标记仍然可见（还能点它、展开它）。
+ *
+ * 归属按**容器身份**（容器 id）判定，不按角色名 —— 名字允许重复时，
+ * 按名字匹配会让两个同名角色互相带累（一个隐藏、另一个的卡片也跟着消失）。
  */
 export function hiddenCardsFor(nodes: CardNode[]): Set<string> {
   const out = new Set<string>();
   const hidden = nodes.filter(cardsHidden);
   if (!hidden.length) return out;
-  const boxes = roleBoxes(nodes);
+  const owners = roleOwnerMap(nodes);
+  const hiddenIds = new Set(hidden.map((h) => h.id));
   for (const n of nodes) {
     if (isNamespaceNode(n)) continue;
-    const owner = roleOfNode(n, boxes);
-    if (owner && hidden.some((h) => String(h.fields.role_name ?? "").trim() === owner)) {
-      out.add(n.id);
-    }
+    const owner = owners.get(n.id);
+    if (owner && hiddenIds.has(owner)) out.add(n.id);
   }
   return out;
 }
 
 /**
- * 右键「隐藏/显示区域内的卡片」：开隐藏时**顺手把状态切到另一头**
- * （用户要求：隐藏后只剩一张最小的牌子，折叠由调用方一起做）。
+ * 右键「隐藏/显示区域内的卡片」：一个动作同时管两件事，免得留个半截状态。
+ *
+ * * 隐藏时：卡片藏起来 + 本容器**折叠成最小**（只剩一张牌子）；
+ * * 显示时：卡片回来 + 本容器**展开**（原来只恢复卡片、容器还折着，
+ *   看着就像"展开后卡片没了"——用户踩过，见下面的测试）。
+ *
  * 返回新节点数组（纯函数，方便单测）。
  */
 export function toggleRoleCardsHidden(nodes: CardNode[], id: string): CardNode[] {
-  return nodes.map((n) =>
-    n.id === id ? { ...n, fields: { ...n.fields, cards_hidden: !cardsHidden(n) } } : n,
-  );
+  return nodes.map((n) => {
+    if (n.id !== id) return n;
+    const hide = !cardsHidden(n);
+    return { ...n, collapsed: hide, fields: { ...n.fields, cards_hidden: hide } };
+  });
+}
+
+/** 区域内有哪些卡片（按容器身份算，不按角色名） */
+export function cardsInsideIds(nodes: CardNode[], id: string): string[] {
+  const owners = roleOwnerMap(nodes);
+  return nodes
+    .filter((n) => !isNamespaceNode(n) && owners.get(n.id) === id)
+    .map((n) => n.id);
 }
 
 /** 区域内有多少张卡片（右键菜单里报个数；不含容器自己） */
 export function cardsInside(nodes: CardNode[], id: string): number {
-  const target = nodes.find((n) => n.id === id);
-  const name = String(target?.fields.role_name ?? "").trim();
-  if (!name) return 0;
-  const boxes = roleBoxes(nodes);
-  return nodes.filter((n) => !isNamespaceNode(n) && roleOfNode(n, boxes) === name).length;
+  return cardsInsideIds(nodes, id).length;
 }
 
 /**
@@ -191,13 +375,7 @@ export function cardsInside(nodes: CardNode[], id: string): number {
  * 返回**区域外那些卡片的 id**（空数组 = 允许隐藏），文案由调用方按 schema 拼。
  */
 export function cardsBlockingHide(nodes: CardNode[], links: GraphLinkJSON[], id: string): string[] {
-  const target = nodes.find((n) => n.id === id);
-  const name = String(target?.fields.role_name ?? "").trim();
-  if (!name) return [];
-  const boxes = roleBoxes(nodes);
-  const inside = new Set(
-    nodes.filter((n) => !isNamespaceNode(n) && roleOfNode(n, boxes) === name).map((n) => n.id),
-  );
+  const inside = new Set(cardsInsideIds(nodes, id));
   if (!inside.size) return [];
   const blocked: string[] = [];
   for (const l of links) {

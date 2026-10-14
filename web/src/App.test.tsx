@@ -910,14 +910,18 @@ describe("App 集成（假后端 + 真 schema）", () => {
     expect((screen.getByTestId("card-n1").closest(".react-flow__node") as HTMLElement).style.height)
       .toBe("auto");
 
-    // 再右键 →「显示区域内的卡片」→ 卡片回来
-    // （折叠后标题栏文字变成卡片类型名，所以按卡片类型名找标题栏）
+    // 再右键 →「显示区域内的卡片」→ 卡片回来，且容器**一起展开**
+    // （回归：原来只恢复卡片、容器还折着，看着像"展开后卡片没了"）
     fireEvent.contextMenu(within(screen.getByTestId("card-n1")).getByText("角色"));
     await user.click(await screen.findByText(/显示区域内的卡片/));
     await waitFor(() =>
       expect(lastBody?.nodes.find((n) => n.id === "n1")?.fields.cards_hidden).toBe(false),
     );
     await waitFor(() => expect(screen.getByTestId("card-n2")).toBeInTheDocument());
+    // 展开后标题栏回到角色名（折叠时显示的是卡片类型名）
+    await waitFor(() => expect(within(screen.getByTestId("card-n1")).getByText("火神"))
+      .toBeInTheDocument());
+    expect(screen.getByTestId("card-n1")).not.toHaveAttribute("data-collapsed");
   });
 
   it("区域内的卡片和区域外有连线时：菜单项禁用并说明是哪张卡（不隐藏）", async () => {
@@ -959,6 +963,64 @@ describe("App 集成（假后端 + 真 schema）", () => {
     await user.click(item);
     expect(screen.getByTestId("card-n2")).toBeInTheDocument();
     expect(screen.getByTestId("card-n1")).not.toHaveAttribute("data-collapsed");
+  });
+
+  it("角色名不许重名：重名时当场提示并禁用「确定」，改回自己的名字可以保存", async () => {
+    const user = userEvent.setup();
+    await renderApp();
+    await addCard(user, "role");
+    await addCard(user, "role");
+    const first = await screen.findByTestId("card-n1");
+
+    fireEvent.contextMenu(within(first).getByText("角色1"));
+    await user.click(await screen.findByText("设置角色名…"));
+    const dlg = await screen.findByTestId("role-name-dialog");
+    expect(within(dlg).queryByTestId("role-name-error")).toBeNull();
+
+    // 起一个已经存在的名字 → 红字提示 + 确定不可点
+    fireEvent.change(within(dlg).getByTestId("role-name-input"), { target: { value: "角色2" } });
+    const err = within(dlg).getByTestId("role-name-error");
+    expect(err).toHaveTextContent("同名");
+    expect(within(dlg).getByRole("button", { name: "确定" })).toBeDisabled();
+
+    // 改成没被占用的名字 → 提示消失、可以保存
+    fireEvent.change(within(dlg).getByTestId("role-name-input"), { target: { value: "火神" } });
+    expect(within(dlg).queryByTestId("role-name-error")).toBeNull();
+    await user.click(within(dlg).getByRole("button", { name: "确定" }));
+    await waitFor(() =>
+      expect(lastBody?.nodes.find((n) => n.id === "n1")?.fields.role_name).toBe("火神"),
+    );
+  });
+
+  it("打开旧工程时把压在一起的角色区域挪开，并提示「未保存」", async () => {
+    window.localStorage.setItem(
+      "genshin-dmg-calc:project:v1",
+      JSON.stringify({
+        graph: {
+          version: 1,
+          app: "GenshinDamageCalc",
+          zoom: 1,
+          name: "重叠自检",
+          nodes: [
+            { id: "n1", type: "role", pos: [0, 0], size: [560, 380], font_size: null, inputs: 0,
+              fields: { role_name: "火神", panel: "", panel_show: "", card_name: "" } },
+            // 和 n1 压在一起
+            { id: "n2", type: "role", pos: [100, 100], size: [560, 380], font_size: null, inputs: 0,
+              fields: { role_name: "辅助", panel: "", panel_show: "", card_name: "" } },
+          ],
+          links: [],
+        },
+        savedAt: new Date().toISOString(),
+      }),
+    );
+
+    await renderApp();
+    // 提示：自动挪开
+    await waitFor(() => expect(screen.getByText(/已自动挪开/)).toBeInTheDocument());
+    // 位置被改过 → 状态变成「未保存」
+    expect(screen.getByText("● 未保存")).toBeInTheDocument();
+    // 求值载荷里两个角色都还在（挪动只是界面层）
+    await waitFor(() => expect(lastBody?.nodes.map((n) => n.id)).toEqual(["n1", "n2"]));
   });
 
   it("右键角色标签 →「角色面板…」：宏表可编辑、并显示拐力统计（OUT/IN）", async () => {    const user = userEvent.setup();

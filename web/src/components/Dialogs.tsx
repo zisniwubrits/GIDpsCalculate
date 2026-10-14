@@ -411,6 +411,8 @@ export function RolePanelDialog({
 
 export interface RoleNameDialogProps {
   initialName: string;
+  /** 名字能不能用（重名 / 格式非法）；返回错误文案，空串 = 可以 */
+  check?: (name: string) => string;
   onSave: (name: string) => void;
   onClose: () => void;
 }
@@ -419,9 +421,14 @@ export interface RoleNameDialogProps {
  * 设置角色名（右键角色标记的标题栏打开）。
  * 角色名原来放在卡面上的单行输入框里，用户要求改成右键设置 —— 卡面省下这一行，
  * 也就能把卡片收窄。
+ *
+ * 名字必须**唯一**（用户要求：不许同名角色）：重名时当场红字提示并禁用「确定」，
+ * 否则两个同名区域会互相干扰（变量前缀、拐力箭头、一键隐藏都按名字找）。
  */
-export function RoleNameDialog({ initialName, onSave, onClose }: RoleNameDialogProps) {
+export function RoleNameDialog({ initialName, check, onSave, onClose }: RoleNameDialogProps) {
   const [name, setName] = useState(initialName);
+  const error = check ? check(name.trim()) : "";
+  const canSave = !error;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -444,6 +451,7 @@ export function RoleNameDialog({ initialName, onSave, onClose }: RoleNameDialogP
         <p className="modal-hint">
           角色名用来给这个命名空间里的变量加前缀（写 <code>角色名::变量名</code> 引用），
           所以不能带空格、<code>::</code> 或连续下划线；名字同样会被「拐力箭头」引用。
+          名字必须**唯一**，两个角色也不能重名。
         </p>
         <label className="modal-row">
           <span>角色名</span>
@@ -454,16 +462,26 @@ export function RoleNameDialog({ initialName, onSave, onClose }: RoleNameDialogP
             autoFocus
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") onSave(name.trim());
+              if (e.key === "Enter" && canSave) onSave(name.trim());
             }}
           />
         </label>
+        {error ? (
+          <p className="modal-hint modal-warn" data-testid="role-name-error">
+            {error}
+          </p>
+        ) : null}
         <div className="modal-actions">
           <span className="grow" />
           <button type="button" onClick={onClose}>
             取消
           </button>
-          <button type="button" className="primary" onClick={() => onSave(name.trim())}>
+          <button
+            type="button"
+            className="primary"
+            disabled={!canSave}
+            onClick={() => onSave(name.trim())}
+          >
             确定
           </button>
         </div>
