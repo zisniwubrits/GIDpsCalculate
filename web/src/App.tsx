@@ -747,7 +747,8 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
             type: MarkerType.ArrowClosed,
             width: 14,
             height: 14,
-            color: buff ? "#b8860b" : "#2f6fa7",
+            // 拐力箭头也用蓝色（用户要求）；靠虚线区分它不是伤害连线
+            color: "#2f6fa7",
           },
           data: {
             src: l.src,

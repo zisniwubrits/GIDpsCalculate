@@ -195,25 +195,26 @@ describe("角色容器面板", () => {
     expect(body).toMatch(/font-family/);
   });
 
-  it("角色标记的快速查看面板风格对齐普通卡片（同底色/描边/圆角/投影），且不吃鼠标事件", () => {
-    const panel = ruleBody(".role-panel");
-    // 与 .card 同一套外观
-    expect(panel).toMatch(/background:\s*var\(--card-bg\)/);
-    expect(panel).toMatch(/border:\s*1px solid var\(--line\)/);
-    expect(panel).toMatch(/border-radius:\s*8px/);
-    expect(panel).toMatch(/box-shadow:\s*0 1px 3px rgba\(30,\s*50,\s*70,\s*0\.09\)/);
-    // 贴着左上角标记牌，并且是一行一个属性
-    expect(panel).toMatch(/align-self:\s*flex-start/);
-    expect(panel).toMatch(/flex-direction:\s*column/);
-    // 字段行与卡片里的 .f-row 同构：左字段名（灰）+ 右值
-    const row = ruleBody(".role-panel .rp-row");
-    expect(row).toMatch(/grid-template-columns:\s*84px 1fr/);
+  it("角色标记：标记牌 + 角色名 + 面板合成同一张卡片（角色名在面板上面）", () => {
+    // 三块片段共用同一张卡片的底色与左右描边（拼成一个连续的盒子）
+    const merged = ruleBodyInList(".card-role-box > .role-panel");
+    expect(merged).toMatch(/background:\s*var\(--card-bg\)/);
+    expect(merged).toMatch(/border-left:\s*1px solid var\(--line\)/);
+    expect(merged).toMatch(/border-right:\s*1px solid var\(--line\)/);
+    // 标记牌出上圆角与标题底色
+    const head = ruleBody(".card-role-box > .card-head");
+    expect(head).toMatch(/border-radius:\s*8px 8px 0 0/);
+    expect(head).toMatch(/font-size:\s*12px/);
+    // 角色名一行排到面板之前（order），面板收下圆角
+    expect(ruleBody(".card-role-box > .card-body")).toMatch(/order:\s*1/);
+    const panel = ruleBody(".card-role-box > .role-panel");
+    expect(panel).toMatch(/order:\s*2/);
+    expect(panel).toMatch(/border-radius:\s*0 0 8px 8px/);
+    // 面板内部：一行一个属性，字段名灰、数值右对齐，含拐暖色
+    expect(ruleBody(".role-panel .rp-row")).toMatch(/grid-template-columns:\s*84px 1fr/);
     expect(ruleBody(".role-panel .rp-key")).toMatch(/color:\s*var\(--muted\)/);
     expect(ruleBody(".role-panel .rp-val")).toMatch(/text-align:\s*right/);
-    // 含拐的项用暖色标出来
     expect(ruleBody(".role-panel .rp-buffed")).toMatch(/color:\s*var\(--warn\)/);
-    // 标记牌加大（"标签控件不变、只是变大"）
-    expect(ruleBody(".card-role-box .card-head")).toMatch(/font-size:\s*12px/);
   });
 
   it("角色面板弹窗放大、宏表一行一个（便于交互）", () => {
@@ -251,10 +252,11 @@ describe("角色容器面板", () => {
     expect(outLeft - inLeft).toBeLessThan(120);     // 都挤在左上角那一小块
   });
 
-  it("拐力箭头画成虚线暖色，与伤害连线区分", () => {
+  it("拐力箭头画成蓝色虚线，与伤害连线区分（不用暖色）", () => {
     const body = ruleBody(".react-flow__edge-path.card-edge-buff");
     expect(body).toMatch(/stroke-dasharray/);
-    expect(body).toMatch(/stroke:\s*var\(--warn\)/);
+    expect(body).toMatch(/stroke:\s*var\(--link\)/);
+    expect(body).not.toMatch(/--warn/);
   });
 });
 
