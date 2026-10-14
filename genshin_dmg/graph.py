@@ -299,7 +299,14 @@ class Graph:
             if not role_from or not role_to or role_from == role_to:
                 continue
             grants = out.setdefault(role_to, {})
-            for macro in _nodes.PANEL_MACRO_KEYS:
+            names = list(_nodes.PANEL_MACRO_KEYS)
+            out_prefix = role_from + NS_JOIN + SUB_OUT + NS_JOIN
+            for key in base_vars:
+                if key.startswith(out_prefix):
+                    nm = key[len(out_prefix):]
+                    if NS_JOIN not in nm and nm not in names:
+                        names.append(nm)        # out:: 里写的自定义名字
+            for macro in names:
                 val = self.role_out_value(base_vars, role_from, macro)
                 if val:
                     grants[macro] = grants.get(macro, 0.0) + val
@@ -408,10 +415,15 @@ class Graph:
                 if not key.startswith(prefix):
                     continue
                 rest = key[len(prefix):]
-                if NS_JOIN in rest:
-                    continue                    # 已经是子命名空间键（重复调用时跳过）
+                if rest.startswith(SUB_OUT + NS_JOIN):
+                    # 用户 out:: 声明的**自定义名字**同样算一个名字（任意名字都能拐）
+                    rest = rest[len(SUB_OUT) + len(NS_JOIN):]
+                elif NS_JOIN in rest:
+                    continue                    # 其它子命名空间键（重复调用时跳过）
                 names.add(rest)
             grants = self.buffs.get(role) or {}
+            # 收到拐的名字（含自定义名字）也要有 in::/own::/out:: 三个键
+            names.update(grants)
             for name in names:
                 own = float(own_vars.get(prefix + name, 0.0) or 0.0)
                 inc = float(grants.get(name, 0.0) or 0.0)
@@ -457,7 +469,8 @@ class Graph:
         """按 ``own``（拐力生效前的自身值）重算：拐力、生效值、子命名空间。
 
         * 拐力来源值取 ``own``（保证"不传递"）
-        * 生效值 = own + in，**覆盖式**写回全名键（重复调用不会翻倍）
+        * **不再自动相加**：自身写了的以自身为准；只有没写自身时才把拐力（in）写进去。
+          想要"自身 + 拐"就自己写 ``X = own::X + in::X``
         * 顺带刷新 ``own`` / ``out`` / ``in`` 三个子命名空间
         """
         self.buffs = self.buff_sources(own)
@@ -470,8 +483,11 @@ class Graph:
             }
         for role, totals in self._buff_totals.items():
             for macro, total in totals.items():
-                # 只写全名键（角色::宏名），不往全局塞裸名，免得拐力漏给别的角色
-                self.variables[env_key(qualify(macro, role))] = total
+                # 只写全名键（角色::宏名），不往全局塞裸名，免得拐力漏给别的角色；
+                # **自身已定义就跳过**（不再自动相加），totals 此时就等于 in
+                key = env_key(qualify(macro, role))
+                if key not in self.variables:
+                    self.variables[key] = total
         self._apply_sub_namespaces(own)
 
     def buff_stats(self, base_vars: dict) -> dict:
@@ -491,7 +507,14 @@ class Graph:
             rb = _valid_role(b.fields.get("role_name"))
             if not ra or not rb or ra == rb:
                 continue
-            for macro in _nodes.PANEL_MACRO_KEYS:
+            names = list(_nodes.PANEL_MACRO_KEYS)
+            out_prefix = ra + NS_JOIN + SUB_OUT + NS_JOIN
+            for key in base_vars:
+                if key.startswith(out_prefix):
+                    nm = key[len(out_prefix):]
+                    if NS_JOIN not in nm and nm not in names:
+                        names.append(nm)
+            for macro in names:
                 val = self.role_out_value(base_vars, ra, macro)
                 if not val:
                     continue
@@ -522,8 +545,7 @@ class Graph:
         return None
 
     def warnings(self) -> list:
-        # 「用 in::同名 定义自己」放最前：它是用户主动写的、最容易出乎意料的一条
-        out = self._double_count_warnings()
+        out = []
         if self.result_node() is None:
             out.append("没有「结果」卡片：请加一张 ★结果 卡片并把链条接到它上面")
         elif "crit" not in self.chain_types():
@@ -531,38 +553,6 @@ class Graph:
         dup = self.duplicate_card_names()
         if dup:
             out.append("卡片名重复（只有第一张生效）：%s" % "、".join(dup))
-        return out
-
-    def _double_count_warnings(self) -> list:
-        """提醒"用 in::同名 定义自己"会翻倍（自身 + 收进来的各算一次）。
-
-        这是四个名字的定义使然，不是 bug；但用户很容易这么写（以为 in:: 就是"我要的值"），
-        所以给一条可操作的提示：删掉这行，裸名本身就含拐。
-        """
-        seen, out = set(), []
-        for node in self.nodes.values():
-            if node.type == "var":
-                lines = (node.fields.get("defs") or "").splitlines()
-            elif node.type == "role":
-                lines = (node.fields.get("panel") or "").splitlines()
-            else:
-                continue
-            for line in lines:
-                parsed = split_var_line(line)
-                if parsed is None:
-                    continue
-                name = valid_var_name(parsed[0]) or parsed[0].strip()
-                kind, _explicit, base = parse_sub_ns(name)
-                if kind in (SUB_OUT, SUB_IN) or not base:
-                    continue
-                if ("%s%s%s" % (SUB_IN, NS_SEP, base)) not in parsed[1]:
-                    continue
-                if base in seen:
-                    continue
-                seen.add(base)
-                out.append(
-                    "「%s = …」里用了 in::%s 定义自己：生效值会翻倍（自身 + 收进来的各算一次）；"
-                    "这行通常不需要，删掉它 %s 本身就已经含拐" % (base, base, base))
         return out
 
     # -- 卡片命名（`卡片名::输出`）-----------------------------------------
@@ -648,8 +638,9 @@ class Graph:
                 if key.startswith(prefix):
                     out[key[len(prefix):]] = val        # 就近：本角色覆盖同名全局
             for macro, extra in (self._buff_totals.get(role) or {}).items():
-                # 覆盖式：本角色面板项 = 自身值 + 拐力（多来源已在 _buff_totals 里加过）
-                out[macro] = extra
+                if macro in out:
+                    continue        # 自身已定义 → 以自身为准（要"自身+拐"自己写 own:: + in::）
+                out[macro] = extra  # 自身没写 → 吃拐（此时 extra 就等于 in）
                 out[prefix + macro] = extra
             # 子命名空间（own / out / in）的就近别名：不管 base 是什么表都补上，
             # 否则"第二轮解析变量"时（base 是空表）变量定义里引用不到 in::/own::

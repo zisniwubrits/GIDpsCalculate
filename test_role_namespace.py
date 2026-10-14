@@ -337,10 +337,20 @@ class TestBuffArrows(unittest.TestCase):
         g.links.append(Link("r_src", "r_dst", 0))
         self.assertEqual(self.base_value(g), 1400)          # 拐上 40% 攻击
 
-    def test_target_own_value_adds_to_grant(self):
+    def test_own_value_wins_no_auto_sum(self):
+        """取消自动相加后：自身写了 10 就以 10 为准（以前是 20 → 50%）。"""
         g = self.build("atk_pct = 40", target_defs="atk = 1000\natk_pct = 10")
         g.links.append(Link("r_src", "r_dst", 0))
-        self.assertEqual(self.base_value(g), 1500)          # 自身 10 + 拐 40 = 50%
+        self.assertEqual(self.base_value(g), 1100)
+        # 想要"自身 + 拐"，自己在变量卡里写出来
+        g2 = self.build("atk_pct = 40",
+                        target_defs="atk = 1000\n总 = own::atk_pct + in::atk_pct")
+        g2.add(GraphNode("b2", "base",
+                         fields={"stat_base": "", "stat_big": "总", "multiplier": "100"},
+                         role="火神"))
+        g2.links.append(Link("r_src", "r_dst", 0))
+        # 目标没写自身 atk_pct → own:: 是 0，所以 总 = 0 + 40 → 1000×1.4
+        self.assertEqual(g2.evaluate()["nodes"]["b2"]["values"]["noncrit"], 1400)
 
     def test_multiple_sources_add_up(self):
         g = self.build("atk_pct = 40")
@@ -388,7 +398,7 @@ class TestBuffArrows(unittest.TestCase):
         g.add(GraphNode("t", "vartable"))
         g.links.append(Link("r_src", "r_dst", 0))
         rows = dict(g.evaluate()["nodes"]["t"]["rows"])
-        self.assertEqual(rows["火神::atk_pct"], "50")        # 含拐的面板值
+        self.assertEqual(rows["火神::atk_pct"], "10")        # 自身优先（不再自动加拐）
         self.assertEqual(rows["辅助::atk_pct"], "40")        # 源角色自己不变
 
     def test_target_expression_using_macro_sees_the_grant(self):
@@ -396,7 +406,8 @@ class TestBuffArrows(unittest.TestCase):
         g = self.build("atk = 500", target_defs="atk = 1000\ntotal = atk * 2")
         g.links.append(Link("r_src", "r_dst", 0))
         names = {v["name"]: v["text"] for v in g.evaluate()["variables"]}
-        self.assertEqual(names["火神::total"], "3000")        # (1000+500)×2
+        # 取消自动相加：自身写了 1000 → atk 就是 1000（不再加收进来的 500）
+        self.assertEqual(names["火神::total"], "2000")
 
     def test_buff_edges_helper(self):
         g = self.build("atk_pct = 40")
@@ -496,7 +507,7 @@ class TestSubNamespaces(unittest.TestCase):
 
     def test_four_names(self):
         g = self.build()
-        self.assertEqual(self.calc(g, "c1", "atk_pct"), 50)          # 生效值
+        self.assertEqual(self.calc(g, "c1", "atk_pct"), 10)          # 自身优先（不再自动加拐）
         self.assertEqual(self.calc(g, "c2", "own::atk_pct"), 10)     # 纯自身
         self.assertEqual(self.calc(g, "c3", "out::atk_pct"), 10)     # 对外提供
         self.assertEqual(self.calc(g, "c4", "::in::atk_pct"), 40)    # 收进来
@@ -505,7 +516,7 @@ class TestSubNamespaces(unittest.TestCase):
 
     def test_full_names_work_from_anywhere(self):
         g = self.build()
-        self.assertEqual(self.calc(g, "c1", "火神::atk_pct", role=""), 50)
+        self.assertEqual(self.calc(g, "c1", "火神::atk_pct", role=""), 10)
         self.assertEqual(self.calc(g, "c2", "火神::in::atk_pct", role=""), 40)
         self.assertEqual(self.calc(g, "c3", "火神::own::atk_pct", role=""), 10)
         # 从别的角色里看也一样（全名不受就近解析影响）
@@ -524,9 +535,9 @@ class TestSubNamespaces(unittest.TestCase):
         g = self.build()
         g.add(GraphNode("rc", "role", fields={"role_name": "另一个辅助", "panel": "atk_pct = 25"}))
         g.links.append(Link("rc", "rb", 0))
-        self.assertEqual(self.calc(g, "c1", "::in::atk_pct"), 65)     # 40 + 25
+        self.assertEqual(self.calc(g, "c1", "::in::atk_pct"), 65)     # 40 + 25（多来源在 in 里相加）
         self.assertEqual(self.calc(g, "c2", "::own::atk_pct"), 10)    # 自身不受影响
-        self.assertEqual(self.calc(g, "c3", "atk_pct"), 75)           # 生效值
+        self.assertEqual(self.calc(g, "c3", "atk_pct"), 10)           # 自身优先
 
     def test_not_propagated(self):
         """不传递：C→A、A→B 时 A 的 out 仍是自身值（不含 C 给的），B 只拿到 A 的 out。"""
@@ -600,10 +611,9 @@ class TestDeferredDefinitions(unittest.TestCase):
             g.add(GraphNode("c1", "calc", fields={"expr": "own::atk_pct"}, role="火神"))
             g.add(GraphNode("c2", "calc", fields={"expr": "atk_pct"}, role="火神"))
             out = g.evaluate()
-            # 自身被定义成"收进来的 40"
+            # 自身被定义成"收进来的 40"，生效值就是 40（不再自动把 in 再加一遍）
             self.assertEqual(out["nodes"]["c1"]["values"]["noncrit"], 40, where)
-            # 生效值 = 自身 + 收进来的 = 80：把自己定义成 in 会翻倍（语义使然，别这么写）
-            self.assertEqual(out["nodes"]["c2"]["values"]["noncrit"], 80, where)
+            self.assertEqual(out["nodes"]["c2"]["values"]["noncrit"], 40, where)
 
     def test_panel_items_can_reference_each_other(self):
         """角色面板里的项可以引用同一角色卡上先写的项（原来角色卡自己没作用域，引用不到）。"""
@@ -691,14 +701,23 @@ class TestOutDeclarations(unittest.TestCase):
         g.add(GraphNode("c1", "calc", fields={"expr": "in::atk_pct"}, role="a"))
         self.assertEqual(g.evaluate()["nodes"]["c1"]["values"]["noncrit"], 40)
 
-    def test_double_count_warning(self):
-        """用 in::同名 定义自己 → 给一条可操作的告警（放最前，状态区看得到）。"""
-        g = self.build(with_a_def=True)
-        warns = g.evaluate()["warnings"]
-        self.assertIn("翻倍", warns[0])
-        self.assertIn("删掉它", warns[0])
-        # 没有这种写法时不该出现
-        self.assertFalse([w for w in self.build().evaluate()["warnings"] if "翻倍" in w])
+class TestCustomOutNames(unittest.TestCase):
+    """out:: 后面可以是**任意名字**（不限于面板宏），对面用 in::那个名字 收到。"""
+
+    def test_custom_out_name_is_granted(self):
+        g = Graph()
+        g.add(GraphNode("ra", "role", fields={"role_name": "辅助"}))
+        g.add(var_card("va", "out::拐力A = 20", role="辅助"))
+        g.add(GraphNode("rb", "role", fields={"role_name": "火神"}))
+        g.add(GraphNode("c1", "calc", fields={"expr": "in::拐力A"}, role="火神"))
+        g.add(GraphNode("t", "vartable"))
+        g.links.append(Link("ra", "rb", 0))
+        out = g.evaluate()
+        self.assertEqual(out["nodes"]["c1"]["values"]["noncrit"], 20)
+        # 自定义名字也要进「角色面板」弹窗的 OUT / IN 统计
+        self.assertEqual([r["macro"] for r in out["buffStats"]["辅助"]["out"]], ["拐力A"])
+        self.assertEqual([r["macro"] for r in out["buffStats"]["火神"]["in"]], ["拐力A"])
+        self.assertEqual(dict(out["nodes"]["t"]["rows"])["火神::拐力A"], "20")   # 没写自身 → 直接吃
 
 
 class TestRoleNameValidation(unittest.TestCase):
