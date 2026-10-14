@@ -137,7 +137,7 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
   // 标题栏文案：
   //  * 角色容器 → 「角色 · 自定义角色名」
   //  * 计算卡 → 它自己的标题（历史行为）
-  //  * 命名过的卡片 → 「类型 · 名字」（名字只在这里展示，不占卡片版面）
+  //  * 其余 → 卡片类型（命名后的名字另挂徽标，见下面的 card-name-chip）
   const cardName = String(node.fields.card_name ?? "").trim();
   const baseTitle =
     node.type === "calc" ? String(node.fields.title ?? spec.title) || spec.title : spec.title;
@@ -145,9 +145,7 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
     ? spec.label
     : node.type === "role"
       ? `角色 · ${String(node.fields.role_name ?? "").trim() || "未命名"}`
-      : cardName && node.type !== "calc"
-        ? `${baseTitle} · ${cardName}`
-        : baseTitle;
+      : baseTitle;
 
   const body = collapsed ? null : (
     <div
@@ -291,9 +289,22 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
           <span className="card-title" title={spec.title}>
             {title}
           </span>
+          {/* 命名空间徽标：显示的是**你能敲的前缀**，所以都带 :: 
+              —— 命名卡片的输出写作 火神增伤::暴击，角色里的变量写作 火神::攻击力 */}
+          {cardName && !collapsed && node.type !== "calc" ? (
+            <span
+              className="card-name-chip"
+              title={`引用这张卡的输出：${cardName}（期望值）／ ${cardName}::暴击 ／ ${cardName}::未暴击`}
+            >
+              {cardName}::
+            </span>
+          ) : null}
           {data.role && !collapsed ? (
-            <span className="card-role-chip" title={`属于角色「${data.role}」：其中的变量写作 ${data.role}::变量名`}>
-              {data.role}
+            <span
+              className="card-role-chip"
+              title={`属于角色「${data.role}」：其中的变量写作 ${data.role}::变量名`}
+            >
+              {data.role}::
             </span>
           ) : null}
           <button

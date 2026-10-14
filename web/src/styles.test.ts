@@ -132,6 +132,13 @@ describe("角色容器面板", () => {
     expect(body).toMatch(/border-radius/);
     expect(body).toMatch(/font-size:\s*11px/);
   });
+
+  it("命名卡片的徽标同样是小胶囊，且用等宽字形（显示的是要敲的前缀 `名字::`）", () => {
+    const body = ruleBody(".card-name-chip");
+    expect(body).toMatch(/border-radius/);
+    expect(body).toMatch(/font-size:\s*11px/);
+    expect(body).toMatch(/font-family/);
+  });
 });
 
 describe("画布水印", () => {

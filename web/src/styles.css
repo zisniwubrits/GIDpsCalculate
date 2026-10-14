@@ -336,7 +336,7 @@ textarea:focus {
   border-bottom: 1px dashed #b9cde0;
 }
 
-/* 标题栏上的角色徽标：一眼看出这张卡属于哪个角色 */
+/* 标题栏上的角色徽标：一眼看出这张卡属于哪个角色（显示成 `火神::`，就是该敲的前缀） */
 .card-role-chip {
   margin-left: 6px;
   padding: 0 6px;
@@ -345,6 +345,18 @@ textarea:focus {
   color: var(--accent);
   font-size: 11px;
   white-space: nowrap;
+}
+
+/* 命名卡片的徽标：同样是「能敲的前缀」形式（`雷神增伤::`） */
+.card-name-chip {
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: rgba(107, 122, 137, 0.14);
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+  font-family: Consolas, "Courier New", "Microsoft YaHei", monospace;
 }
 
 .role-hint {
