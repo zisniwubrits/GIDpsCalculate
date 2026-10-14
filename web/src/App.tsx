@@ -131,8 +131,18 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
     };
   }, [schema]);
 
+  /**
+   * React Flow 自己也会存一份节点位置：把节点挡回原处时**它内部那份还是拖动后的**，
+   * 只改我们的状态它不会跟（画布上还停在压住别人的地方）。这个计数器强制重算
+   * rfNodes（对象引用变了 → RF 重新对账并采纳我们的位置）。
+   */
+  const [revision, setRevision] = useState(0);
+  /** 最新的节点数组（给"回滚位置"这类 apply 之后的副作用用，避免闭包拿到旧值） */
+  const nodesRef = useRef<CardNodeModel[]>([]);
+
   const history = useGraphHistory(initial.state);
   const { nodes, links } = history.state;
+  nodesRef.current = nodes;
   const [name, setName] = useState(initial.name);
   /** 一键保存的落地目录（后端记忆，打开/保存后同步） */
   const [saveDir, setSaveDir] = useState("");
@@ -163,6 +173,10 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
   const boxSelecting = useRef(false);
   /** 拖动角色区域被"重叠"规则挡回时，记下要写回 React Flow 的位置（apply 之后处理） */
   const revertTo = useRef<{ id: string; pos: [number, number] } | null>(null);
+  /** 拖动中的角色区域**最后一次合法位置**（压到别人时就顶回这儿，拖动中不越界） */
+  const dragAnchor = useRef<Map<string, [number, number]>>(new Map());
+  /** 拖动开始前角色区域的位置（松手时若被顶过，就整个回滚到这里） */
+  const dragStart = useRef<Map<string, [number, number]>>(new Map());
   /** 加载工程时自动挪开重叠角色区域的提示（只在第一次渲染后弹一次） */
   const overlapNotice = useRef(
     initial.overlapsMoved.length
@@ -388,28 +402,42 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
         for (const ch of changes) {
           if (ch.type === "position" && ch.position) {
             const pos = ch.position;
-            next = next.map((n) => (n.id === ch.id ? { ...n, pos: [pos.x, pos.y] } : n));
-            if (!ch.dragging) {
-              // 角色区域**不许互相压**（用户硬规则）：拖完压上了就把这次拖动挡回去。
-              // 这里只算结果，真正的"回滚 + 写回 React Flow"放在 apply 之后做
-              // （apply 的 updater 要保持纯粹，不能在里面产生副作用）。
-              const moving = next.find((n) => n.id === ch.id);
-              if (moving && isNamespaceNode(moving)) {
-                const hit = roleBoxCollisions(
-                  next.filter((n) => n.id !== ch.id),
-                  ch.id,
-                  moving.pos,
-                  moving.size,
-                );
-                if (hit.length) {
-                  const old = s.nodes.find((n) => n.id === ch.id);
-                  if (old) {
-                    revertTo.current = { id: ch.id, pos: [old.pos[0], old.pos[1]] };
-                    next = next.map((n) =>
-                      n.id === ch.id ? { ...n, pos: [old.pos[0], old.pos[1]] } : n,
-                    );
-                  }
+            // 拖动**角色区域**时若压到别的角色：把这次位移直接顶回上一次的合法位置。
+            // 必须在"拖动中"就顶（不能等拖完）—— React Flow 自己也在按指针位置画，
+            // 等松手再纠正，画布上那一下仍然会停在压住别人的地方（实测抓到的 bug）。
+            let placed: [number, number] = [pos.x, pos.y];
+            const moving = s.nodes.find((n) => n.id === ch.id);
+            if (moving && isNamespaceNode(moving)) {
+              if (ch.dragging && !dragStart.current.has(ch.id)) {
+                dragStart.current.set(ch.id, moving.pos);       // 记住"拖动前"的位置
+              }
+              if (ch.dragging && roleBoxCollisions(s.nodes, ch.id, placed, moving.size).length) {
+                placed = dragAnchor.current.get(ch.id) ?? moving.pos;
+                if (typeof requestAnimationFrame === "function") {
+                  const back = placed;
+                  requestAnimationFrame(() =>
+                    rf.updateNode(ch.id, { position: { x: back[0], y: back[1] } }),
+                  );
                 }
+                setToast("角色区域不许互相压：拖到这里会被顶回去");
+              } else if (ch.dragging) {
+                dragAnchor.current.set(ch.id, placed);      // 记住最后一次合法位置
+              }
+            }
+            next = next.map((n) => (n.id === ch.id ? { ...n, pos: placed } : n));
+            if (!ch.dragging) {
+              // 松手：这一趟被顶过（停在别人边上）就整个回滚到拖动前，别留个半截位置
+              const landed = next.find((n) => n.id === ch.id);
+              if (landed && isNamespaceNode(landed)) {
+                const start = dragStart.current.get(ch.id);
+                if (start && (start[0] !== placed[0] || start[1] !== placed[1])) {
+                  revertTo.current = { id: ch.id, pos: start };
+                  next = next.map((n) =>
+                    n.id === ch.id ? { ...n, pos: [start[0], start[1]] } : n,
+                  );
+                }
+                dragAnchor.current.delete(ch.id);
+                dragStart.current.delete(ch.id);
               }
               // 拖拽结束：空白的变量卡落进角色区域 → 程序填入面板预设代码
               const res = fillPresetForDropped(
@@ -455,7 +483,21 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
       const back = revertTo.current;
       if (back) {
         revertTo.current = null;
-        rf.updateNode(back.id, { position: { x: back.pos[0], y: back.pos[1] } });
+        const put = () => {
+          rf.updateNode(back.id, { position: { x: back.pos[0], y: back.pos[1] } });
+          const live = rf.getNodes();
+          rf.setNodes(
+            live.map((n) => {
+              const mine = nodesRef.current.find((m) => m.id === n.id);
+              return mine ? { ...n, position: { x: mine.pos[0], y: mine.pos[1] } } : n;
+            }),
+          );
+        };
+        // React Flow 对"正在拖的节点"会忽略位置更新（拖动状态还没清掉），
+        // 所以推到下一帧再写回，否则画布上仍停在压住别人的位置（实测踩到）
+        put();
+        if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => put());
+        setRevision((v) => v + 1);
         setToast("角色区域不许互相压：这次拖动已放回原处");
       }
     },
@@ -880,7 +922,7 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
         };
       }),
     [orderedNodes, schema, results, roles, onField, removeNode, onCopy, onResize,
-     evaluation.data, hiddenCards],
+     evaluation.data, hiddenCards, revision],
   );
 
   const rfEdges = useMemo<CardRFEdge[]>(

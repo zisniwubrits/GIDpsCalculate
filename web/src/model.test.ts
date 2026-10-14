@@ -700,6 +700,14 @@ describe("角色命名空间的两条硬规则", () => {
     expect(roleBoxCollisions(tight, "r3", [400, 0], [900, 380]).map((n) => n.id)).toEqual(["r1"]);
   });
 
+  it("回归：判定时数组里必须含目标容器自己（去掉它就永远判成不冲突）", () => {
+    // 曾经 App.tsx 传的是"去掉自己"的数组 → 拖动压人根本挡不住（真机实测抓到）
+    const list = [mk("r1", "火神", [0, 0], [560, 380]), mk("r2", "辅助", [760, 0], [560, 380])];
+    const withoutSelf = list.filter((n) => n.id !== "r2");
+    expect(roleBoxCollisions(list, "r2", [100, 0]).map((n) => n.id)).toEqual(["r1"]);   // 正确用法
+    expect(roleBoxCollisions(withoutSelf, "r2", [100, 0])).toEqual([]);                 // 反例：找不到目标
+  });
+
   it("打开旧工程时把压在一起的角色区域挪开（先来的不动）", () => {
     const list = [
       mk("r1", "火神", [0, 0], [560, 380]),
