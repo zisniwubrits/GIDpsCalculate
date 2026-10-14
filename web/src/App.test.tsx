@@ -74,7 +74,14 @@ function evaluateStub(body: GraphJSON): EvaluateResult {
           boundNames: [],
         }
       : null,
-    variables: [],
+    variables: body.nodes
+      .filter((n) => n.type === "role")
+      .map((n) => ({
+        // 假数据：每个角色都"定义了 atk"，用来验证画布上那块面板的显示与筛选
+        name: `${String(n.fields.role_name ?? "").trim()}::atk`,
+        value: 1000,
+        text: "1000",
+      })),
     nodes,
     chainTypes: [],
     warnings: resultNode ? [] : ["没有「结果」卡片：请加一张 ★结果 卡片并把链条接到它上面"],
@@ -781,6 +788,31 @@ describe("App 集成（假后端 + 真 schema）", () => {
     expect(box.querySelectorAll(".react-flow__handle.port-out")).toHaveLength(1);
     // 端口上写明用途（拖过去 = 上拐）
     expect(box.querySelector(".role-port-out")?.getAttribute("title")).toContain("拐力");
+  });
+
+  it("角色标记下方显示「面板」：默认只列有值的项，可在弹窗里勾选控制显示哪几项", async () => {
+    const user = userEvent.setup();
+    await renderApp();
+    await addCard(user, "role");
+    const card = await screen.findByTestId("card-n1");
+
+    // 假后端说这个角色定义了 atk=1000 → 面板里就有这一行（其余宏没值，不显示）
+    const panel = await screen.findByTestId("role-panel-n1");
+    await waitFor(() => expect(panel).toHaveTextContent("atk"));
+    expect(panel).toHaveTextContent("1000");
+    expect(panel).not.toHaveTextContent("crit_rate");
+
+    // 在「角色面板…」里勾上 crit_rate → 确定 → 写进 panel_show，画布面板按勾选显示
+    fireEvent.contextMenu(within(card).getByText("角色 · 角色1"));
+    await user.click(await screen.findByText("角色面板…"));
+    const dialog = await screen.findByTestId("role-panel-dialog");
+    await user.click(within(dialog).getByTestId("panel-show-crit_rate"));
+    await user.click(within(dialog).getByRole("button", { name: "确定" }));
+
+    await waitFor(() => expect(lastBody?.nodes[0].fields.panel_show).toBe("crit_rate"));
+    await waitFor(() => expect(screen.getByTestId("role-panel-n1")).toHaveTextContent("crit_rate"));
+    // 勾选是白名单：没勾的 atk 不再显示
+    expect(screen.getByTestId("role-panel-n1")).not.toHaveTextContent("atk ");
   });
 
   it("右键角色标签 →「角色面板…」：宏表可编辑、并显示拐力统计（OUT/IN）", async () => {    const user = userEvent.setup();

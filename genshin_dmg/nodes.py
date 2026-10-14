@@ -625,6 +625,8 @@ NODE_TYPES: dict = {
     ], hidden_fields=[
         # 面板宏：右键「角色面板…」弹窗里编辑（写 `宏 = 值` 多行），只存不渲染
         _F("panel", "面板", "", "textbox"),
+        # 画布上那块面板**显示哪些宏**（空格/逗号分隔的宏名；留空 = 只显示已有值的那些）
+        _F("panel_show", "面板显示项", "", "textbox"),
     ]),
     "result": dict(title="★ 结果", label="★结果", group="工具", inputs=1,
                    compute=_t_result, ctx_menu=True, hidden_fields=[

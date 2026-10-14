@@ -373,6 +373,67 @@ textarea:focus {
   top: -7px;
 }
 
+/* 画布上角色标记里的「面板」：标记牌下方，只读一行一项；
+   只显示控制哪些项（右键「角色面板…」里勾选），空 = 只显示已有值的那些 */
+.role-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 2px 6px 0;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.role-panel .rp-row {
+  display: flex;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.role-panel .rp-key {
+  font-family: Consolas, "Courier New", "Microsoft YaHei", monospace;
+  color: var(--accent);
+}
+
+.role-panel .rp-val {
+  color: #34495e;
+}
+
+/* 含拐的面板项（自身 + 收进来的）用暖色标出来 */
+.role-panel .rp-buffed {
+  color: var(--warn);
+  font-weight: 700;
+}
+
+/* 面板弹窗里的「显示」勾选列 */
+.panel-macro-head,
+.panel-macro-row {
+  grid-template-columns: 108px 84px minmax(150px, 1fr) minmax(170px, 1.05fr) 44px;
+}
+
+.panel-macro-head {
+  display: grid;
+  align-items: center;
+  gap: 10px;
+  padding: 0 6px 4px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.pm-show,
+.pm-show-head {
+  justify-self: center;
+}
+
+.pm-show {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
 /* 背景标记的观感：虚线淡蓝、无阴影、无白底；标签条做成"标记牌"而不是卡片头 */
 .card-role-box {
   background: rgba(47, 111, 167, 0.05);
@@ -383,12 +444,12 @@ textarea:focus {
 
 .card-role-box .card-head {
   align-self: flex-start;
-  margin: 2px 0 0 2px;
-  padding: 1px 8px;
+  margin: 3px 0 0 3px;
+  padding: 3px 10px;
   border-radius: 8px;
   background: rgba(47, 111, 167, 0.14);
   border-bottom: none;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--accent);
 }
 

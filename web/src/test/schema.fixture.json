@@ -1179,7 +1179,8 @@
       ],
       "defaults": {
         "role_name": "",
-        "panel": ""
+        "panel": "",
+        "panel_show": ""
       },
       "isolated": true,
       "no_output": true,
@@ -1196,7 +1197,8 @@
       "sink": false,
       "table": null,
       "hidden_fields": [
-        "panel"
+        "panel",
+        "panel_show"
       ]
     },
     "result": {

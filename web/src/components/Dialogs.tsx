@@ -158,10 +158,12 @@ export interface RolePanelDialogProps {
   macros: { key: string; label: string; feed: string }[];
   /** 当前面板值 {宏: 值文本} */
   initial: Record<string, string>;
+  /** 画布上那块面板要显示哪些宏（空 = 只显示已有值的） */
+  initialShow: string[];
   /** 拐力统计（OUT：给出去多少；IN：收进来多少） */
   stats?: { out: { macro: string; label: string; value: number; role: string }[];
             in: { macro: string; label: string; value: number; role: string }[] };
-  onSave: (values: Record<string, string>) => void;
+  onSave: (values: Record<string, string>, show: string[]) => void;
   onClose: () => void;
 }
 
@@ -175,11 +177,13 @@ export function RolePanelDialog({
   title,
   macros,
   initial,
+  initialShow,
   stats,
   onSave,
   onClose,
 }: RolePanelDialogProps) {
   const [values, setValues] = useState<Record<string, string>>({ ...initial });
+  const [show, setShow] = useState<string[]>([...initialShow]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -233,6 +237,13 @@ export function RolePanelDialog({
           <code>::in::atk</code> 收进来的拐（多来源相加）。在角色内可省略角色名。
         </p>
         <div className="panel-macro-grid">
+          <div className="panel-macro-head">
+            <span className="pm-key">宏</span>
+            <span className="pm-label">属性</span>
+            <span>值（可写算式/变量）</span>
+            <span className="pm-feed">喂给哪张卡</span>
+            <span className="pm-show-head" title="勾选后显示在画布的角色面板上">显示</span>
+          </div>
           {macros.map((m) => (
             <label className="panel-macro-row" key={m.key}>
               <span className="pm-key">{m.key}</span>
@@ -246,9 +257,24 @@ export function RolePanelDialog({
               <span className="pm-feed" title={m.feed}>
                 {m.feed}
               </span>
+              <input
+                type="checkbox"
+                className="pm-show"
+                data-testid={`panel-show-${m.key}`}
+                title="在画布的角色面板上显示这一项"
+                checked={show.includes(m.key)}
+                onChange={(e) =>
+                  setShow((s) =>
+                    e.target.checked ? [...s, m.key] : s.filter((k) => k !== m.key),
+                  )
+                }
+              />
             </label>
           ))}
         </div>
+        <p className="modal-hint">
+          「显示」一列控制画布上角色标记里那块面板显示哪几项（不勾 = 只在有值时才显示）。
+        </p>
         <div className="buff-stats">
           <div>
             <h3>给出去的拐（OUT）</h3>
@@ -264,7 +290,7 @@ export function RolePanelDialog({
           <button type="button" onClick={onClose}>
             取消
           </button>
-          <button type="button" className="primary" onClick={() => onSave(values)}>
+          <button type="button" className="primary" onClick={() => onSave(values, show)}>
             确定
           </button>
         </div>

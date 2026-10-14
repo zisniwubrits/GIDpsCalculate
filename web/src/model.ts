@@ -180,6 +180,21 @@ export function formatPanel(
   return lines.join("\n");
 }
 
+/**
+ * 画布上那块「面板」显示哪些宏（空格 / 逗号 / 顿号分隔的宏名）。
+ * 留空 = **只显示已有值的那些**（新角色不显示空面板）。
+ */
+export function parsePanelShow(text: string): string[] {
+  return (text ?? "")
+    .split(/[\s,，、]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+export function formatPanelShow(keys: readonly string[]): string {
+  return keys.join(" ");
+}
+
 /** 生成不重复的节点 id：n1、n2… */
 export function nextNodeId(nodes: CardNode[]): string {
   let max = 0;

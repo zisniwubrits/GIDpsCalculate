@@ -42,6 +42,7 @@ import {
   connect,
   estimateSize,
   formatPanel,
+  formatPanelShow,
   freeSlot,
   graphToJSON,
   ignoredByBoxSelect,
@@ -49,6 +50,7 @@ import {
   makeNode,
   nextNodeId,
   parsePanel,
+  parsePanelShow,
   wouldCycle,
   type AlignMode,
   type SizeOf,
@@ -658,6 +660,25 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
           const s = roleName ? evaluation.data?.buffStats?.[roleName] : undefined;
           return { out: s?.out ?? [], in: s?.in ?? [] };
         };
+        // 画布上的「面板」：显示哪几项由 panel_show 控制；留空 = 只显示已有值的那些
+        const rolePanelRows = (roleNode: CardNodeModel) => {
+          const roleName = String(roleNode.fields.role_name ?? "").trim();
+          const data0 = evaluation.data;
+          if (!roleName || !data0) return [];
+          const values = new Map(data0.variables.map((v) => [v.name, v.text]));
+          const incoming = new Map(
+            (data0.buffStats?.[roleName]?.in ?? []).map((r) => [r.macro, r.value]),
+          );
+          const shown = parsePanelShow(String(roleNode.fields.panel_show ?? ""));
+          return schema.panelMacros
+            .map((m) => ({
+              key: m.key,
+              label: m.label,
+              value: values.get(`${roleName}::${m.key}`) ?? "",
+              incoming: incoming.get(m.key) ?? 0,
+            }))
+            .filter((r) => (shown.length ? shown.includes(r.key) : r.value !== ""));
+        };
         const data: CardData = {
           node: n,
           spec: schema.nodeTypes[n.type],
@@ -667,6 +688,7 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
           role: roles[n.id] ?? "",
           // 角色卡：左上角标签上方显示"出入度"（给出去/收进来的拐）
           roleBuffs: n.type === "role" ? roleBuffRows(n) : undefined,
+          rolePanel: n.type === "role" ? rolePanelRows(n) : undefined,
           onField,
           onDelete: removeNode,
           onResize,
@@ -894,9 +916,11 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
             title={roleName || "未命名"}
             macros={schema.panelMacros}
             initial={parsePanel(String(node?.fields.panel ?? ""), keys)}
+            initialShow={parsePanelShow(String(node?.fields.panel_show ?? ""))}
             stats={stats}
-            onSave={(values) => {
+            onSave={(values, show) => {
               onField(panelDialog, "panel", formatPanel(values, keys));
+              onField(panelDialog, "panel_show", formatPanelShow(show));
               setPanelDialog(null);
             }}
             onClose={() => setPanelDialog(null)}

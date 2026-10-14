@@ -20,6 +20,8 @@ export interface CardData extends Record<string, unknown> {
   role: string;
   /** 只对角色卡有意义：这个命名空间**给出去的拐**（OUT）与**收到的拐**（IN） */
   roleBuffs?: { out: BuffStatRow[]; in: BuffStatRow[] };
+  /** 只对角色卡有意义：画布上面板要显示的行（宏名 / 中文名 / 生效值 / 收到的拐） */
+  rolePanel?: { key: string; label: string; value: string; incoming: number }[];
   onField: (id: string, key: string, value: FieldValue) => void;
   onDelete: (id: string) => void;
   /** 拖动缩放手柄结束后把最终尺寸（含左上角坐标变化）写回模型 */
@@ -364,6 +366,26 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
             ✕
           </button>
         </div>
+        {/* 角色标记的「面板」：显示在左上角标记牌**下方**（画布上就能看到属性），
+            显示哪几项由右键「角色面板…」里的勾选控制；只读，不吃鼠标事件 */}
+        {spec.role_card && !collapsed && data.rolePanel?.length ? (
+          <div className="role-panel" data-testid={`role-panel-${id}`}>
+            {data.rolePanel.map((r) => (
+              <div
+                className="rp-row"
+                key={r.key}
+                title={
+                  r.incoming
+                    ? `${r.label}：自身 + 收到的 ${r.incoming}`
+                    : `${r.label}（${r.key}）`
+                }
+              >
+                <span className="rp-key">{r.key}</span>
+                <span className={`rp-val${r.incoming ? " rp-buffed" : ""}`}>{r.value}</span>
+              </div>
+            ))}
+          </div>
+        ) : null}
         {body}
         {footer}
       </div>

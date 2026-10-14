@@ -15,7 +15,9 @@ import {
   ignoredByBoxSelect,
   jsonToGraph,
   formatPanel,
+  formatPanelShow,
   parsePanel,
+  parsePanelShow,
   makeNode,
   nextNodeId,
   nextRoleName,
@@ -401,6 +403,16 @@ describe("角色容器（抽象角色命名空间）", () => {
     const text = formatPanel({ res_shred: "40", atk: "2000", atk_pct: "" }, keys);
     expect(text).toBe("atk = 2000\nres_shred = 40");
     expect(parsePanel(text, keys)).toEqual({ atk: "2000", res_shred: "40" });
+  });
+
+  it("画布面板的显示名单：解析空格/逗号/顿号分隔，回写用空格", () => {
+    expect(parsePanelShow("atk crit_rate")).toEqual(["atk", "crit_rate"]);
+    expect(parsePanelShow("atk, crit_rate、em")).toEqual(["atk", "crit_rate", "em"]);
+    expect(parsePanelShow("  ")).toEqual([]);
+    expect(formatPanelShow(["atk", "em"])).toBe("atk em");
+    // 往返稳定
+    expect(parsePanelShow(formatPanelShow(["atk_pct", "res_shred"])))
+      .toEqual(["atk_pct", "res_shred"]);
   });
 
   it("normalizeSchema 给旧后端缺的字段补默认值（否则界面会白屏）", () => {

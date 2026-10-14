@@ -163,7 +163,9 @@ describe("角色容器面板", () => {
     const head = ruleBody(".card-role-box .card-head");
     expect(head).toMatch(/align-self:\s*flex-start/);
     expect(head).toMatch(/border-radius/);
-    expect(head).toMatch(/font-size:\s*11px/);
+    // 用户要求"标签控件不改变，只是变大" → 11px 提到 12px、内边距加大
+    expect(head).toMatch(/font-size:\s*12px/);
+    expect(head).toMatch(/padding:\s*3px 10px/);
     expect(head).toMatch(/border-bottom:\s*none/);
   });
 
@@ -191,6 +193,17 @@ describe("角色容器面板", () => {
     expect(body).toMatch(/border-radius/);
     expect(body).toMatch(/font-size:\s*11px/);
     expect(body).toMatch(/font-family/);
+  });
+
+  it("角色标记的面板挂在左上角（标记牌下方、靠左），且不吃鼠标事件", () => {
+    const panel = ruleBody(".role-panel");
+    expect(panel).toMatch(/align-self:\s*flex-start/);     // 跟着左上角标记牌走
+    expect(panel).toMatch(/flex-direction:\s*column/);     // 一行一个属性
+    expect(ruleBody(".role-panel .rp-row")).toMatch(/white-space:\s*nowrap/);
+    // 含拐的项用暖色标出来
+    expect(ruleBody(".role-panel .rp-buffed")).toMatch(/color:\s*var\(--warn\)/);
+    // 角色节点整体 pointer-events: none → 面板只读、不挡框选与拖动
+    expect(ruleBody(".card-role-box .card-head")).toMatch(/font-size:\s*12px/);  // 标记牌加大
   });
 
   it("角色面板弹窗放大、宏表一行一个（便于交互）", () => {
