@@ -49,8 +49,16 @@ _FULLWIDTH = {"，": ",", "×": "*", "÷": "/", "＋": "+", "－": "-",
 NS_SEP = "::"
 NS_JOIN = "__"
 
-# 形如 名字::名字 的片段（名字=标识符形态：字母/下划线开头，后跟字母数字下划线）
-_NS_RE = re.compile(r"([^\W\d]\w*)\s*::\s*([^\W\d]\w*)")
+# 子命名空间：`角色::out::atk` 这种，用来消除"生效值 / 自身值 / 给出去 / 收进来"的歧义
+SUB_OWN = "own"
+SUB_OUT = "out"
+SUB_IN = "in"
+SUB_NS = (SUB_OWN, SUB_OUT, SUB_IN)
+
+# 命名空间链条：`A` / `A::B` / `A::B::C`…（每段都是标识符形态）
+_CHAIN = r"[^\W\d]\w*(?:\s*::\s*[^\W\d]\w*)*"
+# 允许**前导** `::`（用户会写 `::out::atk` 表示"本角色的 out"）
+_NS_RE = re.compile(r"::\s*(?P<bare>" + _CHAIN + r")|(?P<full>" + _CHAIN + r")")
 
 _OPS = {
     ast.Add: operator.add,
@@ -69,8 +77,16 @@ _TRUE_WORDS = ("1", "true", "yes", "是", "on")
 
 # ---------------------------------------------------------------- 命名空间
 def mangle(text: str) -> str:
-    """把表达式里的 ``角色::变量`` 拼成合法标识符 ``角色__变量``（供 ast 解析）。"""
-    return _NS_RE.sub(lambda m: m.group(1) + NS_JOIN + m.group(2), text or "")
+    """把表达式里的命名空间链条拼成合法标识符（``角色::out::atk`` → ``角色__out__atk``）。
+
+    支持多段与前导 ``::``（``::out::atk`` → ``out__atk``，即"本角色的 out"）。
+    """
+    def repl(m):
+        chain = m.group("bare") or m.group("full") or ""
+        parts = [p.strip() for p in chain.split(NS_SEP) if p.strip()]
+        return NS_JOIN.join(parts)
+
+    return _NS_RE.sub(repl, text or "")
 
 
 def demangle(name: str) -> str:
@@ -82,11 +98,34 @@ def demangle(name: str) -> str:
 
 
 def qualify(name: str, role: str = "") -> str:
-    """给变量名加上角色前缀（已经有前缀 / 没有角色则原样返回）。"""
+    """给变量名补上角色前缀。
+
+    * 没有 ``::`` 的裸名 → ``角色::名字``
+    * 以子命名空间开头（``own::x`` / ``out::x`` / ``in::x``）→ ``角色::own::x``
+    * 已经写了角色名（``胡桃::x``）→ 原样返回
+    """
     t = (name or "").strip()
-    if not t or not role or NS_SEP in t:
+    if t.startswith(NS_SEP):
+        t = t[len(NS_SEP):].strip()      # `::out::atk` = 本角色的 out
+    if not t or not role:
         return t
-    return "%s%s%s" % (role, NS_SEP, t)
+    if NS_SEP not in t:
+        return "%s%s%s" % (role, NS_SEP, t)
+    head = t.split(NS_SEP, 1)[0].strip()
+    if head in SUB_NS:
+        return "%s%s%s" % (role, NS_SEP, t)
+    return t
+
+
+def split_ns(name: str) -> list:
+    """把 ``角色::out::atk`` 拆成 ``["角色", "out", "atk"]``（``::`` 空白已去掉）。"""
+    return [p.strip() for p in (name or "").split(NS_SEP) if p.strip()]
+
+
+def is_sub_ns(name: str) -> bool:
+    """这个名字是否用了子命名空间（``own`` / ``out`` / ``in``）。"""
+    parts = split_ns(name)
+    return any(p in SUB_NS for p in parts[:-1]) if len(parts) > 1 else False
 
 
 def env_key(name: str) -> str:
@@ -94,25 +133,38 @@ def env_key(name: str) -> str:
     return mangle((name or "").strip())
 
 
-def _plain_ok(t: str) -> bool:
-    """单个名字（不含命名空间）是否合法：标识符、非关键字、不含内部拼接符。"""
-    return bool(t) and t.isidentifier() and not keyword.iskeyword(t) and NS_JOIN not in t
+def _plain_ok(t: str, keyword_ok: bool = False) -> bool:
+    """单个名字（不含命名空间）是否合法：标识符、非关键字、不含内部拼接符。
+
+    ``keyword_ok=True`` 用于**命名空间链条里的段**：``in`` / ``is`` 这类关键字单独出现
+    时会被 ast 当语法，但拼成 ``in__atk`` 之后只是普通标识符，所以允许
+    （子命名空间 ``::in::`` 正是这个情况）。
+    """
+    if not t or not t.isidentifier() or NS_JOIN in t:
+        return False
+    return keyword_ok or not keyword.iskeyword(t)
 
 
 def valid_var_name(s) -> str:
     """校验用户填写的变量名，返回**规范化的展示名**；非法时返回空串（表示不定义）。
 
-    支持 ``角色::变量`` 形式；角色名与变量名都不能含 ``__``（保留给内部拼接）。
+    支持多段命名空间：``角色::变量``、``角色::own::atk``、``out::atk``…
+    每一段都必须是标识符形态且不含 ``__``（``__`` 保留给内部拼接）。
+    也接受前导 ``::``（``::out::atk``，表示"本角色的 out"），会去掉它。
     """
     t = (s or "").strip()
     if not t:
         return ""
+    if t.startswith(NS_SEP):
+        t = t[len(NS_SEP):].strip()          # 前导 :: 只是"本角色"的写法，不是名字的一部分
+    if not t:
+        return ""
     if NS_SEP in t:
-        ns, _, var = t.partition(NS_SEP)
-        ns, var = ns.strip(), var.strip()
-        if not _plain_ok(ns) or not _plain_ok(var):
+        parts = [p.strip() for p in t.split(NS_SEP)]
+        # 链条里的段允许 Python 关键字（`::in::atk` → 拼成 in__atk 就安全了）
+        if len(parts) < 2 or not all(_plain_ok(p, keyword_ok=True) for p in parts):
             return ""
-        return "%s%s%s" % (ns, NS_SEP, var)
+        return NS_SEP.join(parts)
     return t if _plain_ok(t) else ""
 
 

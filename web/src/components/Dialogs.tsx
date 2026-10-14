@@ -224,8 +224,13 @@ export function RolePanelDialog({
         ) : null}
         <p className="modal-hint">
           面板项就是本角色命名空间里的变量（<code>{title}::atk</code> 这样引用）。
-          卡片字段**留空**时会用这里的值兜底；拖拐力箭头时，本表会加到目标角色的同名项上。
+          卡片字段留空时会用这里的值兜底；拖拐力箭头时，本表会加到目标角色的同名项上。
           值可以写算式或引用其它变量。
+        </p>
+        <p className="modal-hint">
+          同一个面板项有四个名字：<code>{title}::atk</code> 生效值（自身+收进来的拐）、
+          <code>::own::atk</code> 纯自身、<code>::out::atk</code> 给出去的（=自身）、
+          <code>::in::atk</code> 收进来的拐（多来源相加）。在角色内可省略角色名。
         </p>
         <div className="panel-macro-grid">
           {macros.map((m) => (

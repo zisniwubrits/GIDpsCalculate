@@ -335,6 +335,15 @@ class TestTutorial(unittest.TestCase):
         json.dumps(dict(text=tutorial.HELP_TEXT, sections=tutorial.SECTIONS),
                    ensure_ascii=False)
 
+    def test_no_markdown_markers(self):
+        """F1 是 <pre> 原样渲染：出现 ** 粗体标记会被原样显示成星号（踩过两次）。
+
+        只放行算式里的 ``2**3``。
+        """
+        offenders = [line.strip() for line in tutorial.HELP_TEXT.splitlines()
+                     if "**" in line and "2**3" not in line]
+        self.assertEqual(offenders, [], "教程里不要写 Markdown 粗体标记：%s" % offenders)
+
 
 class TestFrontendStaleness(unittest.TestCase):
     """前端产物过期的判定要能从接口看到（否则界面缺功能时无从下手）。

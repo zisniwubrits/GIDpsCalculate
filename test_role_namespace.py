@@ -14,7 +14,7 @@ import unittest
 
 from genshin_dmg import damage as dmg
 from genshin_dmg import nodes as nd
-from genshin_dmg.expr import demangle, env_key, mangle, qualify, valid_var_name
+from genshin_dmg.expr import demangle, env_key, is_sub_ns, mangle, qualify, valid_var_name
 from genshin_dmg.graph import Graph, GraphNode, Link
 
 
@@ -39,15 +39,40 @@ class TestNameSyntax(unittest.TestCase):
         self.assertEqual(valid_var_name("攻击力"), "攻击力")
 
     def test_valid_var_name_rejects_reserved_and_junk(self):
-        for bad in ("", "  ", "a__b", "雷神::a__b", "雷神::", "::攻击力",
-                    "1abc", "a b", "a-b", "雷神::攻击力::x"):
+        for bad in ("", "  ", "::", "a__b", "雷神::a__b", "雷神::", "1abc", "a b", "a-b",
+                    "雷神:::攻击力", "雷神::攻击力::"):
             self.assertEqual(valid_var_name(bad), "", bad)
+
+    def test_valid_var_name_accepts_sub_namespace(self):
+        """多段命名空间（消除"生效值/自身/给出去/收进来"歧义）都算合法名字。"""
+        self.assertEqual(valid_var_name("火神::own::atk"), "火神::own::atk")
+        self.assertEqual(valid_var_name("火神 :: out :: atk"), "火神::out::atk")
+        # 前导 :: = "本角色的"，规范化时去掉
+        self.assertEqual(valid_var_name("::out::atk"), "out::atk")
+        self.assertEqual(valid_var_name("::in::攻击力"), "in::攻击力")
+        self.assertEqual(valid_var_name("雷神::攻击力::x"), "雷神::攻击力::x")
+
+    def test_mangle_sub_namespace(self):
+        self.assertEqual(mangle("火神::out::atk*2"), "火神__out__atk*2")
+        self.assertEqual(mangle("::in::atk"), "in__atk")
+        self.assertEqual(demangle("火神__out__atk"), "火神::out::atk")
+        self.assertEqual(env_key("火神::out::atk"), "火神__out__atk")
+
+    def test_is_sub_ns(self):
+        self.assertTrue(is_sub_ns("火神::out::atk"))
+        self.assertTrue(is_sub_ns("own::atk"))
+        self.assertFalse(is_sub_ns("火神::atk"))
+        self.assertFalse(is_sub_ns("own"))          # 变量本身叫 own 不算
+        self.assertFalse(is_sub_ns("atk"))
 
     def test_qualify(self):
         self.assertEqual(qualify("攻击力", "雷神"), "雷神::攻击力")
         self.assertEqual(qualify("攻击力", ""), "攻击力")
         # 已经写了前缀就不再套一层
         self.assertEqual(qualify("胡桃::攻击力", "雷神"), "胡桃::攻击力")
+        # 子命名空间：本角色的 own/out/in
+        self.assertEqual(qualify("out::atk", "火神"), "火神::out::atk")
+        self.assertEqual(qualify("::in::atk", "火神"), "火神::in::atk")
 
 
 class TestScoping(unittest.TestCase):
@@ -442,6 +467,104 @@ class TestRoleCardPanel(unittest.TestCase):
         info2 = g2.evaluate()["nodes"]["b"]
         self.assertEqual(info2["panelFields"], [])
         self.assertFalse(info2["buffed"])
+
+
+class TestSubNamespaces(unittest.TestCase):
+    """子命名空间（``own`` / ``out`` / ``in``）：消除"生效值/自身/给出去/收进来"的歧义。
+
+    用户确认的四个名字（以火神自身 atk_pct=10、收到辅助 40 为例）：
+      * 火神::atk_pct      = 50（生效值，保持原有行为）
+      * 火神::own::atk_pct = 10（纯自身）
+      * 火神::out::atk_pct = 10（对外提供的 = 自身，"宏就是对外值"）
+      * 火神::in::atk_pct  = 40（收进来的，多来源相加）
+    并且：**任意变量都支持**（非面板宏的 in 就是 0）、**角色内可省略角色名**。
+    """
+
+    def build(self, link=True):
+        g = Graph()
+        g.add(GraphNode("ra", "role", fields={"role_name": "辅助", "panel": "atk_pct = 40"}))
+        g.add(GraphNode("rb", "role",
+                        fields={"role_name": "火神", "panel": "atk = 1000\natk_pct = 10"}))
+        g.add(var_card("vb", "攻击力 = 2000", role="火神"))
+        if link:
+            g.links.append(Link("ra", "rb", 0))
+        return g
+
+    def calc(self, g, nid, expr, role="火神"):
+        g.add(GraphNode(nid, "calc", fields={"expr": expr}, role=role))
+        return g.evaluate()["nodes"][nid]["values"]["noncrit"]
+
+    def test_four_names(self):
+        g = self.build()
+        self.assertEqual(self.calc(g, "c1", "atk_pct"), 50)          # 生效值
+        self.assertEqual(self.calc(g, "c2", "own::atk_pct"), 10)     # 纯自身
+        self.assertEqual(self.calc(g, "c3", "out::atk_pct"), 10)     # 对外提供
+        self.assertEqual(self.calc(g, "c4", "::in::atk_pct"), 40)    # 收进来
+        # 前导 :: 与不写一样，都指"本角色"
+        self.assertEqual(self.calc(g, "c5", "in::atk_pct"), 40)
+
+    def test_full_names_work_from_anywhere(self):
+        g = self.build()
+        self.assertEqual(self.calc(g, "c1", "火神::atk_pct", role=""), 50)
+        self.assertEqual(self.calc(g, "c2", "火神::in::atk_pct", role=""), 40)
+        self.assertEqual(self.calc(g, "c3", "火神::own::atk_pct", role=""), 10)
+        # 从别的角色里看也一样（全名不受就近解析影响）
+        self.assertEqual(self.calc(g, "c4", "火神::in::atk_pct", role="胡桃"), 40)
+
+    def test_any_variable_supports_sub_namespaces(self):
+        """非面板宏的变量也支持：own/out 是它自己的值，in 是 0（箭头只拐面板宏）。"""
+        g = self.build()
+        self.assertEqual(self.calc(g, "c1", "攻击力"), 2000)
+        self.assertEqual(self.calc(g, "c2", "own::攻击力"), 2000)
+        self.assertEqual(self.calc(g, "c3", "out::攻击力"), 2000)
+        self.assertEqual(self.calc(g, "c4", "in::攻击力"), 0)
+        self.assertEqual(self.calc(g, "c5", "火神::in::攻击力", role=""), 0)
+
+    def test_in_sums_multiple_sources(self):
+        g = self.build()
+        g.add(GraphNode("rc", "role", fields={"role_name": "另一个辅助", "panel": "atk_pct = 25"}))
+        g.links.append(Link("rc", "rb", 0))
+        self.assertEqual(self.calc(g, "c1", "::in::atk_pct"), 65)     # 40 + 25
+        self.assertEqual(self.calc(g, "c2", "::own::atk_pct"), 10)    # 自身不受影响
+        self.assertEqual(self.calc(g, "c3", "atk_pct"), 75)           # 生效值
+
+    def test_not_propagated(self):
+        """不传递：C→A、A→B 时 A 的 out 仍是自身值（不含 C 给的），B 只拿到 A 的 out。"""
+        g = self.build(link=False)
+        g.add(GraphNode("rc", "role", fields={"role_name": "拐A的", "panel": "atk_pct = 100"}))
+        g.links.append(Link("rc", "ra", 0))
+        g.links.append(Link("ra", "rb", 0))
+        self.assertEqual(self.calc(g, "c1", "辅助::in::atk_pct", role=""), 100)   # A 收到了
+        self.assertEqual(self.calc(g, "c2", "辅助::out::atk_pct", role=""), 40)   # 但对外还是自身
+        self.assertEqual(self.calc(g, "c3", "::in::atk_pct"), 40)                 # B 只拿 A 的 out
+
+    def test_variable_table_does_not_list_sub_namespaces(self):
+        """子命名空间只在表达式里可用，不往变量表里灌三倍的行。"""
+        g = self.build()
+        g.add(GraphNode("t", "vartable"))
+        names = [r[0] for r in g.evaluate()["nodes"]["t"]["rows"]]
+        self.assertIn("火神::atk_pct", names)
+        self.assertIn("火神::攻击力", names)
+        self.assertFalse([n for n in names if "own::" in n or "out::" in n or "in::" in n], names)
+        # 接口返回的变量列表同样干净
+        api = [v["name"] for v in g.evaluate()["variables"]]
+        self.assertFalse([n for n in api if "own::" in n or "out::" in n or "in::" in n], api)
+
+    def test_usable_in_field_expressions_and_fallbacks(self):
+        """卡片字段里（含算式）可以直接用子命名空间。"""
+        g = self.build()
+        g.add(GraphNode("b", "base",
+                        fields={"stat_base": "atk + in::atk_pct * 10", "multiplier": "100"},
+                        role="火神"))
+        # atk=1000（面板），in::atk_pct=40 → 1000 + 400 = 1400
+        self.assertEqual(g.evaluate()["nodes"]["b"]["values"]["noncrit"], 1400)
+
+    def test_usable_inside_variable_definitions(self):
+        """变量卡片的定义也能引用（第二轮解析时子命名空间已注入）。"""
+        g = self.build()
+        g.add(var_card("vc", "总攻击 = atk + in::atk_pct", role="火神"))
+        g.add(GraphNode("c1", "calc", fields={"expr": "总攻击"}, role="火神"))
+        self.assertEqual(g.evaluate()["nodes"]["c1"]["values"]["noncrit"], 1040)
 
 
 class TestRoleNameValidation(unittest.TestCase):

@@ -21,9 +21,13 @@ from genshin_dmg import nodes as _nodes
 from genshin_dmg.expr import (
     NS_JOIN,
     NS_SEP,
+    SUB_IN,
+    SUB_OUT,
+    SUB_OWN,
     demangle,
     env_key,
     fmt_num,
+    is_sub_ns,
     plain_num,
     qualify,
     to_bool,
@@ -301,8 +305,11 @@ class Graph:
         """某角色面板里某个宏的值（本角色命名空间优先，其次全局；没有则 0）。
 
         用**第一轮**变量表算（不含拐力），从而保证"不传递"。
+        优先读 ``角色::own::宏``（语义最明确），没有才退回 ``角色::宏``。
         """
-        for key in (env_key(qualify(macro, role)), env_key(macro)):
+        for key in (env_key(qualify("%s%s%s" % (SUB_OWN, NS_SEP, macro), role)),
+                    env_key(qualify(macro, role)),
+                    env_key(macro)):
             if key in base_vars:
                 val = base_vars[key]
                 return float(val() if callable(val) else val)
@@ -337,6 +344,42 @@ class Graph:
                     _nodes.use_env(self.scoped_env(node, env))
             finally:
                 _nodes.reset_env(token)
+
+    def _apply_sub_namespaces(self, own_vars: dict) -> None:
+        """给每个角色补上 ``own`` / ``out`` / ``in`` 三个子命名空间（消除歧义）。
+
+        * ``角色::名字``      = **生效值**（自身 + 收进来的拐，保持原有行为）
+        * ``角色::own::名字`` = **纯自身**（不含拐）
+        * ``角色::out::名字`` = **对外提供的**（= 自身，"宏就是对外值"）
+        * ``角色::in::名字``  = **收进来的拐**（多来源相加；没被拐就是 0）
+
+        名字取"本角色自己定义过的变量" ∪ "固定词表的面板宏"，所以任意变量都支持子命名空间
+        （只有面板宏会被箭头拐到，其余变量的 ``in`` 就是 0）。
+        ``own_vars`` 是**拐力生效前**的变量表（自身值），由调用方在合适的时机拍快照。
+        """
+        roles = set()
+        for node in self.nodes.values():
+            if node.type == "role":
+                role = _valid_role(node.fields.get("role_name"))
+                if role:
+                    roles.add(role)
+        for role in roles:
+            prefix = role + NS_JOIN
+            names = set(_nodes.PANEL_MACRO_KEYS)
+            for key in own_vars:
+                if not key.startswith(prefix):
+                    continue
+                rest = key[len(prefix):]
+                if NS_JOIN in rest:
+                    continue                    # 已经是子命名空间键（重复调用时跳过）
+                names.add(rest)
+            grants = self.buffs.get(role) or {}
+            for name in names:
+                own = float(own_vars.get(prefix + name, 0.0) or 0.0)
+                inc = float(grants.get(name, 0.0) or 0.0)
+                self.variables[prefix + SUB_OWN + NS_JOIN + name] = own
+                self.variables[prefix + SUB_OUT + NS_JOIN + name] = own   # 对外提供 = 自身
+                self.variables[prefix + SUB_IN + NS_JOIN + name] = inc
 
     def buff_stats(self, base_vars: dict) -> dict:
         """给「角色面板」弹窗用的拐力统计：``{角色: {"out": [...], "in": [...]}}``。
@@ -480,6 +523,17 @@ class Graph:
                 # 覆盖式：本角色面板项 = 自身值 + 拐力（多来源已在 _buff_totals 里加过）
                 out[macro] = extra
                 out[prefix + macro] = extra
+            # 子命名空间（own / out / in）的就近别名：不管 base 是什么表都补上，
+            # 否则"第二轮解析变量"时（base 是空表）变量定义里引用不到 in::/own::
+            for key, val in self.variables.items():
+                if key.startswith(prefix) and is_sub_ns(demangle(key)):
+                    out[key[len(prefix):]] = val
+            # 本角色的面板宏（**含没有收到拐的**）：第二轮解析时 base 是空表，
+            # 这些宏也得看得到（收到拐的已被上面的 _buff_totals 覆盖成生效值）
+            for macro in _nodes.PANEL_MACRO_KEYS:
+                key = prefix + macro
+                if key in self.variables and macro not in out:
+                    out[macro] = self.variables[key]
         for key, getter in self._card_vars().items():
             out.setdefault(key, getter)
         return out
@@ -577,18 +631,22 @@ class Graph:
             self.variables = dict(env)
             # 角色卡自带的面板宏（右键「角色面板…」里编辑的那些）
             self._apply_role_panels(env)
+            # **拐力生效前**的快照 = 各变量的"自身值"（own 的来源）
+            own = dict(env)
             self.variables = dict(env)
             # 拐力：用这一轮（不含拐力）的结果算，保证"不传递"；有拐力则带着拐力重跑一轮，
             # 让**目标角色**里以面板项写的算式也能看到"含拐"的值（拐力值本身不变，不会来回震荡）
-            self.buffs = self.buff_sources(self.variables)
-            self._buff_stats = self.buff_stats(self.variables)
+            self.buffs = self.buff_sources(own)
+            self._buff_stats = self.buff_stats(own)
             # 拐力生效后的面板值（自身 + 拐力）：覆盖式注入，重复注入也不会翻倍
             self._buff_totals = {}
             for role, grants in self.buffs.items():
                 totals = {}
                 for macro, extra in grants.items():
-                    totals[macro] = self.role_panel_value(self.variables, role, macro) + extra
+                    totals[macro] = self.role_panel_value(own, role, macro) + extra
                 self._buff_totals[role] = totals
+            # 子命名空间（own / out / in）：第二轮解析变量时就能引用
+            self._apply_sub_namespaces(own)
             if self.buffs:
                 env = {}
                 self._parse_var_cards(env)
@@ -602,21 +660,25 @@ class Graph:
                     self._parse_var_cards(env, locked=set(rvars) | set(svars))
                     env.update(rvars)
                     env.update(svars)
-                self.variables = dict(env)
                 self._apply_role_panels(env)
+                own = dict(env)                 # 第二轮解析出来的自身值
                 self.variables = dict(env)
                 # 变量表 / 报告里也显示"含拐"的面板值（只写全名键：角色::宏名，
                 # 不往全局塞裸名，免得拐力漏给别的角色）
                 for role, totals in self._buff_totals.items():
                     for macro, total in totals.items():
                         self.variables[env_key(qualify(macro, role))] = total
+                # 用第二轮的值刷新子命名空间（第一轮注入的可能已被覆盖）
+                self._apply_sub_namespaces(own)
             # 变量表已就绪，逐个节点求值
             first = self.result_node()
             out = dict(
                 ok=False, error=None, result=None,
-                # 与「变量表」卡片同源（self.variables），否则拐力写回的值只在表格里看得到
+                # 与「变量表」卡片同源（self.variables），否则拐力写回的值只在表格里看得到；
+                # own / out / in 子命名空间不列出（同 variable_rows 的理由）
                 variables=[dict(name=demangle(k), value=float(v), text=plain_num(v))
-                           for k, v in self.variables.items()],
+                           for k, v in self.variables.items()
+                           if not is_sub_ns(demangle(k))],
                 nodes={}, chainTypes=self.chain_types(), warnings=self.warnings(),
                 buffStats=self._buff_stats,
             )
@@ -733,8 +795,12 @@ class Graph:
         """变量表的正文行：名称 / 数值（无变量时给一行占位提示）。
 
         名称是**展示名**（内部键 ``雷神__攻击力`` 还原成 ``雷神::攻击力``）。
+        ``own`` / ``out`` / ``in`` 子命名空间不在这里列（否则每个变量会多出三行），
+        它们只在表达式里可用；明细看角色的「角色面板…」弹窗。
         """
-        rows = [[demangle(name), plain_num(val)] for name, val in self.variables.items()]
+        rows = [[demangle(name), plain_num(val)]
+                for name, val in self.variables.items()
+                if not is_sub_ns(demangle(name))]
         return rows or [["（暂无变量）", ""]]
 
     def var_card_names(self, nid: str) -> list:
