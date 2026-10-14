@@ -344,6 +344,16 @@ class TestTutorial(unittest.TestCase):
                      if "**" in line and "2**3" not in line]
         self.assertEqual(offenders, [], "教程里不要写 Markdown 粗体标记：%s" % offenders)
 
+    def test_documents_lvalue_and_rvalue(self):
+        """教程要讲清"左值是名字、右值是实际值"，并点明角色属性实际值取右值。"""
+        text = tutorial.HELP_TEXT
+        self.assertIn("左值", text)
+        self.assertIn("右值", text)
+        self.assertIn("角色的属性实际值", text)
+        # 左值不能写算式、读到的名字就是右值算出来的数 —— 两句关键结论都要在
+        self.assertIn("不能写算式", text)
+        self.assertIn("右值算出来的数", text)
+
 
 class TestFrontendStaleness(unittest.TestCase):
     """前端产物过期的判定要能从接口看到（否则界面缺功能时无从下手）。
