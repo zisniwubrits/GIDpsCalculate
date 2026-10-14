@@ -17,6 +17,8 @@
 
 from __future__ import annotations
 
+import re
+
 from genshin_dmg import nodes as _nodes
 from genshin_dmg.expr import (
     NS_JOIN,
@@ -54,6 +56,27 @@ def _valid_role(role) -> str:
     if not t or NS_JOIN in t or "::" in t:
         return ""
     return t if valid_var_name(t) == t else ""
+
+
+def _self_referential(expr: str, name: str) -> bool:
+    """这条定义是不是"自己掺自己"（预设写法 ``X = own::X + in::X``）。
+
+    判定：右值里出现了 ``own::名字``，或者把**名字本身**当值用（裸 ``X`` / ``::X``）。
+    这种定义的值是合成结果（自身 + 拐），**不能**当作自己的属性值 —— 否则
+    ``own::X`` 会把自己算进去（用户报的 ``own::month_dmg`` 含拐就是这条）。
+
+    注意 ``X = in::X``（只收别人给的、不掺自身）**不算**自指：那是"我的属性就等于
+    收进来的这份"，自身值就是它；面板里这么写是常见用法（有测试锁着）。
+    """
+    e = str(expr or "")
+    if not e:
+        return False
+    bare = re.escape(name)
+    return bool(
+        re.search(r"own\s*::\s*%s\b" % bare, e)
+        or re.search(r"::\s*%s\b" % bare, e)
+        or re.search(r"(?<![\w:])%s(?!\s*::)" % bare, e)
+    )
 
 
 def split_var_line(line: str):
@@ -235,6 +258,13 @@ class Graph:
         self._buff_stats: dict = {}
         # 用户显式声明过 `out::X = ...` 的全名键（这些不做派生覆盖）
         self._user_sub_ns: set = set()
+        # 「自身值」的权威记录：``角色__名字 -> 用户自己写的那个值``。
+        #
+        # 为什么单独存：面板里写 ``X = own::X + in::X``（预设写法）时，普通名 ``X``
+        # 最终会变成"自身 + 拐"；``own::X`` 的兜底如果再读普通名，就会把拐力也算进
+        # "自身"里（用户报的 own::month_dmg 累加了 in:: 就是这条）。这里记下定义
+        # 那一刻算出来的值，``own::`` 只认它。
+        self._own_values: dict = {}
         # 当时算不出来、等拐力就绪后再补算的定义（引用了 in::/own:: 等）
         self._deferred: list = []
 
@@ -324,17 +354,37 @@ class Graph:
             out.append(nm)
         return out
 
-    @staticmethod
-    def role_own_value(base_vars: dict, role: str, macro: str) -> float:
-        """某角色**自身**的面板值（own:: 优先，其次基础名，最后全局；没有则 0）。
+    def _pinned_own(self, env: dict, role: str, name: str) -> float:
+        """取"自身值"的**唯一入口**（严格不含拐）。
 
-        用于"生效值 = 自身 + 收进来的"，所以**不**读 out::（对外值可能被单独声明）。
+        优先级：
+          1. ``_own_values``：用户在面板 / 变量卡里给自己写的那个值（定义那一刻的）；
+          2. ``角色::own::X``：显式写法的键；
+          3. **否则 0**。
+
+        第 3 条是刻意的（用户口径：``own::`` 不论如何都不计入 ``in::`` 的拐）：
+        普通名 ``X`` 会被预设写法 ``X = own::X + in::X`` 合成成"自身 + 拐"，
+        如果拿它当兜底，``own::X`` 就会自己把自己算进去 —— 这正是
+        ``own::month_dmg`` 读出 30（含拐）的原因。
         """
-        return Graph._first_value(base_vars, (
-            env_key(qualify("%s%s%s" % (SUB_OWN, NS_SEP, macro), role)),
-            env_key(qualify(macro, role)),
-            env_key(macro),
+        if not role:
+            return 0.0
+        pinned = self._own_values.get(env_key(qualify(name, role)))
+        if pinned is not None:
+            return float(pinned)
+        # 只认本角色的 own:: 键：**不回退到普通名/全局名** —— 普通名会被预设写法
+        # 合成成"自身 + 拐"，全局名还会串到别的角色去（用户口径：own 不论如何
+        # 都不计入 in:: 的拐）。
+        return self._first_value(env, (
+            env_key(qualify("%s%s%s" % (SUB_OWN, NS_SEP, name), role)),
         ))
+
+    def role_own_value(self, base_vars: dict, role: str, macro: str) -> float:
+        """某角色**自身**的值（严格不含拐）——见 :meth:`_pinned_own` 的说明。
+
+        用户口径：``own::`` 不论如何都不计入 ``in::`` 的拐。
+        """
+        return self._pinned_own(base_vars, role, macro)
 
     @staticmethod
     def role_out_value(base_vars: dict, role: str, macro: str) -> float:
@@ -407,9 +457,15 @@ class Graph:
                         value = _nodes.eval_field(parsed[1])
                     except ValueError:
                         # 同变量卡片：可能是引用了 in::/own::（拐力算完才有）→ 等会儿补算
-                        self._defer("panel", key, parsed[1], node, role=role)
+                        self._defer("panel", key, parsed[1], node, role=role, name=macro)
                         continue                    # 算不出来的行忽略
                     env[key] = value
+                    # 记下"用户自己写的那个值"：own:: 只认它、且**先写的为准**
+                    # （`atk_pct = 10` 与 `out::atk_pct = 40` 并存时，自身值仍是 10）；
+                    # 自指定义不算（见 `_self_referential`）。
+                    own_key = env_key(qualify(macro, role))
+                    if own_key not in self._own_values and not _self_referential(parsed[1], macro):
+                        self._own_values[own_key] = value
                     if kind == SUB_OUT:
                         self._user_sub_ns.add(key)
                         if own_key not in env:
@@ -460,7 +516,10 @@ class Graph:
             # 收到拐的名字（含自定义名字）也要有 in::/own::/out:: 三个键
             names.update(grants)
             for name in names:
-                own = float(own_vars.get(prefix + name, 0.0) or 0.0)
+                # 自身值只认"用户定义那一刻的值"（_pinned_own）：预设写法
+                # `X = own::X + in::X` 会把普通名合成成"自身+拐"，这里再读普通名
+                # 就会把拐力算进自身 —— 用户口径：own:: 不计入 in::。
+                own = self._pinned_own(own_vars, role, name)
                 inc = float(grants.get(name, 0.0) or 0.0)
                 out_key = prefix + SUB_OUT + NS_JOIN + name
                 # 只有显式写过 `out::名字 = ...` 才对外提供；否则 0（不发拐力）
@@ -476,9 +535,15 @@ class Graph:
                     self.variables[prefix + SUB_IN + NS_JOIN + name] = inc
 
     # -- 延迟补算（引用了 in::/own:: 这类要等拐力才知道的名字）-----------------
-    def _defer(self, kind: str, key: str, expr: str, node, role=None) -> None:
-        """记下一条"当时算不出来"的定义，等拐力/子命名空间就绪后补算。"""
-        self._deferred.append(dict(kind=kind, key=key, expr=expr, nid=node.id, role=role))
+    def _defer(self, kind: str, key: str, expr: str, node, role=None, name=None) -> None:
+        """记下一条"当时算不出来"的定义，等拐力/子命名空间就绪后补算。
+
+        ``name`` 是这条定义的名字（不含角色前缀）：补算成功后要把结果记进
+        "自身值"那张表（``_own_values``），``own::名字`` 才有正确的自身值。
+        """
+        self._deferred.append(
+            dict(kind=kind, key=key, expr=expr, nid=node.id, role=role, name=name)
+        )
 
     def _retry_deferred(self, env: dict, locked=()) -> None:
         """把延迟的定义再算一遍：能算出来的写进 env，仍算不出的继续留着。
@@ -488,10 +553,14 @@ class Graph:
         莫名其妙没生效"（下游报「未定义变量」）。
         """
         left = []
+        # 补算前把 own:: 的键存一份：这些键的语义是"用户自己写的自身值"，
+        # 补算只该更新普通名，绝不能反过来把 own:: 改成合成值（见 _pinned_own）。
+        own_keys = {k: v for k, v in env.items() if is_sub_ns(demangle(k)) and "__own__" in k}
         for item in self._deferred:
             node = self.nodes.get(item["nid"])
             if node is None or item["key"] in locked:
                 continue
+            role = item.get("role") or ""
             token = _nodes.use_env(self.scoped_env(node, env, role=item["role"]))
             try:
                 value = _nodes.eval_field(item["expr"])
@@ -500,7 +569,19 @@ class Graph:
                 continue
             finally:
                 _nodes.reset_env(token)
+            # 只更新普通名：own:: 的键在 _apply_sub_namespaces 里按"定义时的自身值"写，
+            # 这里不要碰它（原来把合成值写进去，会盖住 own:: 的语义）
             env[item["key"]] = value
+            # 定义拖到补算才成功时（如面板写 `X = in::X`），在这里补记"自身值"
+            # （先写的为准、自指不算）；否则 own::X 会读成 0
+            role = item.get("role") or ""
+            name = item.get("name")
+            if role and name and not _self_referential(item["expr"], name):
+                pin = env_key(qualify(name, role))
+                if pin not in self._own_values:
+                    self._own_values[pin] = value
+        # 还原 own:: 键（补算可能间接动到它们；语义上它们只由"定义那一刻的值"决定）
+        env.update(own_keys)
         self._deferred = left
 
     def _finalize_buffs(self, own: dict) -> None:
@@ -746,11 +827,17 @@ class Graph:
         同名优先级：赋值变量卡 > ★结果卡三元组 > 变量卡片。
         """
         env: dict = {}
+        # 关键：表达式求值必须**始终对着 env 这个自建环境**（而不是会在中途被替换的
+        # self.variables）。以前用 `use_env(self.scoped_env(...))` 时，self.variables
+        # 会被换成 dict(env) 的**副本**，于是面板/变量卡里引用了 in::/own:: 的定义被
+        # 补算后写进了副本，最终节点求值却还对着旧值 —— 表现是 `X = own::X + in::X`
+        # 里的 X 停在"只有拐"的那一版。这里记录一次，随用随恢复。
         token = _nodes.use_env(env)
         self._cardvars = None           # 每次求值重建命名卡片的惰性表
         self._card_stack = set()
         self._deferred = []             # 本次求值里"当时算不出来"的定义（稍后补算）
         self._user_sub_ns = set()       # 本次求值里用户显式声明的 out:: 键
+        self._own_values = {}           # 本次求值里各名字的"自身值"（own:: 只认它）
         # 清掉上一次求值的运行时缓存：同一个 Graph 对象可能被反复求值
         # （测试里就是这样），残留的拐力值会串进新一轮的解析
         self.buffs = {}
@@ -983,9 +1070,14 @@ class Graph:
                     except ValueError:
                         # 引用 `in::`/`own::` 这类要等拐力算完才知道的名字时，
                         # 这里必然算不出来 —— 记下来等拐力就绪后补算（见 _retry_deferred）
-                        self._defer("var", key, parsed[1], node)
+                        self._defer("var", key, parsed[1], node, role=role_here, name=base)
                         continue
                     env[key] = value
+                    # 记下"用户自己写的那个值"：own:: 只认它、先写的为准、自指不算
+                    own_key = env_key(qualify(base, role_here))
+                    if (kind != SUB_OUT and own_key not in self._own_values
+                            and not _self_referential(parsed[1], base)):
+                        self._own_values[own_key] = value
                     if kind == SUB_OUT:
                         self._user_sub_ns.add(key)
                         # 没另外定义自身值时，对外值同时就是自身值（"宏就是对外值"的默认）

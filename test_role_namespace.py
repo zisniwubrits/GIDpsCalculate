@@ -700,7 +700,12 @@ class TestDeferredDefinitions(unittest.TestCase):
         self.assertEqual(g.evaluate()["nodes"]["b"]["values"]["noncrit"], 1000)
 
     def test_in_resolves_in_panel_and_var_card_alike(self):
-        """同样的写法在面板与变量卡里结果一致（都要能解析）。"""
+        """同样的写法在面板与变量卡里结果一致（都要能解析）。
+
+        新口径（用户：own:: 不论如何不计入 in:: 的拐）：面板/变量卡写
+        ``X = in::X`` 只是"我的 X 等于收进来的那份"，**不等于自己声明了 X**；
+        所以 own::X 仍是 0（"自己写的值"只有普通定义 `X = 数值` 才算）。
+        """
         for where in ("panel", "var"):
             g = Graph()
             g.add(GraphNode("ra", "role", fields={"role_name": "辅助", "panel": "out::atk_pct = 40"}))
@@ -714,9 +719,9 @@ class TestDeferredDefinitions(unittest.TestCase):
             g.add(GraphNode("c1", "calc", fields={"expr": "own::atk_pct"}, role="火神"))
             g.add(GraphNode("c2", "calc", fields={"expr": "atk_pct"}, role="火神"))
             out = g.evaluate()
-            # 自身被定义成"收进来的 40"，生效值就是 40（不再自动把 in 再加一遍）
-            self.assertEqual(out["nodes"]["c1"]["values"]["noncrit"], 40, where)
+            # 生效值 = 收进来的 40；自身值仍是 0（没写普通定义）
             self.assertEqual(out["nodes"]["c2"]["values"]["noncrit"], 40, where)
+            self.assertEqual(out["nodes"]["c1"]["values"]["noncrit"], 0, where)
 
     def test_panel_items_can_reference_each_other(self):
         """角色面板里的项可以引用同一角色卡上先写的项（原来角色卡自己没作用域，引用不到）。"""

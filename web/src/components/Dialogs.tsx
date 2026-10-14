@@ -265,22 +265,7 @@ export function RolePanelDialog({
         onMouseDown={(e) => e.stopPropagation()}
       >
         <h2>角色面板 · {title}</h2>
-        {macros.length === 0 ? (
-          <p className="modal-hint modal-warn" data-testid="panel-macros-missing">
-            后端没有返回面板宏词表（panelMacros）—— 服务很可能是旧进程。
-            请双击 launcher.bat → [2] 停止 → [1] 启动，再刷新本页。
-          </p>
-        ) : null}
-        <p className="modal-hint">
-          面板项就是本角色命名空间里的变量（<code>{title}::atk</code> 这样引用）。
-          卡片字段留空时会用这里的值兜底；拖拐力箭头时，本表会加到目标角色的同名项上。
-          值可以写算式或引用其它变量。
-        </p>
-        <p className="modal-hint">
-          同一个面板项有四个名字：<code>{title}::atk</code> 生效值（自身+收进来的拐）、
-          <code>::own::atk</code> 纯自身、<code>::out::atk</code> 给出去的（=自身）、
-          <code>::in::atk</code> 收进来的拐（多来源相加）。在角色内可省略角色名。
-        </p>
+        {/* 用户要求：删掉弹窗里的全部提示性文字（说明都搬到 F1 教程里） */}
         <div className="panel-macro-grid">
           <div className="panel-macro-head">
             <span className="pm-key">宏</span>
@@ -374,17 +359,8 @@ export function RolePanelDialog({
             <button type="button" data-testid="panel-custom-add" onClick={addCustom}>
               ＋ 添加自定义对外项
             </button>
-            <span className="modal-hint">
-              想"面板外拐"（自己不需要这个属性，但要给别人）时用它；
-              拖拐力箭头后，对面写 <code>{SUB_OUT}::{nextCustomOutName(custom)}</code>
-              或 <code>in::名字</code> 就能收到。
-              {macros.length === 0 ? "（后端版本过旧时这一行不会生效，请重启后端服务）" : ""}
-            </span>
           </div>
         </div>
-        <p className="modal-hint">
-          「显示」一列控制画布上角色标记里那块面板显示哪几项（不勾 = 只在有值时才显示）。
-        </p>
         <div className="buff-stats">
           <div>
             <h3>给出去的拐（OUT）</h3>

@@ -929,8 +929,9 @@ describe("App 集成（假后端 + 真 schema）", () => {
       .toBe("auto");
 
     // 再右键 →「显示区域内的卡片」→ 卡片回来，且容器**一起展开**
-    // （回归：原来只恢复卡片、容器还折着，看着像"展开后卡片没了"）
-    fireEvent.contextMenu(within(screen.getByTestId("card-n1")).getByText("角色"));
+    // （回归：原来只恢复卡片、容器还折着，看着像"展开后卡片没了"；
+    //   折叠后标题栏仍然显示角色名，所以还能按名字找它）
+    fireEvent.contextMenu(within(screen.getByTestId("card-n1")).getByText("火神"));
     await user.click(await screen.findByText(/显示区域内的卡片/));
     await waitFor(() =>
       expect(lastBody?.nodes.find((n) => n.id === "n1")?.fields.cards_hidden).toBe(false),
@@ -1203,7 +1204,9 @@ describe("App 集成（假后端 + 真 schema）", () => {
     await user.click(await screen.findByText("角色面板…"));
 
     const dialog = await screen.findByTestId("role-panel-dialog");
-    expect(within(dialog).getByTestId("panel-macros-missing")).toHaveTextContent(/旧进程/);
+    // 弹窗里的提示文字按用户要求删掉了，但「旧后端也不白屏」这条契约还要守住
+    expect(dialog).toBeInTheDocument();
+    expect(within(dialog).getByTestId("panel-custom-add")).toBeInTheDocument();
     // 页面本身照常可用（没有白屏）
     expect(screen.getByTestId("sidebar")).toBeInTheDocument();
   });

@@ -179,16 +179,17 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
   );
 
   // 标题栏文案：
-  //  * 角色容器 → 只显示角色名（用户要求：顶部不要再挂「角色 · 」前缀）
+  //  * 角色容器 → **始终显示角色名**（折叠/一键隐藏之后也还是那个名字，比如 odette；
+  //    用户要求：隐藏前后标题不变）
   //  * 计算卡 → 它自己的标题（历史行为）
-  //  * 其余 → 卡片类型（命名后的名字另挂徽标，见下面的 card-name-chip）
+  //  * 其余 → 折叠时显示卡片类型，否则显示类型或卡名
   const cardName = String(node.fields.card_name ?? "").trim();
   const baseTitle =
     node.type === "calc" ? String(node.fields.title ?? spec.title) || spec.title : spec.title;
-  const title = collapsed
-    ? spec.label
-    : spec.role_card
-      ? String(node.fields.role_name ?? "").trim() || "未命名"
+  const title = spec.role_card
+    ? String(node.fields.role_name ?? "").trim() || "未命名"
+    : collapsed
+      ? spec.label
       : baseTitle;
 
   // 角色卡没有可见字段（角色名改成右键「设置角色名…」了）→ 不渲染空的卡片体
