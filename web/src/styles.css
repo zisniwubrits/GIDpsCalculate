@@ -322,26 +322,13 @@ textarea:focus {
   box-shadow: 0 0 0 2px rgba(47, 111, 167, 0.25);
 }
 
-/* 「角色」容器面板：读起来是一块半透明底板（画布点阵能透出来），
-   卡片浮在它上面 —— 所以它是虚线边、无阴影、淡蓝底。 */
-.card-role-box {
-  background: rgba(47, 111, 167, 0.05);
-  border: 1px dashed #a9c2d8;
-  border-radius: 12px;
-  box-shadow: none;
-}
-
-.card-role-box .card-head {
-  background: rgba(47, 111, 167, 0.12);
-  border-bottom: 1px dashed #b9cde0;
-}
-
-/* 角色容器**整个节点不吃鼠标事件**：
-   面板是一大块底板，若让它接事件，鼠标落在面板上时会命中的是节点
-   （`.react-flow__node.draggable { cursor: grab }`）→ 光标变成抓手，也拖不出框选。
-   注意 `pointer-events: none` 只对**设了它的那个元素**生效、祖先仍会被命中，
-   所以必须设在节点元素上；下面再把需要交互的几处单独放行。
-   （pointer-events 会继承，所以标题栏/手柄/输入框都要显式写 auto。） */
+/* 「角色」容器 = 画布上的**背景标记**（不是一张普通卡片）：
+   一块虚线淡蓝区域 + 一条可拖的标签。区域本身不吃鼠标事件 ——
+   否则鼠标落在上面命中节点（`.react-flow__node.draggable { cursor: grab }` → 光标变抓手），
+   也拖不出框选。真正生效的是 App.tsx 打在节点上的**内联** `pointer-events: none`
+   （内联不受 CSS 优先级/顺序影响），这两条是文档 + 兜底。
+   注意：`pointer-events: none` 只对设了它的那个元素生效、**祖先仍会被命中**，
+   所以必须设在节点元素上；它又会继承给子孙，故标签/手柄/输入框要显式写回 auto。 */
 .react-flow__node.node-role-box {
   pointer-events: none;
 }
@@ -352,6 +339,25 @@ textarea:focus {
 .react-flow__node.node-role-box textarea,
 .react-flow__node.node-role-box select {
   pointer-events: auto;
+}
+
+/* 背景标记的观感：虚线淡蓝、无阴影、无白底；标签条做成"标记牌"而不是卡片头 */
+.card-role-box {
+  background: rgba(47, 111, 167, 0.05);
+  border: 1px dashed #a9c2d8;
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+.card-role-box .card-head {
+  align-self: flex-start;
+  margin: 2px 0 0 2px;
+  padding: 1px 8px;
+  border-radius: 8px;
+  background: rgba(47, 111, 167, 0.14);
+  border-bottom: none;
+  font-size: 11px;
+  color: var(--accent);
 }
 
 /* 标题栏上的角色徽标：一眼看出这张卡属于哪个角色（显示成 `火神::`，就是该敲的前缀） */

@@ -18,7 +18,7 @@ import {
   type NodeChange,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { fetchStorage, health, openProject, saveProject, saveReport } from "./api";
 import { copyText } from "./clipboard";
 import CardNode, { type CardData, type CardRFNode, type MenuKind } from "./components/CardNode";
@@ -618,7 +618,7 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
           onMenu: (id, kind, ev) => setMenu({ id, kind, x: ev.clientX, y: ev.clientY }),
           onCopy,
         };
-        let style: { width?: number; height?: number } | undefined;
+        let style: CSSProperties | undefined;
         if (!n.resizing) {
           if (n.collapsed) {
             // 折叠后高度由内容（只剩标题栏）决定，只保留用户拖出来的宽度
@@ -626,6 +626,12 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
           } else if (n.size) {
             style = { width: n.size[0], height: n.size[1] };
           }
+        }
+        if (n.type === "role") {
+          // 角色容器只是**背景标记**（一块虚线区域 + 一条可拖的标签）：
+          // 区域本身不该吃鼠标事件，否则鼠标落在上面会命中节点（光标变抓手）也拖不出框选。
+          // 写在**内联样式**上最稳：不受任何 CSS 优先级/顺序影响（样式表那两条只是文档与兜底）。
+          style = { ...(style ?? {}), pointerEvents: "none" };
         }
         return {
           id: n.id,

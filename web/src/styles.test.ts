@@ -147,6 +147,14 @@ describe("角色容器面板", () => {
     expect(body).toMatch(/font-size:\s*11px/);
   });
 
+  it("背景标记的标签条是「标记牌」而不是卡片头（小胶囊、贴在左上角）", () => {
+    const head = ruleBody(".card-role-box .card-head");
+    expect(head).toMatch(/align-self:\s*flex-start/);
+    expect(head).toMatch(/border-radius/);
+    expect(head).toMatch(/font-size:\s*11px/);
+    expect(head).toMatch(/border-bottom:\s*none/);
+  });
+
   it("角色面板整体不吃鼠标事件（否则光标是抓手、在面板上拖不出框选），标题栏/手柄/输入框单独放行", () => {
     // 这条必须设在**节点元素**上：pointer-events 只对设它的元素生效，祖先仍会被命中，
     // 所以设在 .card-body 上是没用的（上一版就踩过这个）。

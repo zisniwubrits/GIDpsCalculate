@@ -162,10 +162,13 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
         />
       ) : null}
       {spec.role_card ? (
+        // 角色容器只是**背景标记**：区域不吃鼠标（见 App.tsx 的内联 pointer-events），
+        // 这里只留一句说明 + 可编辑的角色名，看上去就不像一张"卡片"
         <p className="role-hint">
-          把卡片拖进这块面板就算属于这个角色；里面的变量按
-          <b> {String(node.fields.role_name ?? "").trim() || "角色名"}::变量名 </b>
-          加入命名空间（本角色内可直接写变量名）。当前面板内 {data.roleCount ?? 0} 张卡片。
+          这是背景标记：把卡片拖进这块区域就算属于角色「
+          {String(node.fields.role_name ?? "").trim() || "未命名"}」，
+          里面的变量按 <b>{String(node.fields.role_name ?? "").trim() || "角色名"}::变量名</b>{" "}
+          加入命名空间（本角色内可直接写变量名）。当前 {data.roleCount ?? 0} 张卡片。
         </p>
       ) : null}
       {spec.fields.map((f) => (

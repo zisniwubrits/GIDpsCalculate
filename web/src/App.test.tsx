@@ -720,11 +720,15 @@ describe("App 集成（假后端 + 真 schema）", () => {
     expect(card.closest(".react-flow__node")).toHaveClass("node-role-box");
     // 默认名 角色1（抽象角色，名字随用户改）
     expect(within(card).getByText("角色 · 角色1")).toBeInTheDocument();
-    expect(within(card).getByText(/把卡片拖进这块面板/)).toBeInTheDocument();
-    // 角色名可改，标题栏跟着变
+    expect(within(card).getByText(/把卡片拖进这块区域/)).toBeInTheDocument();
+    // 区域整体不吃鼠标事件（内联样式，最稳）—— 否则光标是抓手、也拖不出框选
+    expect(card.closest(".react-flow__node")).toHaveStyle({ pointerEvents: "none" });
+    // 角色名可改，标题栏跟着变。
+    // 用 fireEvent 而不是 user.type：vitest 里不加载 styles.css（`css: false`），
+    // 于是输入框从节点内联样式**继承**到 pointer-events:none，user-event 会拒绝输入；
+    // 真实浏览器里 `.react-flow__node.node-role-box input { pointer-events: auto }` 会放行它。
     const nameInput = within(card).getByDisplayValue("角色1");
-    await user.clear(nameInput);
-    await user.type(nameInput, "主C");
+    fireEvent.change(nameInput, { target: { value: "主C" } });
     await waitFor(() => expect(within(card).getByText("角色 · 主C")).toBeInTheDocument());
   });
 
