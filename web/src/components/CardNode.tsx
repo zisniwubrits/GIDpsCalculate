@@ -18,8 +18,6 @@ export interface CardData extends Record<string, unknown> {
   table: { header: string[]; rows: string[][] } | null;
   /** 这张卡片属于哪个「角色」命名空间（由画布上的容器面板按位置推导，空 = 不属于任何角色） */
   role: string;
-  /** 角色容器面板里当前有几张卡片（只对 role_card 有意义） */
-  roleCount?: number;
   onField: (id: string, key: string, value: FieldValue) => void;
   onDelete: (id: string) => void;
   /** 拖动缩放手柄结束后把最终尺寸（含左上角坐标变化）写回模型 */
@@ -160,16 +158,6 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
           mono={spec.table === "vars"}
           testId={`table-${spec.table}-${id}`}
         />
-      ) : null}
-      {spec.role_card ? (
-        // 角色容器只是**背景标记**：区域不吃鼠标（见 App.tsx 的内联 pointer-events），
-        // 这里只留一句说明 + 可编辑的角色名，看上去就不像一张"卡片"
-        <p className="role-hint">
-          这是背景标记：把卡片拖进这块区域就算属于角色「
-          {String(node.fields.role_name ?? "").trim() || "未命名"}」，
-          里面的变量按 <b>{String(node.fields.role_name ?? "").trim() || "角色名"}::变量名</b>{" "}
-          加入命名空间（本角色内可直接写变量名）。当前 {data.roleCount ?? 0} 张卡片。
-        </p>
       ) : null}
       {spec.fields.map((f) => (
         <div className={`f-row${spec.bare ? " f-row-bare" : ""}`} key={f.key}>

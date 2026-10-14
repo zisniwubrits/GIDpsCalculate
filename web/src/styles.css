@@ -391,16 +391,10 @@ textarea:focus {
   font-family: Consolas, "Courier New", "Microsoft YaHei", monospace;
 }
 
-.role-hint {
-  margin: 4px 0 0;
-  font-size: 11px;
-  line-height: 1.6;
-  color: var(--muted);
-}
-
-.role-hint b {
-  color: var(--accent);
-  font-weight: 700;
+/* 角色标记里的「角色名」输入框：只占一小段，不铺满整个区域
+   （区域是背景标记，不该看着像一个填表框） */
+.card-role-box .f-input {
+  width: 140px;
 }
 
 .card-result {

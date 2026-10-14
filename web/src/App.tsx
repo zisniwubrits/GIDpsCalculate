@@ -603,7 +603,6 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
   const rfNodes = useMemo<CardRFNode[]>(
     () =>
       orderedNodes.map((n) => {
-        const roleName = String(n.fields.role_name ?? "").trim();
         const data: CardData = {
           node: n,
           spec: schema.nodeTypes[n.type],
@@ -611,10 +610,6 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
           fontSize: n.font_size ?? 0,
           table: tableFor(n, schema, results),
           role: roles[n.id] ?? "",
-          // 容器面板自报家门的数字：里面此刻有几张卡片
-          roleCount: n.type === "role"
-            ? Object.values(roles).filter((r) => r && r === roleName).length
-            : undefined,
           onField,
           onDelete: removeNode,
           onResize,

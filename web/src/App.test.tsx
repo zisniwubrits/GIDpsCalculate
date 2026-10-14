@@ -727,7 +727,9 @@ describe("App 集成（假后端 + 真 schema）", () => {
     expect(card.closest(".react-flow__node")).toHaveClass("node-role-box");
     // 默认名 角色1（抽象角色，名字随用户改）
     expect(within(card).getByText("角色 · 角色1")).toBeInTheDocument();
-    expect(within(card).getByText(/把卡片拖进这块区域/)).toBeInTheDocument();
+    // 画布上**不再显示**那句长说明（已写进 F1 教程），区域里只留「角色名」输入框
+    expect(within(card).queryByText(/这是背景标记/)).toBeNull();
+    expect(within(card).queryByText(/当前 \d+ 张卡片/)).toBeNull();
     // 区域整体不吃鼠标事件（内联样式，最稳）—— 否则光标是抓手、也拖不出框选
     expect(card.closest(".react-flow__node")).toHaveStyle({ pointerEvents: "none" });
     // 角色名可改，标题栏跟着变。
