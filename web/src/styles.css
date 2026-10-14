@@ -880,34 +880,57 @@ textarea:focus {
   margin-top: 12px;
 }
 
-/* 角色面板弹窗：可编辑的宏表 + 拐力统计（OUT / IN） */
+/* 角色面板弹窗：可编辑的宏表 + 拐力统计（OUT / IN）
+   宏表**一行一个**（14 个宏铺开看，不用在网格里找），弹窗本身也放大一档 */
 .modal-role-panel {
-  width: 660px;
+  width: min(900px, 94vw);
+  max-height: 90vh;
 }
 
 .panel-macro-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 4px 10px;
-  max-height: 40vh;
+  grid-template-columns: 1fr;
+  gap: 4px;
+  max-height: 54vh;
   overflow: auto;
   padding: 4px 2px;
 }
 
 .panel-macro-row {
   display: grid;
-  grid-template-columns: 82px 62px 1fr;
+  grid-template-columns: 108px 84px minmax(150px, 1fr) minmax(170px, 1.05fr);
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
+  gap: 10px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.panel-macro-row:hover {
+  background: #f2f7fc;
+}
+
+.panel-macro-row input {
+  padding: 6px 8px;
+  font-size: 13px;
 }
 
 .pm-key {
   font-family: Consolas, "Courier New", "Microsoft YaHei", monospace;
+  font-size: 12px;
   color: var(--accent);
 }
 
 .pm-label {
+  font-size: 13px;
+}
+
+/* 「喂给哪张卡的哪个字段」——直接显示，不用悬停猜 */
+.pm-feed {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 12px;
   color: var(--muted);
 }
 

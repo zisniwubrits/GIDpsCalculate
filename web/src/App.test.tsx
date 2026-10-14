@@ -795,6 +795,8 @@ describe("App 集成（假后端 + 真 schema）", () => {
     // 宏表来自 schema（中文名也来自后端，不在前端硬编码）
     expect(within(dialog).getByText("攻击力")).toBeInTheDocument();
     expect(within(dialog).getByTestId("panel-atk_pct")).toBeInTheDocument();
+    // 「喂给哪张卡」直接显示在行内（不是只放在 title 里）
+    expect(within(dialog).getAllByText("基础值 / 属性源 → 白值").length).toBeGreaterThan(0);
     // 拐力统计（角色1 在这份假数据里没有统计 → 两栏都是「无」）
     expect(within(dialog).getAllByTestId("buff-empty").length).toBe(2);
 

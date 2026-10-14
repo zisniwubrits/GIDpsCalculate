@@ -234,7 +234,7 @@ export function RolePanelDialog({
         </p>
         <div className="panel-macro-grid">
           {macros.map((m) => (
-            <label className="panel-macro-row" key={m.key} title={m.feed}>
+            <label className="panel-macro-row" key={m.key}>
               <span className="pm-key">{m.key}</span>
               <span className="pm-label">{m.label}</span>
               <input
@@ -243,6 +243,9 @@ export function RolePanelDialog({
                 placeholder="留空 = 不启用"
                 onChange={(e) => setValues((v) => ({ ...v, [m.key]: e.target.value }))}
               />
+              <span className="pm-feed" title={m.feed}>
+                {m.feed}
+              </span>
             </label>
           ))}
         </div>

@@ -193,6 +193,21 @@ describe("角色容器面板", () => {
     expect(body).toMatch(/font-family/);
   });
 
+  it("角色面板弹窗放大、宏表一行一个（便于交互）", () => {
+    // 弹窗要够宽（14 行 × 4 列铺开）
+    const modal = ruleBody(".modal-role-panel");
+    expect(modal).toMatch(/width:\s*min\(9\d\dpx/);
+    // 单列 = 一行一个宏（不是并排两列）
+    const grid = ruleBody(".panel-macro-grid");
+    expect(grid).toMatch(/grid-template-columns:\s*1fr/);
+    expect(grid).not.toMatch(/repeat\(2/);
+    // 行内输入框加大，便于点选与输入
+    const input = ruleBody(".panel-macro-row input");
+    expect(input).toMatch(/padding:\s*6px/);
+    // 「喂给哪张卡」直接显示
+    expect(ruleBody(".pm-feed")).toMatch(/text-overflow:\s*ellipsis/);
+  });
+
   it("拐力端口并排在左上角标签正上方（箭头的始末都落在标签上方）", () => {
     // Position.Top 只把端口放在水平中点，真正"抬到标签上方、左右并排"靠这两条
     const portIn = ruleBody(".react-flow__handle.role-port-in");
