@@ -769,7 +769,8 @@ describe("App 集成（假后端 + 真 schema）", () => {
     expect(domOrder[0]).toBe("card-n1");
   });
 
-  it("角色卡有一对拐力端口（左进右出），可以拖箭头把面板值拐给别的角色", async () => {    const user = userEvent.setup();
+  it("角色卡有一对拐力端口（都在标签上方），可以拖箭头把面板值拐给别的角色", async () => {
+    const user = userEvent.setup();
     await renderApp();
     await addCard(user, "role");
 
@@ -779,7 +780,7 @@ describe("App 集成（假后端 + 真 schema）", () => {
     expect(box.querySelectorAll(".react-flow__handle.port-in")).toHaveLength(1);
     expect(box.querySelectorAll(".react-flow__handle.port-out")).toHaveLength(1);
     // 端口上写明用途（拖过去 = 上拐）
-    expect(box.querySelector(".port-out")?.getAttribute("title")).toContain("拐力");
+    expect(box.querySelector(".role-port-out")?.getAttribute("title")).toContain("拐力");
   });
 
   it("右键角色标签 →「角色面板…」：宏表可编辑、并显示拐力统计（OUT/IN）", async () => {    const user = userEvent.setup();
@@ -892,22 +893,24 @@ describe("App 集成（假后端 + 真 schema）", () => {
     expect(screen.getByTestId("sidebar")).toBeInTheDocument();
   });
 
-  it("角色标记左上角标签**上方**显示出入度（OUT/IN），并注明对象角色", async () => {
+  it("拐力端口并排在左上角标签的正上方（箭头的始末都在标签上方）", async () => {
     const user = userEvent.setup();
     await renderApp();
     await addCard(user, "role");
     const card = await screen.findByTestId("card-n1");
+    const box = card.closest(".react-flow__node") as HTMLElement;
 
-    // 假数据里「火神」收到 辅助 的 攻击% 40
-    fireEvent.change(within(card).getByDisplayValue("角色1"), { target: { value: "火神" } });
-    const rows = await screen.findByTestId("role-buffs-n1");
-    await waitFor(() => expect(rows).toHaveTextContent("入 1：辅助 atk_pct 40"));
-    // 出入度在标签之前（也就是标签上方）
-    const head = card.querySelector(".card-head");
-    expect(head).not.toBeNull();
-    expect(
-      rows.compareDocumentPosition(head as Node) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
+    const portIn = box.querySelector(".react-flow__handle.role-port-in");
+    const portOut = box.querySelector(".react-flow__handle.role-port-out");
+    expect(portIn).not.toBeNull();
+    expect(portOut).not.toBeNull();
+    // 都用 Position.Top（连线朝上走），而不是默认的左右两边
+    expect(portIn).toHaveClass("react-flow__handle-top");
+    expect(portOut).toHaveClass("react-flow__handle-top");
+    expect(box.querySelector(".react-flow__handle-left")).toBeNull();
+    expect(box.querySelector(".react-flow__handle-right")).toBeNull();
+    // 具体坐标（"在标签正上方、一进一出并排"）由 styles.css 的 .role-port-* 决定，
+    // 见 styles.test.ts 的契约用例 —— jsdom 没有布局，这里只能验到行为层面
   });
 
   it("卡片底部标注「含面板」与「含拐」——让人一眼看出在吃面板/拐力", async () => {

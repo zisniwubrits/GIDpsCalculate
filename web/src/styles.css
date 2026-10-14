@@ -360,31 +360,17 @@ textarea:focus {
   pointer-events: auto;
 }
 
-/* 角色标记左上角标签**上方**的出入度（给出去 / 收进来的拐）：
-   只读展示，继承节点的 pointer-events: none，所以不挡框选与拖动 */
-.role-buffs {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  align-self: flex-start;
-  max-width: 100%;
-  padding: 2px 4px 0;
-  font-size: 11px;
+/* 拐力端口：一进一出**并排在左上角标签的正上方**（Position.Top + 每边偏移），
+   于是拐力箭头的起点与终点都落在标签上方那一小块，不会横跨整片区域。
+   `.react-flow__handle-top` 默认是 left:50% / top:0，这里只改水平位置并抬高一档。 */
+.react-flow__handle.role-port-in {
+  left: 14px;
+  top: -7px;
 }
 
-.role-buffs .rb {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  cursor: help;
-}
-
-.role-buffs .rb-out {
-  color: var(--warn);
-}
-
-.role-buffs .rb-in {
-  color: var(--accent);
+.react-flow__handle.role-port-out {
+  left: 56px;
+  top: -7px;
 }
 
 /* 背景标记的观感：虚线淡蓝、无阴影、无白底；标签条做成"标记牌"而不是卡片头 */

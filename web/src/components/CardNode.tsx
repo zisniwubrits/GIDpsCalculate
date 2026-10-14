@@ -126,11 +126,15 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
   // 角色卡片是个例外：它没有伤害端口，但要一对**拐力端口** ——
   // 从源角色标签拖到目标角色标签，就等于把这个角色的面板值拐给对面。
   const isRole = Boolean(spec.role_card);
-  // 角色卡的出入度（给出去 / 收进来），只显示在标签上方
-  const buffRows =
-    isRole && data.roleBuffs && (data.roleBuffs.out.length || data.roleBuffs.in.length)
-      ? data.roleBuffs
-      : null;
+  /** 拐力端口的悬停说明：带上这个命名空间已经收到/给出的拐（明细看「角色面板」弹窗） */
+  const buffIn = data.roleBuffs?.in ?? [];
+  const buffOut = data.roleBuffs?.out ?? [];
+  const inTitle = buffIn.length
+    ? `收到的拐：${buffIn.map((r) => `${r.role} ${r.label} ${r.value}`).join("；")}`
+    : "收到的拐：把别的角色的拐力端口拖到这里";
+  const outTitle = buffOut.length
+    ? `给出去的拐：${buffOut.map((r) => `${r.label} ${r.value} → ${r.role}`).join("；")}`
+    : "拐力：拖到另一个角色标签上方的端口，把本角色面板值拐给它";
   const hasInput = isRole || (!spec.isolated && spec.inputs > 0);
   // sink 卡片（「赋值变量」）只有输入端口：它不参与结果链，只把上游值记到变量表
   const hasOutput = isRole || (!spec.isolated && !spec.no_output && !spec.sink);
@@ -242,33 +246,55 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
   })();
 
   const handles = [];
-  if (hasInput) {
-    const n = Math.max(1, node.inputs);
-    for (let i = 0; i < n; i += 1) {
-      handles.push(
-        <Handle
-          key={`in-${i}`}
-          id={`in-${i}`}
-          type="target"
-          position={Position.Left}
-          style={{ top: `${((i + 1) / (n + 1)) * 100}%` }}
-          className="port port-in"
-          title={isRole ? "接收另一个角色的拐力（把对方的标签拖到这里）" : undefined}
-        />,
-      );
-    }
-  }
-  if (hasOutput && (!spec.no_output || isRole)) {
+  if (isRole) {
+    // 角色卡的拐力端口：**两个都并排在左上角标签的正上方** ——
+    // 这样拐力箭头的起点与终点都落在标签上方那一小块，连线不会横跨整片区域。
+    // 用 Position.Top 让连线朝上走，具体坐标由 .role-port-* 微调。
     handles.push(
+      <Handle
+        key="in-0"
+        id="in-0"
+        type="target"
+        position={Position.Top}
+        className="port port-in role-port-in"
+        title={inTitle}
+      />,
       <Handle
         key="out"
         id="out"
         type="source"
-        position={Position.Right}
-        className="port port-out"
-        title={isRole ? "拐力：拖到另一个角色标签，把这个角色的面板值拐给它" : undefined}
+        position={Position.Top}
+        className="port port-out role-port-out"
+        title={outTitle}
       />,
     );
+  } else {
+    if (hasInput) {
+      const n = Math.max(1, node.inputs);
+      for (let i = 0; i < n; i += 1) {
+        handles.push(
+          <Handle
+            key={`in-${i}`}
+            id={`in-${i}`}
+            type="target"
+            position={Position.Left}
+            style={{ top: `${((i + 1) / (n + 1)) * 100}%` }}
+            className="port port-in"
+          />,
+        );
+      }
+    }
+    if (hasOutput && !spec.no_output) {
+      handles.push(
+        <Handle
+          key="out"
+          id="out"
+          type="source"
+          position={Position.Right}
+          className="port port-out"
+        />,
+      );
+    }
   }
 
   return (
@@ -296,33 +322,6 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
         data-type={node.type}
         data-collapsed={collapsed ? "1" : undefined}
       >
-        {/* 命名空间的**出入度**集中在左上角标签的上方（不出现在卡片体里） */}
-        {spec.role_card && !collapsed && buffRows ? (
-          <div className="role-buffs" data-testid={`role-buffs-${id}`}>
-            {buffRows.out.length ? (
-              <span
-                className="rb rb-out"
-                title={`给出去的拐（OUT）：${buffRows.out
-                  .map((r) => `${r.label} ${r.value} → ${r.role}`)
-                  .join("；")}`}
-              >
-                出 {buffRows.out.length}：
-                {buffRows.out.map((r) => `${r.macro} ${r.value}`).join("、")}
-              </span>
-            ) : null}
-            {buffRows.in.length ? (
-              <span
-                className="rb rb-in"
-                title={`收进来的拐（IN）：${buffRows.in
-                  .map((r) => `${r.role} → ${r.label} ${r.value}`)
-                  .join("；")}`}
-              >
-                入 {buffRows.in.length}：
-                {buffRows.in.map((r) => `${r.role} ${r.macro} ${r.value}`).join("、")}
-              </span>
-            ) : null}
-          </div>
-        ) : null}
         <div
           className="card-head"
           onContextMenu={(e) => {

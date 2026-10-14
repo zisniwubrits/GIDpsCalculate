@@ -193,6 +193,19 @@ describe("角色容器面板", () => {
     expect(body).toMatch(/font-family/);
   });
 
+  it("拐力端口并排在左上角标签正上方（箭头的始末都落在标签上方）", () => {
+    // Position.Top 只把端口放在水平中点，真正"抬到标签上方、左右并排"靠这两条
+    const portIn = ruleBody(".react-flow__handle.role-port-in");
+    const portOut = ruleBody(".react-flow__handle.role-port-out");
+    expect(portIn).toMatch(/top:\s*-\d+px/);        // 负偏移 = 在卡片上边缘之上
+    expect(portOut).toMatch(/top:\s*-\d+px/);
+    const inLeft = Number(/left:\s*(\d+)px/.exec(portIn)?.[1] ?? NaN);
+    const outLeft = Number(/left:\s*(\d+)px/.exec(portOut)?.[1] ?? NaN);
+    expect(inLeft).toBeGreaterThan(0);
+    expect(outLeft).toBeGreaterThan(inLeft);        // 一进一出并排（出在右边）
+    expect(outLeft - inLeft).toBeLessThan(120);     // 都挤在左上角那一小块
+  });
+
   it("拐力箭头画成虚线暖色，与伤害连线区分", () => {
     const body = ruleBody(".react-flow__edge-path.card-edge-buff");
     expect(body).toMatch(/stroke-dasharray/);
