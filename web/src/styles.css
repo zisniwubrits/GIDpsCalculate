@@ -78,6 +78,16 @@ textarea {
   padding: 2px 6px;
 }
 
+/* <pre>/<code> 的**浏览器默认字体是 monospace**，而中文 Windows 上 monospace 遇到中文
+   会回退成宋体 —— 只删掉自定义的 font-family 是没用的（UA 那条还在，用户报过一次
+   「F1 还是宋体」）。统一让它们继承界面字体：排版靠 white-space 保证，不需要等宽字形。 */
+pre,
+code,
+kbd,
+samp {
+  font-family: inherit;
+}
+
 input:focus,
 select:focus,
 textarea:focus {
@@ -806,9 +816,8 @@ textarea:focus {
   background: #fbfcfe;
   border: 1px solid var(--line);
   border-radius: 6px;
-  /* 不指定字体族：Consolas / Courier New 都没有中文字形，中文会被浏览器回退成宋体，
-     与界面其它文字不一致（用户报过两次：文本框一次、教程一次）。
-     white-space: pre-wrap 已经保证教程里的缩进与排版，不需要等宽字体。 */
+  /* 字体族由上面那条全局 `pre, code, kbd, samp { font-family: inherit }` 负责：
+     <pre> 的 UA 默认是 monospace，中文会回退成宋体（用户报过）。这里不再单独写。 */
   font-size: 12px;
   line-height: 1.75;
   white-space: pre-wrap;

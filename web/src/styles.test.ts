@@ -98,9 +98,17 @@ describe("字体", () => {
     expect(body).toMatch(/font-family/);
     expect(body).toMatch(/Microsoft YaHei/);
   });
-  it("F1 教程也不单独指定字体族（否则中文会回退成宋体，与界面不一致）", () => {
-    // 同 .f-area：Consolas / Courier New 没有中文字形；教程靠 pre-wrap 保排版，不需要等宽。
+  it("F1 教程不单独指定字体族（否则中文会回退成宋体，与界面不一致）", () => {
+    // 教程靠 pre-wrap 保排版，不需要等宽；字体族统一由下面那条全局 pre 规则继承。
     expect(ruleBody(".help-text")).not.toMatch(/font-family/);
+  });
+
+  it("pre/code 显式继承界面字体 —— <pre> 的 UA 默认是 monospace，中文会回退成宋体", () => {
+    // 只删掉自定义 font-family 是没用的：浏览器给 <pre> 的默认样式就是 monospace，
+    // 中文 Windows 上 monospace 的中文字形是宋体（用户报过「F1 还是宋体」）。
+    for (const sel of ["pre", "code", "kbd", "samp"]) {
+      expect(ruleBodyInList(sel)).toMatch(/font-family:\s*inherit/);
+    }
   });
 });
 
