@@ -257,16 +257,16 @@ describe("角色容器面板", () => {
     expect(ruleBody(".panel-macro-head")).toMatch(/grid-template-columns:[^;]*\)\s*40px/);
   });
 
-  it("拐力端口的基准位置在卡片顶部中间（百分比、入度正中）", () => {
+  it("拐力端口用容器百分比、以 50% 为界左右各一个", () => {
     const portIn = ruleBody(".react-flow__handle.role-port-in");
     const portOut = ruleBody(".react-flow__handle.role-port-out");
     expect(portIn).toMatch(/top:\s*-\d+px/);        // 负偏移 = 在卡片上边缘之上
     expect(portOut).toMatch(/top:\s*-\d+px/);
-    // 百分比：卡片多宽都落在中间那一带（一个入度点固定不动）
-    expect(portIn).toMatch(/left:\s*50%/);
-    const outLeft = Number(/([\d.]+)%/.exec(portOut)?.[1] ?? NaN);
-    expect(outLeft).toBeGreaterThan(50);            // 出度在入度右侧
-    expect(outLeft).toBeLessThanOrEqual(60);        // 挨着，算"同一组"
+    // 百分比写法（用户口径：就是容器 50% 那条线，左右各一个）
+    expect(portOut).toMatch(/left:\s*50%/);         // 出度压在 50% 那条线上
+    const inLeft = Number(/([\d.]+)%/.exec(portIn)?.[1] ?? NaN);
+    expect(inLeft).toBeLessThan(50);                // 入度在它左边
+    expect(inLeft).toBeGreaterThanOrEqual(40);
   });
 
   it("拐力箭头画成蓝色虚线，与伤害连线区分（不用暖色）", () => {

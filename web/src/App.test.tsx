@@ -789,10 +789,12 @@ describe("App 集成（假后端 + 真 schema）", () => {
     // 所以端口位置不会随来源数量变化，箭头也就不会"错位"
     const ins = [...box.querySelectorAll<HTMLElement>(".react-flow__handle.role-port-in")];
     expect(ins).toHaveLength(1);
-    expect(ins[0].style.left).toBe("50%");
+    // 容器百分比写法；入度在 50% 左侧、出度压在 50% 上（用户口径：左右各一个）
+    expect(ins[0].style.left).toMatch(/%$/);
+    expect(Number.parseFloat(ins[0].style.left)).toBeLessThan(50);
     const outs = [...box.querySelectorAll<HTMLElement>(".react-flow__handle.role-port-out")];
     expect(outs).toHaveLength(1);
-    expect(Number.parseFloat(outs[0].style.left)).toBeGreaterThan(50);
+    expect(outs[0].style.left).toBe("50%");
     // 端口上写明用途（拖过去 = 上拐）
     expect(box.querySelector(".role-port-out")?.getAttribute("title")).toContain("拐力");
   });
