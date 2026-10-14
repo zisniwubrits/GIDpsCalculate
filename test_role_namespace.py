@@ -567,6 +567,75 @@ class TestSubNamespaces(unittest.TestCase):
         self.assertEqual(g.evaluate()["nodes"]["c1"]["values"]["noncrit"], 1040)
 
 
+class TestDeferredDefinitions(unittest.TestCase):
+    """引用了 `in::`/`own::` 的定义要能生效（这些名字要等拐力算完才存在）。
+
+    修复的 bug：变量卡片与角色面板都在拐力之前解析，早先算不出来就**静默丢掉** ——
+    表现是"写了 `in::` 的面板项莫名不生效，下游报未定义变量"。
+    """
+
+    def test_in_resolves_without_any_buff(self):
+        """没有拐力时 `in::atk_pct` 就是 0（而不是"未定义"）。"""
+        g = Graph()
+        g.add(GraphNode("rb", "role",
+                        fields={"role_name": "火神", "panel": "atk = 1000\natk_pct = in::atk_pct"}))
+        g.add(GraphNode("b", "base",
+                        fields={"stat_base": "", "stat_big": "", "multiplier": "100"},
+                        role="火神"))
+        # atk=1000、atk_pct=0 → 1000×1.0
+        self.assertEqual(g.evaluate()["nodes"]["b"]["values"]["noncrit"], 1000)
+
+    def test_in_resolves_in_panel_and_var_card_alike(self):
+        """同样的写法在面板与变量卡里结果一致（都要能解析）。"""
+        for where in ("panel", "var"):
+            g = Graph()
+            g.add(GraphNode("ra", "role", fields={"role_name": "辅助", "panel": "atk_pct = 40"}))
+            if where == "panel":
+                g.add(GraphNode("rb", "role", fields={
+                    "role_name": "火神", "panel": "atk = 1000\natk_pct = in::atk_pct"}))
+            else:
+                g.add(GraphNode("rb", "role", fields={"role_name": "火神", "panel": "atk = 1000"}))
+                g.add(var_card("vb", "atk_pct = in::atk_pct", role="火神"))
+            g.links.append(Link("ra", "rb", 0))
+            g.add(GraphNode("c1", "calc", fields={"expr": "own::atk_pct"}, role="火神"))
+            g.add(GraphNode("c2", "calc", fields={"expr": "atk_pct"}, role="火神"))
+            out = g.evaluate()
+            # 自身被定义成"收进来的 40"
+            self.assertEqual(out["nodes"]["c1"]["values"]["noncrit"], 40, where)
+            # 生效值 = 自身 + 收进来的 = 80：把自己定义成 in 会翻倍（语义使然，别这么写）
+            self.assertEqual(out["nodes"]["c2"]["values"]["noncrit"], 80, where)
+
+    def test_panel_items_can_reference_each_other(self):
+        """角色面板里的项可以引用同一角色卡上先写的项（原来角色卡自己没作用域，引用不到）。"""
+        g = Graph()
+        g.add(GraphNode("rb", "role", fields={
+            "role_name": "火神", "panel": "atk = 2000\natk_pct = 10\natk_flat = atk*0.05"}))
+        g.add(GraphNode("b", "base",
+                        fields={"stat_base": "", "stat_big": "", "stat_flat": "",
+                                "multiplier": "100"},
+                        role="火神"))
+        # (2000×1.1 + 100) × 100% = 2300
+        self.assertEqual(g.evaluate()["nodes"]["b"]["values"]["noncrit"], 2300)
+
+    def test_var_card_can_reference_panel_macro(self):
+        g = Graph()
+        g.add(GraphNode("rb", "role", fields={"role_name": "火神", "panel": "atk = 1000"}))
+        g.add(var_card("vb", "小攻击 = atk*0.1", role="火神"))
+        g.add(GraphNode("c1", "calc", fields={"expr": "小攻击"}, role="火神"))
+        self.assertEqual(g.evaluate()["nodes"]["c1"]["values"]["noncrit"], 100)
+
+    def test_unresolvable_definition_is_not_kept_forever(self):
+        """真算不出来的定义仍然只是"不定义"，不能把求值搞崩。"""
+        g = Graph()
+        g.add(GraphNode("rb", "role",
+                        fields={"role_name": "火神", "panel": "atk_pct = 根本没这个变量"}))
+        g.add(GraphNode("c1", "calc", fields={"expr": "atk_pct"}, role="火神"))
+        out = g.evaluate()
+        self.assertIn("未定义变量", out["nodes"]["c1"]["display"])
+        # 第二次求值也不受第一次延迟列表影响
+        self.assertIn("未定义变量", g.evaluate()["nodes"]["c1"]["display"])
+
+
 class TestRoleNameValidation(unittest.TestCase):
     def test_bad_role_is_treated_as_global(self):
         for bad in ("", "  ", "有 空格", "a__b", "雷神::x", "1abc"):

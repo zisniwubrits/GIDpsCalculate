@@ -232,6 +232,8 @@ class Graph:
         self._buff_totals: dict = {}
         # 拐力统计（给「角色面板」弹窗）：{角色: {"out": [...], "in": [...]}}
         self._buff_stats: dict = {}
+        # 当时算不出来、等拐力就绪后再补算的定义（引用了 in::/own:: 等）
+        self._deferred: list = []
 
     # -- 基础 -------------------------------------------------------------
     @staticmethod
@@ -327,7 +329,7 @@ class Graph:
             role = _valid_role(node.fields.get("role_name"))
             if not role:
                 continue
-            token = _nodes.use_env(self.scoped_env(node, env))
+            token = _nodes.use_env(self.scoped_env(node, env, role=role))
             try:
                 for line in (node.fields.get("panel") or "").splitlines():
                     parsed = split_var_line(line)
@@ -339,9 +341,13 @@ class Graph:
                     try:
                         value = _nodes.eval_field(parsed[1])
                     except ValueError:
+                        # 同变量卡片：可能是引用了 in::/own::（拐力算完才有）→ 等会儿补算
+                        self._defer("panel", env_key(qualify(macro, role)), parsed[1],
+                                    node, role=role)
                         continue                    # 算不出来的行忽略
                     env[env_key(qualify(macro, role))] = value
-                    _nodes.use_env(self.scoped_env(node, env))
+                    # 同一张角色卡里的后续面板项要能引用刚定义的（如 atk_pct = atk * 0.1）
+                    _nodes.use_env(self.scoped_env(node, env, role=role))
             finally:
                 _nodes.reset_env(token)
 
@@ -380,6 +386,55 @@ class Graph:
                 self.variables[prefix + SUB_OWN + NS_JOIN + name] = own
                 self.variables[prefix + SUB_OUT + NS_JOIN + name] = own   # 对外提供 = 自身
                 self.variables[prefix + SUB_IN + NS_JOIN + name] = inc
+
+    # -- 延迟补算（引用了 in::/own:: 这类要等拐力才知道的名字）-----------------
+    def _defer(self, kind: str, key: str, expr: str, node, role=None) -> None:
+        """记下一条"当时算不出来"的定义，等拐力/子命名空间就绪后补算。"""
+        self._deferred.append(dict(kind=kind, key=key, expr=expr, nid=node.id, role=role))
+
+    def _retry_deferred(self, env: dict, locked=()) -> None:
+        """把延迟的定义再算一遍：能算出来的写进 env，仍算不出的继续留着。
+
+        为什么需要：变量卡片与角色面板都在**拐力算完之前**解析，而 `in::` / `own::`
+        这些名字要等拐力就绪才存在。早先的实现是直接跳过 —— 表现为"写了 `in::` 的定义
+        莫名其妙没生效"（下游报「未定义变量」）。
+        """
+        left = []
+        for item in self._deferred:
+            node = self.nodes.get(item["nid"])
+            if node is None or item["key"] in locked:
+                continue
+            token = _nodes.use_env(self.scoped_env(node, env, role=item["role"]))
+            try:
+                value = _nodes.eval_field(item["expr"])
+            except ValueError:
+                left.append(item)               # 还是算不出来：保留，下次求值再试
+                continue
+            finally:
+                _nodes.reset_env(token)
+            env[item["key"]] = value
+        self._deferred = left
+
+    def _finalize_buffs(self, own: dict) -> None:
+        """按 ``own``（拐力生效前的自身值）重算：拐力、生效值、子命名空间。
+
+        * 拐力来源值取 ``own``（保证"不传递"）
+        * 生效值 = own + in，**覆盖式**写回全名键（重复调用不会翻倍）
+        * 顺带刷新 ``own`` / ``out`` / ``in`` 三个子命名空间
+        """
+        self.buffs = self.buff_sources(own)
+        self._buff_stats = self.buff_stats(own)
+        self._buff_totals = {}
+        for role, grants in self.buffs.items():
+            self._buff_totals[role] = {
+                macro: self.role_panel_value(own, role, macro) + extra
+                for macro, extra in grants.items()
+            }
+        for role, totals in self._buff_totals.items():
+            for macro, total in totals.items():
+                # 只写全名键（角色::宏名），不往全局塞裸名，免得拐力漏给别的角色
+                self.variables[env_key(qualify(macro, role))] = total
+        self._apply_sub_namespaces(own)
 
     def buff_stats(self, base_vars: dict) -> dict:
         """给「角色面板」弹窗用的拐力统计：``{角色: {"out": [...], "in": [...]}}``。
@@ -503,7 +558,7 @@ class Graph:
         return dup
 
     # -- 求值 -------------------------------------------------------------
-    def scoped_env(self, node, env=None) -> dict:
+    def scoped_env(self, node, env=None, role=None) -> dict:
         """求值某节点的字段时用的变量表，优先级从高到低：
 
         1. 本角色自己的变量（裸名，覆盖同名全局变量）
@@ -513,7 +568,9 @@ class Graph:
         """
         base = self.variables if env is None else env
         out = dict(base)
-        role = getattr(node, "role", "")
+        # role 参数：解析**角色卡自己的面板**时用（角色卡自身没有 .role，
+        # 但它显然该按"本角色"的作用域取值，否则面板项之间互相引用都看不见）
+        role = getattr(node, "role", "") if role is None else role
         if role:
             prefix = role + NS_JOIN
             for key, val in base.items():
@@ -612,6 +669,12 @@ class Graph:
         token = _nodes.use_env(env)
         self._cardvars = None           # 每次求值重建命名卡片的惰性表
         self._card_stack = set()
+        self._deferred = []             # 本次求值里"当时算不出来"的定义（稍后补算）
+        # 清掉上一次求值的运行时缓存：同一个 Graph 对象可能被反复求值
+        # （测试里就是这样），残留的拐力值会串进新一轮的解析
+        self.buffs = {}
+        self._buff_totals = {}
+        self._buff_stats = {}
         try:
             # 第一轮：只解析「变量」卡片的定义
             self._parse_var_cards(env)
@@ -634,20 +697,12 @@ class Graph:
             # **拐力生效前**的快照 = 各变量的"自身值"（own 的来源）
             own = dict(env)
             self.variables = dict(env)
-            # 拐力：用这一轮（不含拐力）的结果算，保证"不传递"；有拐力则带着拐力重跑一轮，
-            # 让**目标角色**里以面板项写的算式也能看到"含拐"的值（拐力值本身不变，不会来回震荡）
-            self.buffs = self.buff_sources(own)
-            self._buff_stats = self.buff_stats(own)
-            # 拐力生效后的面板值（自身 + 拐力）：覆盖式注入，重复注入也不会翻倍
-            self._buff_totals = {}
-            for role, grants in self.buffs.items():
-                totals = {}
-                for macro, extra in grants.items():
-                    totals[macro] = self.role_panel_value(own, role, macro) + extra
-                self._buff_totals[role] = totals
-            # 子命名空间（own / out / in）：第二轮解析变量时就能引用
-            self._apply_sub_namespaces(own)
+            # 拐力 + 生效值 + 子命名空间（own/out/in）——第二轮解析变量时就能引用它们。
+            # 拐力值取 own（不含拐）以保证"不传递"。
+            self._finalize_buffs(own)
             if self.buffs:
+                # 有拐力：带着拐力（与子命名空间）重跑一轮变量登记，
+                # 让目标角色里以面板项写的算式也能看到"含拐"的值
                 env = {}
                 self._parse_var_cards(env)
                 rvars = self._result_vars()
@@ -663,13 +718,15 @@ class Graph:
                 self._apply_role_panels(env)
                 own = dict(env)                 # 第二轮解析出来的自身值
                 self.variables = dict(env)
-                # 变量表 / 报告里也显示"含拐"的面板值（只写全名键：角色::宏名，
-                # 不往全局塞裸名，免得拐力漏给别的角色）
-                for role, totals in self._buff_totals.items():
-                    for macro, total in totals.items():
-                        self.variables[env_key(qualify(macro, role))] = total
-                # 用第二轮的值刷新子命名空间（第一轮注入的可能已被覆盖）
-                self._apply_sub_namespaces(own)
+                self._finalize_buffs(own)
+            if self._deferred:
+                # 还有引用了 in::/own:: 这类名字、当时没算出来的定义 → 现在补算，
+                # 再按新的自身值刷新一次拐力（只刷新这一次，不再迭代）
+                locked = set(rvars) | set(svars)
+                self._retry_deferred(env, locked)
+                own = dict(env)
+                self.variables = dict(env)
+                self._finalize_buffs(own)
             # 变量表已就绪，逐个节点求值
             first = self.result_node()
             out = dict(
@@ -847,7 +904,10 @@ class Graph:
                     try:
                         value = _nodes.eval_field(parsed[1])
                     except ValueError:
-                        continue                # 定义失败则忽略该行
+                        # 引用 `in::`/`own::` 这类要等拐力算完才知道的名字时，
+                        # 这里必然算不出来 —— 记下来等拐力就绪后补算（见 _retry_deferred）
+                        self._defer("var", key, parsed[1], node)
+                        continue
                     env[key] = value
                     # 同一张卡的后续行要能引用刚定义的变量：重建一次作用域
                     _nodes.use_env(self.scoped_env(node, env))
