@@ -744,7 +744,7 @@ describe("App 集成（假后端 + 真 schema）", () => {
     expect(domOrder[0]).toBe("card-n1");
   });
 
-  it("右键「命名卡片…」给卡片起名：标题栏挂上 `名字::` 徽标，名字进工程字段", async () => {
+  it("右键「命名卡片…」给卡片起名：标题栏挂上名字徽标，名字进工程字段", async () => {
     const user = userEvent.setup();
     await renderApp();
     await addCard(user, "dmg");
@@ -757,8 +757,8 @@ describe("App 集成（假后端 + 真 schema）", () => {
     await user.type(input, "雷神增伤");
     await user.click(screen.getByRole("button", { name: "确定" }));
 
-    // 标题仍是类型，名字另挂徽标（显示成能敲的前缀 `雷神增伤::`）
-    await waitFor(() => expect(within(card).getByText("雷神增伤::")).toBeInTheDocument());
+    // 标题仍是类型，名字另挂徽标（徽标只显示名字，不带尾随 ::）
+    await waitFor(() => expect(within(card).getByText("雷神增伤")).toBeInTheDocument());
     expect(within(card).getByText("增伤区")).toBeInTheDocument();
     // 名字是隐藏字段 card_name，随载荷一起发给后端（供 卡片名::暴击 引用）
     await waitFor(() => expect(lastBody?.nodes[0].fields.card_name).toBe("雷神增伤"));
@@ -776,14 +776,14 @@ describe("App 集成（假后端 + 真 schema）", () => {
     await user.click(await screen.findByText("命名卡片…"));
     await user.type(await screen.findByTestId("card-name-input"), "临时名");
     await user.click(screen.getByRole("button", { name: "确定" }));
-    await waitFor(() => expect(within(card).getByText("临时名::")).toBeInTheDocument());
+    await waitFor(() => expect(within(card).getByText("临时名")).toBeInTheDocument());
 
     fireEvent.contextMenu(within(card).getByText("增伤区"));
     await user.click(await screen.findByText("命名卡片…"));
     await user.clear(await screen.findByTestId("card-name-input"));
     await user.click(screen.getByRole("button", { name: "确定" }));
 
-    await waitFor(() => expect(within(card).queryByText("临时名::")).toBeNull());
+    await waitFor(() => expect(within(card).queryByText("临时名")).toBeNull());
     expect(within(card).getByText("增伤区")).toBeInTheDocument();
   });
 });

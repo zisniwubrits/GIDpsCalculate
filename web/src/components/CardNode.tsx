@@ -289,14 +289,14 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
           <span className="card-title" title={spec.title}>
             {title}
           </span>
-          {/* 命名空间徽标：显示的是**你能敲的前缀**，所以都带 :: 
-              —— 命名卡片的输出写作 火神增伤::暴击，角色里的变量写作 火神::攻击力 */}
+          {/* 命名空间徽标：只显示**名字本身**，不带尾随 `::`
+              —— `::` 后面没有字段时没必要显示（用户要求）；完整用法写在 title 里 */}
           {cardName && !collapsed && node.type !== "calc" ? (
             <span
               className="card-name-chip"
               title={`引用这张卡的输出：${cardName}（期望值）／ ${cardName}::暴击 ／ ${cardName}::未暴击`}
             >
-              {cardName}::
+              {cardName}
             </span>
           ) : null}
           {data.role && !collapsed ? (
@@ -304,7 +304,7 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
               className="card-role-chip"
               title={`属于角色「${data.role}」：其中的变量写作 ${data.role}::变量名`}
             >
-              {data.role}::
+              {data.role}
             </span>
           ) : null}
           <button
