@@ -863,6 +863,54 @@ describe("App 集成（假后端 + 真 schema）", () => {
     );
   });
 
+  it("角色面板弹窗能增删自定义对外项（out::名字），存进面板字段并往返稳定", async () => {
+    const user = userEvent.setup();
+    await renderApp();
+    await addCard(user, "role");
+    const card = await screen.findByTestId("card-n1");
+
+    fireEvent.contextMenu(within(card).getByText("角色1"));
+    await user.click(await screen.findByText("角色面板…"));
+    let dialog = await screen.findByTestId("role-panel-dialog");
+
+    // 默认没有自定义行；点「＋」加一行（名字给个不重复的建议值）
+    expect(within(dialog).queryByTestId("panel-custom-name-0")).toBeNull();
+    await user.click(within(dialog).getByTestId("panel-custom-add"));
+    expect(within(dialog).getByTestId("panel-custom-name-0")).toHaveValue("buff");
+
+    // 改名 + 填值（固定宏也填一个，验证两类行一起存）
+    fireEvent.change(within(dialog).getByTestId("panel-custom-name-0"), {
+      target: { value: "gift" },
+    });
+    fireEvent.change(within(dialog).getByTestId("panel-custom-value-0"), {
+      target: { value: "40" },
+    });
+    fireEvent.change(within(dialog).getByTestId("panel-atk_pct"), { target: { value: "20" } });
+    await user.click(within(dialog).getByRole("button", { name: "确定" }));
+
+    await waitFor(() =>
+      expect(lastBody?.nodes[0].fields.panel).toBe("atk_pct = 20\nout::gift = 40"),
+    );
+
+    // 再打开：这一行还在（改名与值都没丢）
+    fireEvent.contextMenu(within(card).getByText("角色1"));
+    await user.click(await screen.findByText("角色面板…"));
+    dialog = await screen.findByTestId("role-panel-dialog");
+    expect(within(dialog).getByTestId("panel-custom-name-0")).toHaveValue("gift");
+    expect(within(dialog).getByTestId("panel-custom-value-0")).toHaveValue("40");
+
+    // 名字非法 → 就地给提示（不是静默丢掉）
+    fireEvent.change(within(dialog).getByTestId("panel-custom-name-0"), {
+      target: { value: "Bad" },
+    });
+    expect(within(dialog).getByTestId("panel-custom-hint-0")).toHaveTextContent("小写字母");
+
+    // 删掉这一行 → 面板字段里只剩固定宏
+    await user.click(within(dialog).getByTestId("panel-custom-del-0"));
+    await user.click(within(dialog).getByRole("button", { name: "确定" }));
+    await waitFor(() => expect(lastBody?.nodes[0].fields.panel).toBe("atk_pct = 20"));
+  });
+
   it("角色面板弹窗在「火神」名下会显示后端给的 OUT/IN 统计", async () => {
     const user = userEvent.setup();
     await renderApp();

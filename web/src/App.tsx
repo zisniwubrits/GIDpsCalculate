@@ -43,7 +43,7 @@ import {
   connect,
   estimateSize,
   fillPresetForDropped,
-  formatPanel,
+  formatRolePanel,
   formatPanelShow,
   freeSlot,
   graphToJSON,
@@ -51,7 +51,7 @@ import {
   jsonToGraph,
   makeNode,
   nextNodeId,
-  parsePanel,
+  parseRolePanel,
   isNamespaceNode,
   isPanelNode,
   parsePanelShow,
@@ -962,15 +962,22 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
         const roleName = String(node?.fields.role_name ?? "").trim();
         const keys = schema.panelMacros.map((m) => m.key);
         const stats = roleName ? evaluation.data?.buffStats?.[roleName] : undefined;
+        const parsed = parseRolePanel(
+          String(node?.fields.panel ?? ""),
+          keys,
+          schema.panelCustomPattern,
+        );
         return (
           <RolePanelDialog
             title={roleName || "未命名"}
             macros={schema.panelMacros}
-            initial={parsePanel(String(node?.fields.panel ?? ""), keys)}
+            initial={parsed.values}
+            initialCustom={parsed.custom}
+            customPattern={schema.panelCustomPattern}
             initialShow={parsePanelShow(String(node?.fields.panel_show ?? ""))}
             stats={stats}
-            onSave={(values, show) => {
-              onField(panelDialog, "panel", formatPanel(values, keys));
+            onSave={(values, show, custom) => {
+              onField(panelDialog, "panel", formatRolePanel(values, keys, custom));
               onField(panelDialog, "panel_show", formatPanelShow(show));
               setPanelDialog(null);
             }}

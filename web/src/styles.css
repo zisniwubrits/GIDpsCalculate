@@ -1074,6 +1074,65 @@ textarea:focus {
   color: var(--muted);
 }
 
+/* 自定义对外项（out::名字）：与固定宏同一套列宽，但要看出是"另加的一段" */
+.panel-custom-block {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--line);
+}
+
+.panel-custom-title {
+  padding: 0 6px 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* 名字输入框嵌在 `out::` 前缀后面（前缀说明这行是"给出去的"） */
+.panel-custom-row .pm-key {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.panel-custom-row .pm-custom-name {
+  width: 100%;
+  min-width: 0;
+  padding: 6px 6px;
+  font-size: 13px;
+  font-family: Consolas, "Courier New", "Microsoft YaHei", monospace;
+}
+
+/* 删除按钮占掉「显示」那一列的位置（自定义项不进画布面板，没有勾选框） */
+.panel-custom-del {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.panel-custom-del:hover {
+  color: #c0392b;
+  border-color: #e0b4ae;
+}
+
+.panel-custom-add {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px;
+}
+
+.panel-custom-add button {
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
 .help-nav {
   display: flex;
   flex-wrap: wrap;

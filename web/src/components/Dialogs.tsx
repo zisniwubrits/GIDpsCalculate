@@ -2,6 +2,12 @@
  * 弹窗：设置结果变量（★结果卡片右键）、F1 教程。
  */
 import { useEffect, useState } from "react";
+import {
+  DEFAULT_PANEL_CUSTOM_PATTERN,
+  nextCustomOutName,
+  SUB_OUT,
+  validCustomOut,
+} from "../model";
 
 export interface ResultVarsDialogProps {
   initial: Record<string, string>;
@@ -156,14 +162,18 @@ export interface RolePanelDialogProps {
   title: string;
   /** 固定宏词表（来自 schema：key / 中文名 / 喂给哪张卡） */
   macros: { key: string; label: string; feed: string }[];
-  /** 当前面板值 {宏: 值文本} */
+  /** 当前面板值 {宏: 值文本}；自定义对外项用 `out::名字` 作键 */
   initial: Record<string, string>;
+  /** 已有的自定义对外项名字（`out::名字`，按出现顺序） */
+  initialCustom: string[];
+  /** 自定义对外项名字的规则（schema 的 panelCustomPattern；后端是权威） */
+  customPattern?: string;
   /** 画布上那块面板要显示哪些宏（空 = 只显示已有值的） */
   initialShow: string[];
   /** 拐力统计（OUT：给出去多少；IN：收进来多少） */
   stats?: { out: { macro: string; label: string; value: number; role: string }[];
             in: { macro: string; label: string; value: number; role: string }[] };
-  onSave: (values: Record<string, string>, show: string[]) => void;
+  onSave: (values: Record<string, string>, show: string[], custom: string[]) => void;
   onClose: () => void;
 }
 
@@ -172,17 +182,23 @@ export interface RolePanelDialogProps {
  *
  * 「面板」是原神黑话里的角色属性表：面板项就是本角色命名空间里的变量，
  * 卡片字段留空时会用它们兜底；拖拐力箭头时也是把这张表加到目标角色的同名项上。
+ *
+ * 除固定词表外，还能加**自定义对外项**（`out::名字 = 值`）：本角色没有这个属性，
+ * 但要把一份拐力给出去（"面板外拐"）。名字规则由后端给（customPattern）。
  */
 export function RolePanelDialog({
   title,
   macros,
   initial,
+  initialCustom,
+  customPattern = DEFAULT_PANEL_CUSTOM_PATTERN,
   initialShow,
   stats,
   onSave,
   onClose,
 }: RolePanelDialogProps) {
   const [values, setValues] = useState<Record<string, string>>({ ...initial });
+  const [custom, setCustom] = useState<string[]>([...initialCustom]);
   const [show, setShow] = useState<string[]>([...initialShow]);
 
   useEffect(() => {
@@ -192,6 +208,35 @@ export function RolePanelDialog({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+
+  /** 自定义对外项在 values 里的键 */
+  const customKey = (name: string) => `${SUB_OUT}::${name}`;
+
+  /** 改一个自定义项的名字：值跟着那一行走（rename 不是"新建一行"） */
+  const renameCustom = (i: number, name: string) => {
+    const old = custom[i];
+    setCustom((list) => list.map((n, j) => (j === i ? name : n)));
+    if (old === name) return;
+    setValues((v) => {
+      const next = { ...v, [customKey(name)]: v[customKey(old)] ?? "" };
+      delete next[customKey(old)];
+      return next;
+    });
+  };
+
+  const removeCustom = (i: number) => {
+    const old = custom[i];
+    setCustom((list) => list.filter((_, j) => j !== i));
+    setValues((v) => {
+      const next = { ...v };
+      delete next[customKey(old)];
+      return next;
+    });
+  };
+
+  const addCustom = () => {
+    setCustom((list) => [...list, nextCustomOutName(list)]);
+  };
 
   const rows = (list: { macro: string; label: string; value: number; role: string }[]) =>
     list.length ? (
@@ -271,6 +316,71 @@ export function RolePanelDialog({
               />
             </label>
           ))}
+          {custom.length ? (
+            <div className="panel-custom-block">
+              <div className="panel-custom-title">
+                自定义对外项（`{SUB_OUT}::名字`）—— 本角色没有这个属性，只把这份拐力给出去
+              </div>
+              {custom.map((name, i) => {
+                const bad = !validCustomOut(name, customPattern);
+                const dup = custom.filter((n) => n === name).length > 1;
+                const clash = macros.some((m) => m.key === name);
+                const err = bad
+                  ? "名字只能用小写字母/数字/下划线，且要以字母开头"
+                  : clash
+                    ? "这个名字是固定面板宏，直接在上面那一行填值即可"
+                    : dup
+                      ? "名字重复了"
+                      : "";
+                return (
+                  <div className="panel-macro-row panel-custom-row" key={`custom-${i}`}>
+                    <span className="pm-key">
+                      {SUB_OUT}::
+                      <input
+                        className="pm-custom-name"
+                        value={name}
+                        data-testid={`panel-custom-name-${i}`}
+                        placeholder="buff"
+                        onChange={(e) => renameCustom(i, e.target.value.trim())}
+                      />
+                    </span>
+                    <span className="pm-label" />
+                    <input
+                      value={values[customKey(name)] ?? ""}
+                      data-testid={`panel-custom-value-${i}`}
+                      placeholder="留空 = 不给出去"
+                      onChange={(e) =>
+                        setValues((v) => ({ ...v, [customKey(name)]: e.target.value }))
+                      }
+                    />
+                    <span className={err ? "pm-feed modal-warn" : "pm-feed"} data-testid={`panel-custom-hint-${i}`}>
+                      {err || "拐力箭头 → 对面 in::名字"}
+                    </span>
+                    <button
+                      type="button"
+                      className="pm-custom-del"
+                      title="删掉这一行"
+                      data-testid={`panel-custom-del-${i}`}
+                      onClick={() => removeCustom(i)}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
+          <div className="panel-custom-add">
+            <button type="button" data-testid="panel-custom-add" onClick={addCustom}>
+              ＋ 添加自定义对外项
+            </button>
+            <span className="modal-hint">
+              想"面板外拐"（自己不需要这个属性，但要给别人）时用它；
+              拖拐力箭头后，对面写 <code>{SUB_OUT}::{nextCustomOutName(custom)}</code>
+              或 <code>in::名字</code> 就能收到。
+              {macros.length === 0 ? "（后端版本过旧时这一行不会生效，请重启后端服务）" : ""}
+            </span>
+          </div>
         </div>
         <p className="modal-hint">
           「显示」一列控制画布上角色标记里那块面板显示哪几项（不勾 = 只在有值时才显示）。
@@ -290,7 +400,7 @@ export function RolePanelDialog({
           <button type="button" onClick={onClose}>
             取消
           </button>
-          <button type="button" className="primary" onClick={() => onSave(values, show)}>
+          <button type="button" className="primary" onClick={() => onSave(values, show, custom)}>
             确定
           </button>
         </div>
