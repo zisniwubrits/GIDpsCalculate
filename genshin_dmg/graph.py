@@ -151,8 +151,20 @@ class GraphNode:
         return NODE_TYPES[self.type]["title"]
 
     def getter(self):
-        """compute / factor 用的取值器。"""
-        return lambda key: self.fields.get(key)
+        """compute / factor 用的取值器。
+
+        字段**留空**时用「角色面板」兜底：把该字段对应的面板宏（atk / crit_rate /
+        res_shred …，定义在本角色命名空间里）加起来当值 —— 这是"面板化"的核心规则；
+        字段写了值就以卡片为准。当前变量表里已经含有角色命名空间与拐力叠加的结果。
+        """
+        def get(key):
+            raw = self.fields.get(key)
+            if raw is None or (isinstance(raw, str) and not raw.strip()):
+                v = _nodes.panel_value(self.type, key)
+                if v is not None:
+                    return v
+            return raw
+        return get
 
     def result_var_names(self) -> list:
         """结果卡片的三个变量名（顺序：未暴击 / 暴击 / 期望）。"""

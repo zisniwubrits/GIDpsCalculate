@@ -112,6 +112,75 @@ def _attr(get):
 
 
 # ---------------------------------------------------------------------------
+# 角色面板（"面板"是原神黑话：角色的属性表）
+# ---------------------------------------------------------------------------
+# 面板项就是**本角色命名空间里的变量** —— 写在该角色内的「变量」卡片里，例如
+#     攻击力 = 2000        atk = 2000
+#     暴击率 = 70          crit_rate = 70
+# 名字用**固定 ASCII 词表**（atk / crit_rate / …），后端才知道它对应哪张卡的哪个字段。
+#
+# 两条规则（用户确认）：
+#  1. **卡片字段留空 → 用本角色面板兜底**；字段写了值就以卡片为准。
+#  2. 拖「拐力箭头」A→B 时，把 A 的面板值**加到** B 的同名面板项上（多来源相加、不传递），
+#     因此注入变量表后，卡片、算式、面板兜底看到的都是"含拐"的值。
+PANEL_MACROS = (
+    "atk", "atk_pct", "atk_flat", "crit_rate", "crit_dmg", "em", "dmg",
+    "month_dmg", "base_boost", "res_shred", "def_shred", "ignore_def",
+    "elevate", "reaction_dmg",
+)
+
+# (卡片类型, 字段 key) → 该字段对应的面板宏（可以有多个：月增伤与基础提升都喂「基础提升%」）
+FIELD_MACROS = {
+    ("base", "stat_base"): ("atk",),
+    ("base", "stat_big"): ("atk_pct",),
+    ("base", "stat_flat"): ("atk_flat",),
+    ("attr", "stat_base"): ("atk",),
+    ("attr", "stat_big"): ("atk_pct",),
+    ("attr", "stat_flat"): ("atk_flat",),
+    ("crit", "crit_rate"): ("crit_rate",),
+    ("crit", "crit_damage"): ("crit_dmg",),
+    ("dmg", "dmg_net"): ("dmg",),
+    ("base_boost", "base_boost"): ("month_dmg", "base_boost"),
+    ("boost", "boost"): ("elevate",),
+    ("res", "resistance"): ("res_shred",),
+    ("def", "def_reduction"): ("def_shred",),
+    ("def", "ignore_def"): ("ignore_def",),
+    ("amp", "em"): ("em",),
+    ("amp", "amp_bonus"): ("reaction_dmg",),
+    ("aggravate", "em"): ("em",),
+    ("transform", "em"): ("em",),
+    ("transform", "amp_bonus"): ("reaction_dmg",),
+    ("crystal", "em"): ("em",),
+    ("em_gain", "em"): ("em",),
+}
+
+# 取负的宏：字段是「敌人抗性%」，而"减抗 40"意味着抗性 -40
+MACRO_SIGN = {"res_shred": -1.0}
+
+
+def field_macros(type_key: str, field_key: str) -> tuple:
+    """该字段对应哪些面板宏（没有则空元组）。"""
+    return FIELD_MACROS.get((type_key, field_key), ())
+
+
+def panel_value(type_key: str, field_key: str):
+    """字段留空时的**面板兜底值**：把该字段对应的面板宏（按当前作用域）加起来。
+
+    没定义任何相关宏时返回 None（调用方照旧走字段默认值）。
+    值取自当前变量表，因此「角色命名空间」与「拐力叠加」都已经体现在里面。
+    """
+    total, found = 0.0, False
+    for name in field_macros(type_key, field_key):
+        try:
+            v = _expr(name)
+        except ValueError:
+            continue                        # 这个面板项没定义：跳过
+        total += v * MACRO_SIGN.get(name, 1.0)
+        found = True
+    return total if found else None
+
+
+# ---------------------------------------------------------------------------
 # 计算函数
 # ---------------------------------------------------------------------------
 def _t_base(get, ins):
