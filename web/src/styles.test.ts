@@ -36,6 +36,20 @@ function ruleBody(selector: string): string {
   return match[1];
 }
 
+/**
+ * 同上，但允许选择器写成**逗号列表**（`a, b { … }` 这种 ruleBody 匹配不到）。
+ * 做法是按 `}` 切开逐段看选择器列表里有没有它。
+ */
+function ruleBodyInList(selector: string): string {
+  for (const chunk of css.split("}")) {
+    const i = chunk.lastIndexOf("{");
+    if (i < 0) continue;
+    const sels = chunk.slice(0, i).split(",").map((s) => s.trim());
+    if (sels.includes(selector)) return chunk.slice(i + 1);
+  }
+  throw new Error(`styles.css 的选择器列表里找不到：${selector}`);
+}
+
 describe("卡片尺寸", () => {
   it(".card 同时撑满容器宽高（少了 height 纵向缩放就没反应）", () => {
     const body = ruleBody(".card");
@@ -133,13 +147,17 @@ describe("角色容器面板", () => {
     expect(body).toMatch(/font-size:\s*11px/);
   });
 
-  it("面板主体不吃鼠标事件（否则在面板上方拖不出框选），里面的输入框单独放行", () => {
-    expect(ruleBody(".card-role-box .card-body")).toMatch(/pointer-events:\s*none/);
-    // 输入框与其它控件在同一个选择器列表里（单行选择器列表 ruleBody 匹配不到），
-    // 所以这里直接对整段 CSS 断言：逗号分隔的选择器组也要放行鼠标事件。
-    expect(css).toMatch(
-      /\.card-role-box \.card-body input[^{]*\{[^}]*pointer-events:\s*auto/,
-    );
+  it("角色面板整体不吃鼠标事件（否则光标是抓手、在面板上拖不出框选），标题栏/手柄/输入框单独放行", () => {
+    // 这条必须设在**节点元素**上：pointer-events 只对设它的元素生效，祖先仍会被命中，
+    // 所以设在 .card-body 上是没用的（上一版就踩过这个）。
+    expect(ruleBody(".react-flow__node.node-role-box")).toMatch(/pointer-events:\s*none/);
+    for (const sel of [
+      ".react-flow__node.node-role-box .card-head",
+      ".react-flow__node.node-role-box .react-flow__resize-control",
+      ".react-flow__node.node-role-box input",
+    ]) {
+      expect(ruleBodyInList(sel)).toMatch(/pointer-events:\s*auto/);
+    }
   });
 
   it("命名卡片的徽标同样是小胶囊，且用等宽字形（显示的是要敲的前缀 `名字::`）", () => {

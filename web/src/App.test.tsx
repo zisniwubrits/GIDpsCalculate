@@ -715,10 +715,11 @@ describe("App 集成（假后端 + 真 schema）", () => {
 
     const card = await screen.findByTestId("card-n1");
     expect(card).toHaveAttribute("data-type", "role");
+    // 面板样式 + **节点整体不吃鼠标事件**（否则光标是抓手、在面板上拖不出框选）
+    expect(card).toHaveClass("card-role-box");
+    expect(card.closest(".react-flow__node")).toHaveClass("node-role-box");
     // 默认名 角色1（抽象角色，名字随用户改）
     expect(within(card).getByText("角色 · 角色1")).toBeInTheDocument();
-    // 面板样式 + 提示文案
-    expect(card).toHaveClass("card-role-box");
     expect(within(card).getByText(/把卡片拖进这块面板/)).toBeInTheDocument();
     // 角色名可改，标题栏跟着变
     const nameInput = within(card).getByDisplayValue("角色1");

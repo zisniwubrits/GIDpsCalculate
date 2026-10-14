@@ -336,15 +336,21 @@ textarea:focus {
   border-bottom: 1px dashed #b9cde0;
 }
 
-/* 面板主体**不吃鼠标事件**：它是一大块底板，若把事件吃掉就没法在它上面拖框选了
-   （面板只保留标题栏拖动与四角缩放手柄）。面板里的输入框单独放行，仍可正常编辑。 */
-.card-role-box .card-body {
+/* 角色容器**整个节点不吃鼠标事件**：
+   面板是一大块底板，若让它接事件，鼠标落在面板上时会命中的是节点
+   （`.react-flow__node.draggable { cursor: grab }`）→ 光标变成抓手，也拖不出框选。
+   注意 `pointer-events: none` 只对**设了它的那个元素**生效、祖先仍会被命中，
+   所以必须设在节点元素上；下面再把需要交互的几处单独放行。
+   （pointer-events 会继承，所以标题栏/手柄/输入框都要显式写 auto。） */
+.react-flow__node.node-role-box {
   pointer-events: none;
 }
 
-.card-role-box .card-body input,
-.card-role-box .card-body textarea,
-.card-role-box .card-body select {
+.react-flow__node.node-role-box .card-head,
+.react-flow__node.node-role-box .react-flow__resize-control,
+.react-flow__node.node-role-box input,
+.react-flow__node.node-role-box textarea,
+.react-flow__node.node-role-box select {
   pointer-events: auto;
 }
 

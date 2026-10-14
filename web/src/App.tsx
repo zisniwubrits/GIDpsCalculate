@@ -635,6 +635,9 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
           style,
           selected: Boolean(n.selected),
           measured: n.measured,
+          // 角色容器：整个节点不吃鼠标事件（见 styles.css 的 .node-role-box）——
+          // 否则鼠标落在面板上时命中节点，光标变成抓手，也拖不出框选。
+          className: n.type === "role" ? "node-role-box" : undefined,
           // 只有标题栏能拖动（见 model.ts 的说明）
           dragHandle: CARD_DRAG_HANDLE,
         };
