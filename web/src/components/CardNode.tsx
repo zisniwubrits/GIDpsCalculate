@@ -6,7 +6,7 @@
  */
 import { Handle, NodeResizer, Position, type Node, type NodeProps } from "@xyflow/react";
 import { memo, useCallback } from "react";
-import type { CardNode, FieldSpec, FieldValue, NodeResult, NodeTypeSpec } from "../types";
+import type { BuffStatRow, CardNode, FieldSpec, FieldValue, NodeResult, NodeTypeSpec } from "../types";
 import DataTable from "./DataTable";
 
 export interface CardData extends Record<string, unknown> {
@@ -18,6 +18,8 @@ export interface CardData extends Record<string, unknown> {
   table: { header: string[]; rows: string[][] } | null;
   /** 这张卡片属于哪个「角色」命名空间（由画布上的容器面板按位置推导，空 = 不属于任何角色） */
   role: string;
+  /** 只对角色卡有意义：这个命名空间**给出去的拐**（OUT）与**收到的拐**（IN） */
+  roleBuffs?: { out: BuffStatRow[]; in: BuffStatRow[] };
   onField: (id: string, key: string, value: FieldValue) => void;
   onDelete: (id: string) => void;
   /** 拖动缩放手柄结束后把最终尺寸（含左上角坐标变化）写回模型 */
@@ -124,6 +126,11 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
   // 角色卡片是个例外：它没有伤害端口，但要一对**拐力端口** ——
   // 从源角色标签拖到目标角色标签，就等于把这个角色的面板值拐给对面。
   const isRole = Boolean(spec.role_card);
+  // 角色卡的出入度（给出去 / 收进来），只显示在标签上方
+  const buffRows =
+    isRole && data.roleBuffs && (data.roleBuffs.out.length || data.roleBuffs.in.length)
+      ? data.roleBuffs
+      : null;
   const hasInput = isRole || (!spec.isolated && spec.inputs > 0);
   // sink 卡片（「赋值变量」）只有输入端口：它不参与结果链，只把上游值记到变量表
   const hasOutput = isRole || (!spec.isolated && !spec.no_output && !spec.sink);
@@ -289,6 +296,33 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
         data-type={node.type}
         data-collapsed={collapsed ? "1" : undefined}
       >
+        {/* 命名空间的**出入度**集中在左上角标签的上方（不出现在卡片体里） */}
+        {spec.role_card && !collapsed && buffRows ? (
+          <div className="role-buffs" data-testid={`role-buffs-${id}`}>
+            {buffRows.out.length ? (
+              <span
+                className="rb rb-out"
+                title={`给出去的拐（OUT）：${buffRows.out
+                  .map((r) => `${r.label} ${r.value} → ${r.role}`)
+                  .join("；")}`}
+              >
+                出 {buffRows.out.length}：
+                {buffRows.out.map((r) => `${r.macro} ${r.value}`).join("、")}
+              </span>
+            ) : null}
+            {buffRows.in.length ? (
+              <span
+                className="rb rb-in"
+                title={`收进来的拐（IN）：${buffRows.in
+                  .map((r) => `${r.role} → ${r.label} ${r.value}`)
+                  .join("；")}`}
+              >
+                入 {buffRows.in.length}：
+                {buffRows.in.map((r) => `${r.role} ${r.macro} ${r.value}`).join("、")}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
         <div
           className="card-head"
           onContextMenu={(e) => {

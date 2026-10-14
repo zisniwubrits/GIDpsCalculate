@@ -23,6 +23,8 @@ const fakeBackend = {
   savePath: "",
   /** /api/health 报的“前端产物过期”状态 */
   webStale: false,
+  /** 模拟旧后端：/api/schema 缺字段（用来验证界面不会白屏） */
+  schemaOverride: null as Schema | null,
 };
 
 const jsonResponse = (data: unknown) =>
@@ -101,7 +103,7 @@ function installFetch() {
         webSourceTime: "2026-10-10 01:29:55",
         webReason: fakeBackend.webStale ? "前端源码比构建产物新" : "产物是最新的",
       });
-    if (url.includes("/api/schema")) return jsonResponse(schema);
+    if (url.includes("/api/schema")) return jsonResponse(fakeBackend.schemaOverride ?? schema);
     if (url.includes("/api/help"))
       return jsonResponse({
         text: "【基本概念】\n· 每张卡片 = 一个乘区节点",
@@ -161,6 +163,7 @@ describe("App 集成（假后端 + 真 schema）", () => {
     window.localStorage.clear();
     fakeBackend.open = null;
     fakeBackend.webStale = false;
+    fakeBackend.schemaOverride = null;
     installFetch();
   });
 
@@ -862,6 +865,49 @@ describe("App 集成（假后端 + 真 schema）", () => {
 
     expect(screen.queryByTestId("new-project-dialog")).toBeNull();
     expect(screen.getByTestId("card-n1")).toBeInTheDocument();
+  });
+
+  it("旧后端（schema 缺 panelMacros）打开角色面板不再白屏，而是给出重启提示", async () => {
+    const user = userEvent.setup();
+    // 造一个"旧后端"：把 panelMacros 与 hidden_fields 去掉
+    const old = JSON.parse(JSON.stringify(schema)) as Record<string, unknown> & {
+      nodeTypes: Record<string, Record<string, unknown>>;
+    };
+    delete old.panelMacros;
+    for (const spec of Object.values(old.nodeTypes)) {
+      delete spec.hidden_fields;
+    }
+    fakeBackend.schemaOverride = old as unknown as Schema;
+
+    await renderApp();
+    await addCard(user, "role");
+    const card = await screen.findByTestId("card-n1");
+
+    fireEvent.contextMenu(within(card).getByText("角色 · 角色1"));
+    await user.click(await screen.findByText("角色面板…"));
+
+    const dialog = await screen.findByTestId("role-panel-dialog");
+    expect(within(dialog).getByTestId("panel-macros-missing")).toHaveTextContent(/旧进程/);
+    // 页面本身照常可用（没有白屏）
+    expect(screen.getByTestId("sidebar")).toBeInTheDocument();
+  });
+
+  it("角色标记左上角标签**上方**显示出入度（OUT/IN），并注明对象角色", async () => {
+    const user = userEvent.setup();
+    await renderApp();
+    await addCard(user, "role");
+    const card = await screen.findByTestId("card-n1");
+
+    // 假数据里「火神」收到 辅助 的 攻击% 40
+    fireEvent.change(within(card).getByDisplayValue("角色1"), { target: { value: "火神" } });
+    const rows = await screen.findByTestId("role-buffs-n1");
+    await waitFor(() => expect(rows).toHaveTextContent("入 1：辅助 atk_pct 40"));
+    // 出入度在标签之前（也就是标签上方）
+    const head = card.querySelector(".card-head");
+    expect(head).not.toBeNull();
+    expect(
+      rows.compareDocumentPosition(head as Node) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it("卡片底部标注「含面板」与「含拐」——让人一眼看出在吃面板/拐力", async () => {

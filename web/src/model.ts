@@ -117,6 +117,37 @@ export function ignoredByBoxSelect(node: CardNode): boolean {
   return node.type === "role";
 }
 
+// ---------------------------------------------------------------- schema 兜底
+/**
+ * 给后端 schema 补齐缺省结构。
+ *
+ * 为什么需要：前端新增界面时往往会用到新的 schema 字段（例如「角色面板」用的
+ * `panelMacros`），而浏览器的 `/api/schema` 可能是**旧后端进程**给的 ——
+ * 直接 `schema.panelMacros.map(...)` 就会抛异常，表现为**整页白屏**。
+ * 这里统一补成空数组/空对象，让界面降级显示（并在用到的地方提示"后端版本过旧"）。
+ */
+export function normalizeSchema(raw: Schema | null | undefined): Schema | null {
+  if (!raw || typeof raw !== "object") return null;
+  const nodeTypes: Schema["nodeTypes"] = {};
+  for (const [key, spec] of Object.entries(raw.nodeTypes ?? {})) {
+    nodeTypes[key] = {
+      ...spec,
+      fields: spec?.fields ?? [],
+      hidden_fields: spec?.hidden_fields ?? [],
+      defaults: spec?.defaults ?? {},
+    };
+  }
+  return {
+    ...raw,
+    groups: raw.groups ?? [],
+    nodeTypes,
+    presets: raw.presets ?? {},
+    tables: raw.tables ?? {},
+    resultVarFields: raw.resultVarFields ?? [],
+    panelMacros: raw.panelMacros ?? [],
+  };
+}
+
 // ---------------------------------------------------------------- 角色面板宏
 /**
  * 解析角色卡「面板」字段里的 ``宏 = 值`` 多行文本（与后端 split_var_line 同规则：

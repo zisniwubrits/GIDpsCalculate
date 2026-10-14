@@ -19,6 +19,7 @@ import {
   makeNode,
   nextNodeId,
   nextRoleName,
+  normalizeSchema,
   roleBoxes,
   roleOfNode,
   spreadChain,
@@ -399,7 +400,33 @@ describe("角色容器（抽象角色命名空间）", () => {
     const keys = ["atk", "atk_pct", "res_shred"];
     const text = formatPanel({ res_shred: "40", atk: "2000", atk_pct: "" }, keys);
     expect(text).toBe("atk = 2000\nres_shred = 40");
-    // 解析回来应该一模一样
     expect(parsePanel(text, keys)).toEqual({ atk: "2000", res_shred: "40" });
+  });
+
+  it("normalizeSchema 给旧后端缺的字段补默认值（否则界面会白屏）", () => {
+    // 旧后端可能没有 panelMacros / hidden_fields 这些新字段，
+    // 前端直接 .map 就会抛异常 → 这里统一补成空数组
+    const old = {
+      version: 1,
+      app: "GenshinDamageCalc",
+      groups: undefined,
+      nodeTypes: { dmg: { type: "dmg", title: "增伤区" } },
+      presets: undefined,
+      tables: undefined,
+      resultVarFields: undefined,
+      panelMacros: undefined,
+      zoom: { min: 0.25, max: 2.5 },
+      history: { max: 80 },
+    } as unknown as Schema;
+    const s = normalizeSchema(old);
+
+    expect(s?.panelMacros).toEqual([]);
+    expect(s?.groups).toEqual([]);
+    expect(s?.resultVarFields).toEqual([]);
+    expect(s?.nodeTypes.dmg.hidden_fields).toEqual([]);
+    expect(s?.nodeTypes.dmg.fields).toEqual([]);
+    expect(s?.nodeTypes.dmg.defaults).toEqual({});
+    // 完全拿不到 schema 时返回 null（由调用方决定怎么提示）
+    expect(normalizeSchema(null)).toBeNull();
   });
 });

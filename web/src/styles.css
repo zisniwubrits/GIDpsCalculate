@@ -360,6 +360,33 @@ textarea:focus {
   pointer-events: auto;
 }
 
+/* 角色标记左上角标签**上方**的出入度（给出去 / 收进来的拐）：
+   只读展示，继承节点的 pointer-events: none，所以不挡框选与拖动 */
+.role-buffs {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 2px 4px 0;
+  font-size: 11px;
+}
+
+.role-buffs .rb {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: help;
+}
+
+.role-buffs .rb-out {
+  color: var(--warn);
+}
+
+.role-buffs .rb-in {
+  color: var(--accent);
+}
+
 /* 背景标记的观感：虚线淡蓝、无阴影、无白底；标签条做成"标记牌"而不是卡片头 */
 .card-role-box {
   background: rgba(47, 111, 167, 0.05);
@@ -799,6 +826,15 @@ textarea:focus {
   font-size: 12px;
 }
 
+/* 需要用户注意的提示（例如"后端是旧进程，重启一下"） */
+.modal-warn {
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  background: #fdf3f2;
+  border-radius: 6px;
+  color: var(--danger);
+}
+
 .modal-row {
   display: grid;
   grid-template-columns: 108px 1fr;
@@ -816,6 +852,46 @@ textarea:focus {
 
 .modal-actions .grow {
   flex: 1 1 auto;
+}
+
+/* 错误边界（白屏兜底）：把渲染异常显示成可读卡片 */
+.crash {
+  max-width: 680px;
+  margin: 12vh auto;
+  padding: 18px 20px;
+  background: #fff;
+  border: 1px solid var(--danger);
+  border-radius: 10px;
+  box-shadow: 0 2px 10px rgba(30, 50, 70, 0.12);
+}
+
+.crash h2 {
+  margin: 0 0 8px;
+  font-size: 16px;
+  color: var(--danger);
+}
+
+.crash-msg {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  background: #fdf3f2;
+  border-radius: 6px;
+  font-family: Consolas, "Courier New", "Microsoft YaHei", monospace;
+  font-size: 12px;
+  word-break: break-word;
+}
+
+.crash .dim {
+  margin: 6px 0;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.crash-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
 }
 
 /* 角色面板弹窗：可编辑的宏表 + 拐力统计（OUT / IN） */

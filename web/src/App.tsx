@@ -653,6 +653,11 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
   const rfNodes = useMemo<CardRFNode[]>(
     () =>
       orderedNodes.map((n) => {
+        const roleBuffRows = (roleNode: CardNodeModel) => {
+          const roleName = String(roleNode.fields.role_name ?? "").trim();
+          const s = roleName ? evaluation.data?.buffStats?.[roleName] : undefined;
+          return { out: s?.out ?? [], in: s?.in ?? [] };
+        };
         const data: CardData = {
           node: n,
           spec: schema.nodeTypes[n.type],
@@ -660,6 +665,8 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
           fontSize: n.font_size ?? 0,
           table: tableFor(n, schema, results),
           role: roles[n.id] ?? "",
+          // 角色卡：左上角标签上方显示"出入度"（给出去/收进来的拐）
+          roleBuffs: n.type === "role" ? roleBuffRows(n) : undefined,
           onField,
           onDelete: removeNode,
           onResize,
@@ -696,7 +703,8 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
           dragHandle: CARD_DRAG_HANDLE,
         };
       }),
-    [orderedNodes, schema, results, roles, onField, removeNode, onCopy, onResize],
+    [orderedNodes, schema, results, roles, onField, removeNode, onCopy, onResize,
+     evaluation.data],
   );
 
   const rfEdges = useMemo<CardRFEdge[]>(

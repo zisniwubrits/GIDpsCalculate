@@ -3,6 +3,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { evaluateGraph, fetchHelp, fetchSchema } from "../api";
+import { normalizeSchema } from "../model";
 import type { EvaluateResult, GraphJSON, Schema } from "../types";
 
 export const EVAL_DEBOUNCE = 140;
@@ -16,7 +17,8 @@ export function useSchema(): { schema: Schema | null; error: string | null; relo
     const ctrl = new AbortController();
     fetchSchema(ctrl.signal)
       .then((s) => {
-        setSchema(s);
+        // 兜底补齐缺失结构（旧后端进程缺新字段时不会让整页崩掉）
+        setSchema(normalizeSchema(s));
         setError(null);
       })
       .catch((e: unknown) => {

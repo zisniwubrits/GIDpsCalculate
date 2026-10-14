@@ -216,6 +216,12 @@ export function RolePanelDialog({
         onMouseDown={(e) => e.stopPropagation()}
       >
         <h2>角色面板 · {title}</h2>
+        {macros.length === 0 ? (
+          <p className="modal-hint modal-warn" data-testid="panel-macros-missing">
+            后端没有返回面板宏词表（panelMacros）—— 服务很可能是旧进程。
+            请双击 launcher.bat → [2] 停止 → [1] 启动，再刷新本页。
+          </p>
+        ) : null}
         <p className="modal-hint">
           面板项就是本角色命名空间里的变量（<code>{title}::atk</code> 这样引用）。
           卡片字段**留空**时会用这里的值兜底；拖拐力箭头时，本表会加到目标角色的同名项上。
