@@ -263,7 +263,10 @@ describe("角色容器面板", () => {
     const outLeft = Number(/left:\s*(\d+)px/.exec(portOut)?.[1] ?? NaN);
     expect(inLeft).toBeGreaterThan(0);
     expect(outLeft).toBeGreaterThan(inLeft);        // 一进一出并排（出在右边）
-    expect(outLeft - inLeft).toBeLessThan(120);     // 都挤在左上角那一小块
+    expect(outLeft - inLeft).toBeLessThanOrEqual(30);   // 向中间聚拢（挨得近）
+    // 都落在卡片中间那一带（卡片按内容自适应，约 96px 宽 → 中点 ~48px）
+    expect(inLeft).toBeGreaterThanOrEqual(30);
+    expect(outLeft).toBeLessThanOrEqual(80);
   });
 
   it("拐力箭头画成蓝色虚线，与伤害连线区分（不用暖色）", () => {

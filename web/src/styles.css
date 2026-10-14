@@ -360,16 +360,16 @@ textarea:focus {
   pointer-events: auto;
 }
 
-/* 拐力端口：一进一出**并排在左上角标签的正上方**（Position.Top + 每边偏移），
-   于是拐力箭头的起点与终点都落在标签上方那一小块，不会横跨整片区域。
-   `.react-flow__handle-top` 默认是 left:50% / top:0，这里只改水平位置并抬高一档。 */
+/* 拐力端口：两个都并排在**卡片中间偏上**（用户要求"往卡片中间对齐、向中间聚拢"）。
+   卡片是左上角那张按内容自适应宽度的小卡（≈96px），所以把两点放在 41/61px
+   （中点两侧各 10px），而不是贴在左边缘。 */
 .react-flow__handle.role-port-in {
-  left: 14px;
+  left: 41px;
   top: -7px;
 }
 
 .react-flow__handle.role-port-out {
-  left: 56px;
+  left: 61px;
   top: -7px;
 }
 
