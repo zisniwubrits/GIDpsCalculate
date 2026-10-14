@@ -208,11 +208,19 @@ describe("角色容器面板", () => {
     // 相对位置保持原样：**不重排**（曾经用 order 把角色名提到面板前，用户要求改回来）
     expect(ruleBody(".card-role-box > .card-body")).not.toMatch(/order:/);
     expect(ruleBody(".card-role-box > .role-panel")).not.toMatch(/order:/);
-    // 角色名一行只带左右描边 → 与标牌、面板连成一张卡片
-    expect(ruleBody(".card-role-box > .card-body")).toMatch(/padding:\s*4px 7px/);
-    const panel = ruleBody(".card-role-box > .role-panel");
-    expect(panel).toMatch(/border-bottom:\s*1px solid var\(--line\)/);
-    expect(panel).toMatch(/border-radius:\s*0 0 8px 8px/);
+    // 三块**同宽**才像一张卡片（宽度不齐会看着是三张卡）
+    for (const sel of [
+      ".card-role-box > .card-head",
+      ".card-role-box > .card-body",
+      ".card-role-box > .role-panel",
+    ]) {
+      expect(ruleBodyInList(sel)).toMatch(/width:\s*200px/);
+    }
+    // DOM 顺序是 标牌 → 面板 → 角色名：上圆角在标牌、下圆角与底边在最后那块（角色名）
+    const body = ruleBody(".card-role-box > .card-body");
+    expect(body).toMatch(/border-bottom:\s*1px solid var\(--line\)/);
+    expect(body).toMatch(/border-radius:\s*0 0 8px 8px/);
+    expect(ruleBody(".card-role-box > .role-panel")).not.toMatch(/border-radius/);
     // 面板内部：一行一个属性，字段名灰、数值右对齐，含拐暖色
     expect(ruleBody(".role-panel .rp-row")).toMatch(/grid-template-columns:\s*84px 1fr/);
     expect(ruleBody(".role-panel .rp-key")).toMatch(/color:\s*var\(--muted\)/);

@@ -444,13 +444,16 @@ textarea:focus {
   color: var(--accent);
 }
 
-/* 角色标记：标记牌 + 角色名 + 面板**合成同一张卡片**
-   （三块片段拼出一个连续的盒子：上圆角在标记牌、下圆角在最后一块；
-     `order` 把角色名一行排到面板前面 —— 用户要求"角色名的单行输入框在顶上"） */
+/* 角色标记：标记牌 + 面板 + 角色名一行**合起来看起来是同一张卡片**
+   （三块片段拼出一个连续的盒子；DOM 顺序是 标牌 → 面板 → 角色名，
+    所以上圆角给标牌、下圆角与底边给最后那块角色名；
+    三块**同宽**才不会看着是三张卡） */
 .card-role-box > .card-head,
 .card-role-box > .card-body,
 .card-role-box > .role-panel {
   align-self: flex-start;
+  width: 200px;
+  max-width: 100%;
   margin: 0 3px;
   background: var(--card-bg);
   border-left: 1px solid var(--line);
@@ -469,13 +472,14 @@ textarea:focus {
   color: var(--accent);
 }
 
-/* 角色名一行：只带左右描边，与上下两块连成一张卡片（位置保持原样，不重排） */
-.card-role-box > .card-body {
-  padding: 4px 7px;
+/* 面板行：卡片中段，只有左右描边（位置保持原样，不重排） */
+.card-role-box > .role-panel {
+  padding: 3px 7px;
 }
 
-/* 快速查看面板：收底部的圆角（位置保持原样，不重排） */
-.card-role-box > .role-panel {
+/* 角色名一行：卡片最后一块，收下圆角与底边（位置保持原样，不重排） */
+.card-role-box > .card-body {
+  padding: 4px 7px;
   margin-bottom: 3px;
   border-bottom: 1px solid var(--line);
   border-radius: 0 0 8px 8px;
