@@ -198,4 +198,12 @@ export interface CardNode extends GraphNodeJSON {
   measured?: { width: number; height: number };
   /** 正在拖动改变大小（此时不覆盖 React Flow 的内部尺寸） */
   resizing?: boolean;
+  /**
+   * 拖动这个角色区域时**压到了别的区域**（临时高亮成红框）。
+   *
+   * 纯界面状态：只在拖动的那么一会儿为真，不入工程 JSON、不进求值载荷。
+   * 为什么要它：区域框（560×380）比看得见的内容大十几倍，"压上了"在画面上
+   * 根本看不出来，用户只会觉得"没碰撞还说不合法"。
+   */
+  colliding?: boolean;
 }

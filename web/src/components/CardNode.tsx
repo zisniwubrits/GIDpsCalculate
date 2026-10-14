@@ -5,7 +5,7 @@
  * 结果文案（本卡系数 ｜ 输出）直接用后端返回的 `display`，保证与 Python 侧完全一致。
  */
 import { Handle, NodeResizer, Position, type Node, type NodeProps } from "@xyflow/react";
-import { memo, useCallback } from "react";
+import { memo, useCallback, type CSSProperties } from "react";
 import type { BuffStatRow, CardNode, FieldSpec, FieldValue, NodeResult, NodeTypeSpec } from "../types";
 import DataTable from "./DataTable";
 
@@ -44,6 +44,20 @@ export type CardRFNode = Node<CardData, "card">;
 export const ROLE_PORT_IN_LEFT = "48%";
 /** 出度端口的水平位置（50% 那条线右侧一档） */
 export const ROLE_PORT_OUT_LEFT = "52%";
+
+/**
+ * 拖动角色区域**压到别的区域**时给它的临时样式（描红）。
+ *
+ * 为什么需要：角色区域框（560×380）比看得见的内容（只有一块 26px 高的牌子）
+ * 大十几倍，"压上了"在画面上看不出来，用户只会觉得程序在乱报不合法。
+ * 这个红框就是把「碰撞箱」显形：拖动中一旦压上，框子当场变红。
+ * 由 App 在拖动过程中通过 `rf.updateNode(id, { style })` 挂上 / 摘掉。
+ */
+export const ROLE_BOX_COLLIDING_STYLE: CSSProperties = {
+  outline: "2px solid #d9534f",
+  outlineOffset: "-2px",
+  background: "rgba(217, 83, 79, 0.06)",
+};
 
 function FieldControl({
   field,
@@ -352,11 +366,12 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
         }}
       />
       <div
-        className={`card${selected ? " card-sel" : ""}${node.type === "result" ? " card-result" : ""}${collapsed ? " card-collapsed" : ""}${spec.role_card ? " card-role-box" : ""}`}
+        className={`card${selected ? " card-sel" : ""}${node.type === "result" ? " card-result" : ""}${collapsed ? " card-collapsed" : ""}${spec.role_card ? " card-role-box" : ""}${node.colliding ? " card-colliding" : ""}`}
         style={fontSize ? { fontSize: `${fontSize}px` } : undefined}
         data-testid={`card-${id}`}
         data-type={node.type}
         data-collapsed={collapsed ? "1" : undefined}
+        data-colliding={node.colliding ? "1" : undefined}
       >
         <div
           className="card-head"

@@ -21,7 +21,12 @@ import "@xyflow/react/dist/style.css";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { fetchStorage, health, openProject, saveProject, saveReport } from "./api";
 import { copyText } from "./clipboard";
-import CardNode, { type CardData, type CardRFNode, type MenuKind } from "./components/CardNode";
+import CardNode, {
+  ROLE_BOX_COLLIDING_STYLE,
+  type CardData,
+  type CardRFNode,
+  type MenuKind,
+} from "./components/CardNode";
 import CardEdge, { type CardRFEdge } from "./components/CardEdge";
 import CanvasWatermark from "./components/CanvasWatermark";
 import ContextMenu, { type MenuItem } from "./components/ContextMenu";
@@ -172,10 +177,10 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
   /** 正在拖框选：此时忽略「角色容器」的选中变化（见 model.ignoredByBoxSelect） */
   const boxSelecting = useRef(false);
   /** 拖动角色区域被"重叠"规则挡回时，记下要写回 React Flow 的位置（apply 之后处理） */
-  const revertTo = useRef<{ id: string; pos: [number, number] } | null>(null);
-  /** 拖动中的角色区域**最后一次合法位置**（压到别人时就顶回这儿，拖动中不越界） */
-  const dragAnchor = useRef<Map<string, [number, number]>>(new Map());
-  /** 拖动开始前角色区域的位置（松手时若被顶过，就整个回滚到这里） */
+  const revertTo = useRef<{ id: string; pos: [number, number]; blockedBy: CardNodeModel[] } | null>(
+    null,
+  );
+  /** 拖动开始前角色区域的位置（松手时若压上了就整个回滚到这里） */
   const dragStart = useRef<Map<string, [number, number]>>(new Map());
   /** 加载工程时自动挪开重叠角色区域的提示（只在第一次渲染后弹一次） */
   const overlapNotice = useRef(
@@ -402,43 +407,43 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
         for (const ch of changes) {
           if (ch.type === "position" && ch.position) {
             const pos = ch.position;
-            // 拖动**角色区域**时若压到别的角色：把这次位移直接顶回上一次的合法位置。
-            // 必须在"拖动中"就顶（不能等拖完）—— React Flow 自己也在按指针位置画，
-            // 等松手再纠正，画布上那一下仍然会停在压住别人的地方（实测抓到的 bug）。
-            let placed: [number, number] = [pos.x, pos.y];
+            // 角色区域不许互相压 —— 但**拖动中不拦**：让卡片老老实实跟着指针走，
+            // 同时把"压到谁"标红（看得见原因）。只有真压上了才在松手时回滚。
+            //
+            // 为什么要改：原来拖动中一旦压到就把位移顶回上一次合法位置，手感是
+            // "走到某处就顶不动了"，而角色区域框（560×380）比看得见的内容（26px 高）
+            // 大十几倍，用户看着没有碰撞却被顶回去，只能理解成"程序乱报不合法"。
+            const placed: [number, number] = [pos.x, pos.y];
             const moving = s.nodes.find((n) => n.id === ch.id);
             if (moving && isNamespaceNode(moving)) {
-              if (ch.dragging && !dragStart.current.has(ch.id)) {
-                dragStart.current.set(ch.id, moving.pos);       // 记住"拖动前"的位置
+              const hit = roleBoxCollisions(s.nodes, ch.id, placed, moving.size);
+              const colliding = hit.length > 0;
+              if (ch.dragging) {
+                if (!dragStart.current.has(ch.id)) dragStart.current.set(ch.id, moving.pos);
+                // 压到别人 → 把这个区域框描红（红框就是碰撞箱，一眼看出压到谁）
+                next = next.map((n) =>
+                  n.id === ch.id ? { ...n, colliding, pos: placed } : n,
+                );
+                continue;
               }
-              if (ch.dragging && roleBoxCollisions(s.nodes, ch.id, placed, moving.size).length) {
-                placed = dragAnchor.current.get(ch.id) ?? moving.pos;
-                if (typeof requestAnimationFrame === "function") {
-                  const back = placed;
-                  requestAnimationFrame(() =>
-                    rf.updateNode(ch.id, { position: { x: back[0], y: back[1] } }),
-                  );
-                }
-                setToast("角色区域不许互相压：拖到这里会被顶回去");
-              } else if (ch.dragging) {
-                dragAnchor.current.set(ch.id, placed);      // 记住最后一次合法位置
+              // 松手：压上了就整趟回滚（并说清压到谁、区域框多大）
+              if (colliding) {
+                const start = dragStart.current.get(ch.id) ?? moving.pos;
+                revertTo.current = { id: ch.id, pos: start, blockedBy: hit };
+                const at = [start[0], start[1]] as [number, number];
+                return {
+                  ...s,
+                  nodes: s.nodes.map((n) =>
+                    n.id === ch.id ? { ...n, pos: at, colliding: false } : n,
+                  ),
+                };
               }
+              dragStart.current.delete(ch.id);
             }
-            next = next.map((n) => (n.id === ch.id ? { ...n, pos: placed } : n));
+            next = next.map((n) =>
+              n.id === ch.id ? { ...n, pos: placed, colliding: false } : n,
+            );
             if (!ch.dragging) {
-              // 松手：这一趟被顶过（停在别人边上）就整个回滚到拖动前，别留个半截位置
-              const landed = next.find((n) => n.id === ch.id);
-              if (landed && isNamespaceNode(landed)) {
-                const start = dragStart.current.get(ch.id);
-                if (start && (start[0] !== placed[0] || start[1] !== placed[1])) {
-                  revertTo.current = { id: ch.id, pos: start };
-                  next = next.map((n) =>
-                    n.id === ch.id ? { ...n, pos: [start[0], start[1]] } : n,
-                  );
-                }
-                dragAnchor.current.delete(ch.id);
-                dragStart.current.delete(ch.id);
-              }
               // 拖拽结束：空白的变量卡落进角色区域 → 程序填入面板预设代码
               const res = fillPresetForDropped(
                 next,
@@ -498,7 +503,18 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
         put();
         if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => put());
         setRevision((v) => v + 1);
-        setToast("角色区域不许互相压：这次拖动已放回原处");
+        // 说清"压到谁、被压的区域有多大"——角色区域框比看得见的内容大得多，
+        // 只报一句"不许互相压"会被当成误报（用户就是这么反馈的）
+        const names = back.blockedBy
+          .map((n) => String(n.fields.role_name ?? "").trim() || "未命名")
+          .join("、");
+        const box = back.blockedBy[0];
+        const size = box ? estimateSize(box) : null;
+        setToast(
+          size
+            ? `压到了「${names}」的区域（约 ${Math.round(size.w)}×${Math.round(size.h)}，虚线范围就是它），已放回原处`
+            : `压到了「${names}」的区域，已放回原处`,
+        );
       }
     },
     [apply, rf],
@@ -909,7 +925,8 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
           type: "card" as const,
           position: { x: n.pos[0], y: n.pos[1] },
           data,
-          style,
+          // 拖动中压到别的角色区域 → 这个框描红（红框就是碰撞箱，见 types.ts 的 colliding）
+          style: n.colliding ? { ...(style ?? {}), ...ROLE_BOX_COLLIDING_STYLE } : style,
           // 一键隐藏区域内卡片：只是不渲染（模型/工程 JSON 里都还在）
           hidden: hiddenCards.has(n.id),
           selected: Boolean(n.selected),

@@ -450,6 +450,20 @@ textarea:focus {
   color: var(--accent);
 }
 
+/* 拖动角色区域**压到别的区域**时：把这个框描红。
+   为什么要它：区域框（560×380）比看得见的内容（26px 高的牌子）大十几倍，
+   "压上了"在画面上根本看不出来 —— 红框就是把碰撞箱显形，免得被当成误报。
+   由 CardNode 按 node.colliding 挂上（拖动结束 / 松手回滚即摘掉）。 */
+.card-role-box.card-colliding {
+  outline: 2px solid #d9534f;
+  outline-offset: -2px;
+  background: rgba(217, 83, 79, 0.08);
+}
+
+.card-role-box.card-colliding > .card-head {
+  background: rgba(217, 83, 79, 0.18);
+}
+
 /* 角色标记：标记牌 + 面板 + 角色名一行**合起来看起来是同一张卡片**
    （三块片段拼出一个连续的盒子；DOM 顺序是 标牌 → 面板 → 角色名，
     所以上圆角给标牌、下圆角与底边给最后那块角色名；
