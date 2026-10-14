@@ -33,6 +33,31 @@ export interface CardData extends Record<string, unknown> {
 export type MenuKind = "result" | "font" | "card";
 export type CardRFNode = Node<CardData, "card">;
 
+// ------------------------------------------------------------ 拐力端口的位置
+// 端口横向位置一律是**容器宽度的百分比**（不写像素）：整组以卡片水平中点
+// （50%）为中心等距展开，所以卡片多宽、缩放到多少倍，端口都稳稳在中间那一带 ——
+// "接入点靠中间，不要贴在左上角"。纵向位置由 styles.css 的 .role-port-* 定
+// （负偏移 = 抬到卡片上边缘之上）。
+/** 单个入度端口时的水平位置（卡片水平中点） */
+const PORT_IN_CENTER = 50;
+/** 入度端口之间的间距（占容器宽度的百分比） */
+const PORT_STEP = 4;
+/** 出度端口相对整组中心的偏移（在入度右侧一档） */
+const PORT_OUT_OFFSET = 4;
+
+/** 入度端口个数：默认 DEFAULTS，已经接满就再多给两个位置（不限制能收几份拐）。 */
+export function buffPortCount(current: number, defaults: number): number {
+  if (defaults <= 0) return 0;
+  const used = Math.max(0, current);
+  return used < defaults ? defaults : used + 2;
+}
+
+/** 第 i 个端口的行内 left（百分比；整组以 center% 为中心等距展开）。 */
+export function portOffset(i: number, count: number, center: number, step: number): string {
+  const left = center - ((count - 1) / 2) * step + i * step;
+  return `${Math.max(2, left)}%`;
+}
+
 function FieldControl({
   field,
   value,
@@ -255,27 +280,40 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
 
   const handles = [];
   if (isRole) {
-    // 角色卡的拐力端口：**两个都并排在左上角标签的正上方** ——
-    // 这样拐力箭头的起点与终点都落在标签上方那一小块，连线不会横跨整片区域。
-    // 用 Position.Top 让连线朝上走，具体坐标由 .role-port-* 微调。
-    handles.push(
-      <Handle
-        key="in-0"
-        id="in-0"
-        type="target"
-        position={Position.Top}
-        className="port port-in role-port-in"
-        title={inTitle}
-      />,
-      <Handle
-        key="out"
-        id="out"
-        type="source"
-        position={Position.Top}
-        className="port port-out role-port-out"
-        title={outTitle}
-      />,
-    );
+    // 角色卡的拐力端口：**在卡片中间偏上一带横向排开**，连线的始末都落在标签上方
+    // 那一小块里，箭头不会横跨整片区域。
+    //
+    // 入度是**多个**（角色能吃多个其他角色的拐，多来源相加）：每个接收端口
+    // 对应一条连线，端口一律居中排布 + 等距展开（最左/最右也离卡片中点不远），
+    // 所以 1 个端口的卡片和 3 个端口看起来都是"居中那一组"。
+    const inCount = buffPortCount(buffIn.length, isWeapon ? 0 : 3);
+    for (let i = 0; i < inCount; i += 1) {
+      handles.push(
+        <Handle
+          key={`in-${i}`}
+          id={`in-${i}`}
+          type="target"
+          position={Position.Top}
+          className="port port-in role-port-in"
+          style={{ left: portOffset(i, inCount, PORT_IN_CENTER, PORT_STEP) }}
+          title={inTitle}
+        />,
+      );
+    }
+    if (!isWeapon) {
+      // 出度：一个角色（或武器）对外只提供一份拐力
+      handles.push(
+        <Handle
+          key="out"
+          id="out"
+          type="source"
+          position={Position.Top}
+          className="port port-out role-port-out"
+          style={{ left: portOffset(inCount, 2, PORT_IN_CENTER + PORT_OUT_OFFSET, PORT_STEP) }}
+          title={outTitle}
+        />,
+      );
+    }
   } else {
     if (hasInput) {
       const n = Math.max(1, node.inputs);

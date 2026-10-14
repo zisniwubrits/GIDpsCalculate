@@ -360,16 +360,17 @@ textarea:focus {
   pointer-events: auto;
 }
 
-/* 拐力端口：两个都并排在**卡片中间偏上**（用户要求"往卡片中间对齐、向中间聚拢"）。
-   卡片是左上角那张按内容自适应宽度的小卡（≈96px），所以把两点放在 41/61px
-   （中点两侧各 10px），而不是贴在左边缘。 */
+/* 拐力端口：横向一律用**百分比**，落在容器中间（用户要求"就在容器百分之 50 左右"）。
+   这里只写**基准值** —— 程序里每个端口的 left 由 CardNode.tsx 的 portOffset() 行内给出
+   （整组以 50% 为中心等距展开，1 个入度就是 50%），行内样式优先于这两条。
+   纵向：负偏移 = 抬到卡片上边缘之上（Position.Top 只管方向，位置在这里微调）。 */
 .react-flow__handle.role-port-in {
-  left: 41px;
+  left: 50%;
   top: -7px;
 }
 
 .react-flow__handle.role-port-out {
-  left: 61px;
+  left: 54%;
   top: -7px;
 }
 

@@ -777,7 +777,7 @@ describe("App 集成（假后端 + 真 schema）", () => {
     expect(domOrder[0]).toBe("card-n1");
   });
 
-  it("角色卡有一对拐力端口（都在标签上方），可以拖箭头把面板值拐给别的角色", async () => {
+  it("角色卡有拐力端口：3 个入度 + 1 个出度（吃多个角色的拐），出度可拖给别的角色", async () => {
     const user = userEvent.setup();
     await renderApp();
     await addCard(user, "role");
@@ -785,7 +785,12 @@ describe("App 集成（假后端 + 真 schema）", () => {
     const card = await screen.findByTestId("card-n1");
     // 端口是卡片的兄弟节点（NodeResizer 与 Handle 都渲染在节点容器里）
     const box = card.closest(".react-flow__node") as HTMLElement;
-    expect(box.querySelectorAll(".react-flow__handle.port-in")).toHaveLength(1);
+    // 入度**多个**：每个来源角色接一个端口（同一个端口插第二条会顶掉前一条，
+    // 所以多来源必须靠多个端口 —— 这正是"角色能吃多个其他角色的拐"）
+    const ins = [...box.querySelectorAll<HTMLElement>(".react-flow__handle.role-port-in")];
+    expect(ins).toHaveLength(3);
+    // 三个端口位置各不相同（组内等距展开），不是叠在同一个点上
+    expect(new Set(ins.map((h) => h.style.left)).size).toBe(3);
     expect(box.querySelectorAll(".react-flow__handle.port-out")).toHaveLength(1);
     // 端口上写明用途（拖过去 = 上拐）
     expect(box.querySelector(".role-port-out")?.getAttribute("title")).toContain("拐力");
