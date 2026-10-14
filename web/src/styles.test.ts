@@ -179,6 +179,7 @@ describe("角色容器面板", () => {
     for (const sel of [
       ".react-flow__node.node-role-box .card-head",
       ".react-flow__node.node-role-box .react-flow__resize-control",
+      ".react-flow__node.node-role-box .react-flow__handle",
       ".react-flow__node.node-role-box input",
     ]) {
       expect(ruleBodyInList(sel)).toMatch(/pointer-events:\s*auto/);
@@ -190,6 +191,12 @@ describe("角色容器面板", () => {
     expect(body).toMatch(/border-radius/);
     expect(body).toMatch(/font-size:\s*11px/);
     expect(body).toMatch(/font-family/);
+  });
+
+  it("拐力箭头画成虚线暖色，与伤害连线区分", () => {
+    const body = ruleBody(".react-flow__edge-path.card-edge-buff");
+    expect(body).toMatch(/stroke-dasharray/);
+    expect(body).toMatch(/stroke:\s*var\(--warn\)/);
   });
 });
 

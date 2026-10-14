@@ -23,7 +23,7 @@ import {
   validRoleName,
   wouldCycle,
 } from "./model";
-import type { CardNode, Schema } from "./types";
+import type { CardNode, GraphJSON, Schema } from "./types";
 import fixture from "./test/schema.fixture.json";
 
 const schema = fixture as unknown as Schema;
@@ -361,5 +361,28 @@ describe("角色容器（抽象角色命名空间）", () => {
     expect(ignoredByBoxSelect(node("r1", "role", [0, 0]))).toBe(true);
     expect(ignoredByBoxSelect(node("n1", "dmg", [0, 0]))).toBe(false);
     expect(ignoredByBoxSelect(node("n2", "text", [0, 0]))).toBe(false);
+  });
+
+  it("拐力箭头（角色→角色）不会被端口范围检查丢掉", () => {
+    // 角色卡没有伤害端口（inputs=0），但拐力箭头走 port 0：
+    // 若按 inputs 检查就会被 jsonToGraph 丢掉，存档一保存拐力就没了
+    const json = {
+      version: 1,
+      app: "GenshinDamageCalc",
+      zoom: 1,
+      name: "",
+      nodes: [
+        { id: "r1", type: "role", pos: [0, 0], size: null, font_size: null, inputs: 0, fields: {} },
+        { id: "r2", type: "role", pos: [700, 0], size: null, font_size: null, inputs: 0, fields: {} },
+        { id: "n1", type: "dmg", pos: [0, 500], size: null, font_size: null, inputs: 1, fields: {} },
+      ],
+      links: [
+        { src: "r1", dst: "r2", port: 0 },      // 拐力箭头
+        { src: "n1", dst: "n1", port: 0 },       // 自连：丢掉
+        { src: "n1", dst: "r1", port: 3 },       // 越界端口：丢掉
+      ],
+    } as unknown as GraphJSON;
+    const back = jsonToGraph(json, schema);
+    expect(back.links).toEqual([{ src: "r1", dst: "r2", port: 0 }]);
   });
 });

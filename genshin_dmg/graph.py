@@ -221,6 +221,11 @@ class Graph:
         # 命名卡片的惰性取值表（每次求值重建）与环路栈
         self._cardvars: dict | None = None
         self._card_stack: set = set()
+        # 拐力：{目标角色: {面板宏: 加总值}}（每次求值由 buff_sources 重算）
+        self.buffs: dict = {}
+        # 拐力生效后的面板值 {目标角色: {面板宏: 自身+拐力}}，用于**覆盖式**注入
+        # （覆盖而不是相加，保证不管注入几次都不会重复计算）
+        self._buff_totals: dict = {}
 
     # -- 基础 -------------------------------------------------------------
     @staticmethod
@@ -257,8 +262,63 @@ class Graph:
     def link_src(self, dst: str, port: int):
         for l in self.links:
             if l.dst == dst and l.port == int(port):
+                src = self.nodes.get(l.src)
+                if src is not None and src.type == "role":
+                    continue        # 角色卡之间的是「拐力箭头」，不是数据连线
                 return l.src
         return None
+
+    # -- 拐力（角色卡 → 角色卡 的面板叠加）----------------------------------
+    def buff_sources(self, base_vars: dict) -> dict:
+        """``{目标角色: {面板宏: 加总值}}``：所有「角色卡 → 角色卡」箭头带来的拐力。
+
+        规则（用户确认）：多来源**相加**；**不传递** —— 源角色的值只取它自己的面板
+        （本角色命名空间优先，其次全局），不把它收到的拐力再传下去。
+        """
+        out: dict = {}
+        for link in self.links:
+            src = self.nodes.get(link.src)
+            dst = self.nodes.get(link.dst)
+            if src is None or dst is None:
+                continue
+            if src.type != "role" or dst.type != "role":
+                continue                        # 只认角色卡之间的箭头
+            role_from = _valid_role(src.fields.get("role_name"))
+            role_to = _valid_role(dst.fields.get("role_name"))
+            if not role_from or not role_to or role_from == role_to:
+                continue
+            grants = out.setdefault(role_to, {})
+            for macro in _nodes.PANEL_MACROS:
+                val = self.role_panel_value(base_vars, role_from, macro)
+                if val:
+                    grants[macro] = grants.get(macro, 0.0) + val
+        return out
+
+    @staticmethod
+    def role_panel_value(base_vars: dict, role: str, macro: str) -> float:
+        """某角色面板里某个宏的值（本角色命名空间优先，其次全局；没有则 0）。
+
+        用**第一轮**变量表算（不含拐力），从而保证"不传递"。
+        """
+        for key in (env_key(qualify(macro, role)), env_key(macro)):
+            if key in base_vars:
+                val = base_vars[key]
+                return float(val() if callable(val) else val)
+        return 0.0
+
+    def buff_edges(self) -> list:
+        """拐力箭头列表 ``[(源角色名, 目标角色名)]``（给报告/自检用）。"""
+        out = []
+        for link in self.links:
+            src = self.nodes.get(link.src)
+            dst = self.nodes.get(link.dst)
+            if src is None or dst is None or src.type != "role" or dst.type != "role":
+                continue
+            a = _valid_role(src.fields.get("role_name"))
+            b = _valid_role(dst.fields.get("role_name"))
+            if a and b and a != b:
+                out.append((a, b))
+        return out
 
     def result_node(self):
         """第一张「★结果」卡片（没有则 None）。"""
@@ -347,7 +407,8 @@ class Graph:
 
         1. 本角色自己的变量（裸名，覆盖同名全局变量）
         2. 全局变量 / 结果三元组 / 赋值变量（内部键与裸名都在）
-        3. 命名卡片的输出（``卡片名`` / ``卡片名::暴击``…，最低优先）
+        3. **别人拐给本角色的面板加成**（加到同名面板项上，多来源已在 buff_sources 里相加）
+        4. 命名卡片的输出（``卡片名`` / ``卡片名::暴击``…，最低优先）
         """
         base = self.variables if env is None else env
         out = dict(base)
@@ -357,8 +418,12 @@ class Graph:
             for key, val in base.items():
                 if key.startswith(prefix):
                     out[key[len(prefix):]] = val        # 就近：本角色覆盖同名全局
+            for macro, extra in (self._buff_totals.get(role) or {}).items():
+                # 覆盖式：本角色面板项 = 自身值 + 拐力（多来源已在 _buff_totals 里加过）
+                out[macro] = extra
+                out[prefix + macro] = extra
         for key, getter in self._card_vars().items():
-            out.setdefault(key, getter)                 # 卡片名优先级最低
+            out.setdefault(key, getter)
         return out
 
     def _compute(self, node, fn):
@@ -442,7 +507,7 @@ class Graph:
             rvars = self._result_vars()
             if rvars:
                 env.update(rvars)
-            # 第三轮：登记赋值变量卡片的变量
+            # 第三轮：登记赋值变量卡片登记的变量
             svars = self._assigned_vars()
             if svars:
                 env.update(svars)
@@ -452,6 +517,35 @@ class Graph:
                 env.update(rvars)
                 env.update(svars)               # 赋值卡优先级最高
             self.variables = dict(env)
+            # 拐力：用这一轮（不含拐力）的结果算，保证"不传递"；有拐力则带着拐力重跑一轮，
+            # 让**目标角色**里以面板项写的算式也能看到"含拐"的值（拐力值本身不变，不会来回震荡）
+            self.buffs = self.buff_sources(self.variables)
+            # 拐力生效后的面板值（自身 + 拐力）：覆盖式注入，重复注入也不会翻倍
+            self._buff_totals = {}
+            for role, grants in self.buffs.items():
+                totals = {}
+                for macro, extra in grants.items():
+                    totals[macro] = self.role_panel_value(self.variables, role, macro) + extra
+                self._buff_totals[role] = totals
+            if self.buffs:
+                env = {}
+                self._parse_var_cards(env)
+                rvars = self._result_vars()
+                if rvars:
+                    env.update(rvars)
+                svars = self._assigned_vars()
+                if svars:
+                    env.update(svars)
+                if rvars or svars:
+                    self._parse_var_cards(env, locked=set(rvars) | set(svars))
+                    env.update(rvars)
+                    env.update(svars)
+                self.variables = dict(env)
+                # 变量表 / 报告里也显示"含拐"的面板值（只写全名键：角色::宏名，
+                # 不往全局塞裸名，免得拐力漏给别的角色）
+                for role, totals in self._buff_totals.items():
+                    for macro, total in totals.items():
+                        self.variables[env_key(qualify(macro, role))] = total
             # 变量表已就绪，逐个节点求值
             first = self.result_node()
             out = dict(

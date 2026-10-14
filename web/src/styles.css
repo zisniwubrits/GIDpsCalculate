@@ -353,6 +353,7 @@ textarea:focus {
 
 .react-flow__node.node-role-box .card-head,
 .react-flow__node.node-role-box .react-flow__resize-control,
+.react-flow__node.node-role-box .react-flow__handle,
 .react-flow__node.node-role-box input,
 .react-flow__node.node-role-box textarea,
 .react-flow__node.node-role-box select {
@@ -621,6 +622,13 @@ textarea:focus {
 .react-flow__edge-path.card-edge-dim {
   stroke: var(--link-dim);
   stroke-width: 1.5;
+}
+
+/* 拐力箭头（角色标签 → 角色标签）：虚线 + 暖色，一眼区别于伤害连线 */
+.react-flow__edge-path.card-edge-buff {
+  stroke: var(--warn);
+  stroke-dasharray: 7 5;
+  stroke-width: 2;
 }
 
 .edge-del {

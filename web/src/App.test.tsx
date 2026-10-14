@@ -741,8 +741,7 @@ describe("App 集成（假后端 + 真 schema）", () => {
     await waitFor(() => expect(within(card).getByText("角色 · 主C")).toBeInTheDocument());
   });
 
-  it("求值载荷里每张卡都带 role 字段（默认空串），容器自身也是空串", async () => {
-    const user = userEvent.setup();
+  it("求值载荷里每张卡都带 role 字段（默认空串），容器自身也是空串", async () => {    const user = userEvent.setup();
     await renderApp();
     await addCard(user, "role");
     await addCard(user, "dmg");
@@ -756,6 +755,20 @@ describe("App 集成（假后端 + 真 schema）", () => {
       (el) => el.getAttribute("data-testid"),
     );
     expect(domOrder[0]).toBe("card-n1");
+  });
+
+  it("角色卡有一对拐力端口（左进右出），可以拖箭头把面板值拐给别的角色", async () => {
+    const user = userEvent.setup();
+    await renderApp();
+    await addCard(user, "role");
+
+    const card = await screen.findByTestId("card-n1");
+    // 端口是卡片的兄弟节点（NodeResizer 与 Handle 都渲染在节点容器里）
+    const box = card.closest(".react-flow__node") as HTMLElement;
+    expect(box.querySelectorAll(".react-flow__handle.port-in")).toHaveLength(1);
+    expect(box.querySelectorAll(".react-flow__handle.port-out")).toHaveLength(1);
+    // 端口上写明用途（拖过去 = 上拐）
+    expect(box.querySelector(".port-out")?.getAttribute("title")).toContain("拐力");
   });
 
   it("右键「命名卡片…」给卡片起名：标题栏挂上名字徽标，名字进工程字段", async () => {

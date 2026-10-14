@@ -16,6 +16,8 @@ export interface LinkEdgeData extends Record<string, unknown> {
   src: string;
   dst: string;
   port: number;
+  /** 拐力箭头（角色标签 → 角色标签）：画成虚线，跟伤害连线区分开 */
+  buff?: boolean;
   /** 悬停某张卡片时，与它无关的连线变淡 */
   dim?: boolean;
   onDelete: (id: string) => void;
@@ -51,7 +53,9 @@ function CardEdgeView({
         id={id}
         path={path}
         markerEnd={markerEnd}
-        className={`card-edge${selected ? " card-edge-sel" : ""}${data?.dim ? " card-edge-dim" : ""}`}
+        className={`card-edge${selected ? " card-edge-sel" : ""}${
+          data?.dim ? " card-edge-dim" : ""
+        }${data?.buff ? " card-edge-buff" : ""}`}
       />
       {selected ? (
         <EdgeLabelRenderer>

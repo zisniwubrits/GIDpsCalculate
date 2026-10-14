@@ -15,7 +15,7 @@ import unittest
 from genshin_dmg import damage as dmg
 from genshin_dmg import nodes as nd
 from genshin_dmg.expr import demangle, env_key, mangle, qualify, valid_var_name
-from genshin_dmg.graph import Graph, GraphNode
+from genshin_dmg.graph import Graph, GraphNode, Link
 
 
 def var_card(nid, defs, role=""):
@@ -284,6 +284,99 @@ class TestRolePanel(unittest.TestCase):
         g = self.graph("atk = 2000")
         self.add(g, "b", "base", stat_base="atk*1.5", multiplier="100")
         self.assertEqual(self.value(g, "b"), 3000)
+
+
+class TestBuffArrows(unittest.TestCase):
+    """拐力箭头：角色卡 → 角色卡，把源角色的面板值**加到**目标角色的同名面板项上。
+
+    用户确认：多来源**相加**；**不传递**（源的值只看它自己的面板）。
+    """
+
+    def build(self, grants, target_defs="atk = 1000", target="火神", source="辅助"):
+        g = Graph()
+        g.add(GraphNode("r_src", "role", fields={"role_name": source}))
+        g.add(GraphNode("r_dst", "role", fields={"role_name": target}))
+        g.add(var_card("v_src", grants, role=source))
+        g.add(var_card("v_dst", target_defs, role=target))
+        g.add(GraphNode("b", "base",
+                        fields={"stat_base": "", "stat_big": "", "multiplier": "100"},
+                        role=target))
+        return g
+
+    def base_value(self, g):
+        return g.evaluate()["nodes"]["b"]["values"]["noncrit"]
+
+    def test_arrow_adds_source_panel_onto_target(self):
+        g = self.build("atk_pct = 40")
+        self.assertEqual(self.base_value(g), 1000)          # 没箭头：只有自己
+        g.links.append(Link("r_src", "r_dst", 0))
+        self.assertEqual(self.base_value(g), 1400)          # 拐上 40% 攻击
+
+    def test_target_own_value_adds_to_grant(self):
+        g = self.build("atk_pct = 40", target_defs="atk = 1000\natk_pct = 10")
+        g.links.append(Link("r_src", "r_dst", 0))
+        self.assertEqual(self.base_value(g), 1500)          # 自身 10 + 拐 40 = 50%
+
+    def test_multiple_sources_add_up(self):
+        g = self.build("atk_pct = 40")
+        g.add(GraphNode("r_src2", "role", fields={"role_name": "另一个辅助"}))
+        g.add(var_card("v_src2", "atk_pct = 25", role="另一个辅助"))
+        g.links.append(Link("r_src", "r_dst", 0))
+        g.links.append(Link("r_src2", "r_dst", 0))
+        self.assertEqual(self.base_value(g), 1650)          # 40+25 = 65%
+
+    def test_not_propagated(self):
+        """不传递：C→A、A→B 时 B 只拿到 A 自己的面板值（不含 C 给 A 的拐）。"""
+        g = self.build("atk_pct = 40")
+        g.add(GraphNode("r_c", "role", fields={"role_name": "拐A的"}))
+        g.add(var_card("v_c", "atk_pct = 100", role="拐A的"))
+        g.links.append(Link("r_c", "r_src", 0))             # C → A
+        g.links.append(Link("r_src", "r_dst", 0))           # A → B
+        # A 自己的面板是 40（不因为收到 C 的 100 而变成 140）
+        self.assertEqual(self.base_value(g), 1400)
+
+    def test_source_role_is_not_buffed_by_its_own_grant(self):
+        """自己给自己上拐的箭头无效（自连被忽略），源角色自己的计算不变。"""
+        g = self.build("atk_pct = 40", target_defs="atk = 1000")
+        g.nodes["r_dst"].fields["role_name"] = "辅助"        # 让箭头变成 A→A
+        g.links.append(Link("r_src", "r_dst", 0))
+        self.assertEqual(self.base_value(g), 1000)
+
+    def test_arrow_between_invalid_roles_is_ignored(self):
+        g = self.build("atk_pct = 40")
+        g.nodes["r_src"].fields["role_name"] = "有 空格"     # 非法角色名
+        g.links.append(Link("r_src", "r_dst", 0))
+        self.assertEqual(self.base_value(g), 1000)
+
+    def test_unrelated_role_is_unaffected(self):
+        g = self.build("atk_pct = 40")
+        g.add(GraphNode("b3", "base",
+                        fields={"stat_base": "", "stat_big": "", "multiplier": "100"},
+                        role="胡桃"))
+        g.add(var_card("v3", "atk = 500", role="胡桃"))
+        g.links.append(Link("r_src", "r_dst", 0))
+        out = g.evaluate()
+        self.assertEqual(out["nodes"]["b3"]["values"]["noncrit"], 500)   # 胡桃没被拐
+
+    def test_granted_macro_appears_in_variable_table(self):
+        g = self.build("atk_pct = 40", target_defs="atk = 1000\natk_pct = 10")
+        g.add(GraphNode("t", "vartable"))
+        g.links.append(Link("r_src", "r_dst", 0))
+        rows = dict(g.evaluate()["nodes"]["t"]["rows"])
+        self.assertEqual(rows["火神::atk_pct"], "50")        # 含拐的面板值
+        self.assertEqual(rows["辅助::atk_pct"], "40")        # 源角色自己不变
+
+    def test_target_expression_using_macro_sees_the_grant(self):
+        """目标角色里以面板宏写的算式也吃到拐（变量那一轮会带着拐力重跑）。"""
+        g = self.build("atk = 500", target_defs="atk = 1000\ntotal = atk * 2")
+        g.links.append(Link("r_src", "r_dst", 0))
+        names = {v["name"]: v["text"] for v in g.evaluate()["variables"]}
+        self.assertEqual(names["火神::total"], "3000")        # (1000+500)×2
+
+    def test_buff_edges_helper(self):
+        g = self.build("atk_pct = 40")
+        g.links.append(Link("r_src", "r_dst", 0))
+        self.assertEqual(g.buff_edges(), [("辅助", "火神")])
 
 
 class TestRoleNameValidation(unittest.TestCase):

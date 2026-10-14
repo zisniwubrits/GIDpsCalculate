@@ -356,32 +356,48 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
     [removeLink],
   );
 
+  /** 两个节点之间是不是「拐力箭头」（角色卡 → 角色卡） */
+  const isBuffPair = useCallback(
+    (source: string, target: string) => {
+      const a = nodes.find((n) => n.id === source);
+      const b = nodes.find((n) => n.id === target);
+      return Boolean(a && b && a.type === "role" && b.type === "role");
+    },
+    [nodes],
+  );
+
   const onConnect = useCallback(
     (conn: Connection) => {
       const source = conn.source;
       const target = conn.target;
       if (!source || !target) return;
       const port = parsePort(conn.targetHandle);
+      const buff = isBuffPair(source, target);
       apply((s) => {
         const targetNode = s.nodes.find((n) => n.id === target);
-        if (!targetNode || port >= targetNode.inputs) return s;
+        if (!targetNode) return s;
+        // 拐力箭头（角色→角色）：端口与环路都不按伤害链的规则来
+        // （拐力只作用于直接目标、不传递，所以成环也没关系）
+        if (buff) return { ...s, links: connect(s.links, source, target, 0) };
+        if (port >= targetNode.inputs) return s;
         if (wouldCycle(s.links, source, target)) return s;
         return { ...s, links: connect(s.links, source, target, port) };
       });
       setSelectedEdge(null);
     },
-    [apply],
+    [apply, isBuffPair],
   );
 
   const isValidConnection = useCallback(
     (conn: Connection | CardRFEdge) => {
       const { source, target } = conn;
       if (!source || !target || source === target) return false;
+      if (isBuffPair(source, target)) return true;      // 角色标签之间：随便连（含双向）
       if (wouldCycle(links, source, target)) return false;
       const targetNode = nodes.find((n) => n.id === target);
       return Boolean(targetNode && parsePort(conn.targetHandle) < targetNode.inputs);
     },
-    [links, nodes],
+    [links, nodes, isBuffPair],
   );
 
   // -- 文件操作（走后端写文件：一键保存、记忆目录）-------------------------
@@ -653,6 +669,7 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
     () =>
       links.map((l) => {
         const id = edgeId(l.src, l.dst, l.port);
+        const buff = isBuffPair(l.src, l.dst);
         return {
           id,
           type: "card" as const,
@@ -662,17 +679,23 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
           targetHandle: `in-${l.port}`,
           selected: selectedEdge === id,
           interactionWidth: 18,
-          markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14, color: "#2f6fa7" },
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+            width: 14,
+            height: 14,
+            color: buff ? "#b8860b" : "#2f6fa7",
+          },
           data: {
             src: l.src,
             dst: l.dst,
             port: l.port,
+            buff,
             dim: Boolean(hoverId && l.src !== hoverId && l.dst !== hoverId),
             onDelete: removeLink,
           },
         };
       }),
-    [links, selectedEdge, hoverId, removeLink],
+    [links, selectedEdge, hoverId, removeLink, isBuffPair],
   );
 
   const selectedCount = nodes.filter((n) => n.selected).length;

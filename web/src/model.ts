@@ -428,9 +428,13 @@ export function jsonToGraph(
     const dst = String((l as { dst?: unknown })?.dst ?? "");
     if (!ids.has(src) || !ids.has(dst) || src === dst) continue;
     const port = Number((l as { port?: unknown })?.port ?? 0);
-    // 端口号必须落在目标卡片真实的输入端口范围内（旧存档里多余的端口会被丢弃）
+    // 端口号必须落在目标卡片真实的输入端口范围内（旧存档里多余的端口会被丢弃）；
+    // **角色卡例外**：它没有伤害端口，但「拐力箭头」（角色→角色）走 port 0，
+    // 不能按 inputs=0 被丢掉。
     const target = byId.get(dst);
-    const maxPort = target ? target.inputs : 0;
+    const srcNode = byId.get(src);
+    const isBuff = Boolean(target && srcNode && target.type === "role" && srcNode.type === "role");
+    const maxPort = isBuff ? 1 : (target ? target.inputs : 0);
     if (!Number.isFinite(port) || port < 0 || port >= maxPort) continue;
     links.push({ src, dst, port });
   }

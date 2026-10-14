@@ -121,9 +121,12 @@ function FieldControl({
 
 function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
   const { node, spec, result, fontSize, table } = data;
-  const hasInput = !spec.isolated && spec.inputs > 0;
+  // 角色卡片是个例外：它没有伤害端口，但要一对**拐力端口** ——
+  // 从源角色标签拖到目标角色标签，就等于把这个角色的面板值拐给对面。
+  const isRole = Boolean(spec.role_card);
+  const hasInput = isRole || (!spec.isolated && spec.inputs > 0);
   // sink 卡片（「赋值变量」）只有输入端口：它不参与结果链，只把上游值记到变量表
-  const hasOutput = !spec.isolated && !spec.no_output && !spec.sink;
+  const hasOutput = isRole || (!spec.isolated && !spec.no_output && !spec.sink);
   /** 折叠状态：只显示卡片类型（标题栏），字段区与底部输出都收起 */
   const collapsed = Boolean(node.collapsed);
 
@@ -224,11 +227,12 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
           position={Position.Left}
           style={{ top: `${((i + 1) / (n + 1)) * 100}%` }}
           className="port port-in"
+          title={isRole ? "接收另一个角色的拐力（把对方的标签拖到这里）" : undefined}
         />,
       );
     }
   }
-  if (hasOutput && !spec.no_output) {
+  if (hasOutput && (!spec.no_output || isRole)) {
     handles.push(
       <Handle
         key="out"
@@ -236,6 +240,7 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
         type="source"
         position={Position.Right}
         className="port port-out"
+        title={isRole ? "拐力：拖到另一个角色标签，把这个角色的面板值拐给它" : undefined}
       />,
     );
   }
