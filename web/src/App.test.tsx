@@ -1042,6 +1042,50 @@ describe("App 集成（假后端 + 真 schema）", () => {
     await waitFor(() => expect(lastBody?.nodes.map((n) => n.id)).toEqual(["n1", "n2"]));
   });
 
+  it("Ctrl+C / Ctrl+V：右键「复制角色域」后粘贴，域与域内卡片一起来、撞名自动加 _2", async () => {
+    const user = userEvent.setup();
+    // 预置：火神域 + 域内两张卡（域外线不带走）
+    window.localStorage.setItem(
+      "genshin-dmg-calc:project:v1",
+      JSON.stringify({
+        graph: {
+          version: 1, app: "GenshinDamageCalc", zoom: 1, name: "复制自检",
+          nodes: [
+            { id: "n1", type: "role", pos: [0, 0], size: [520, 340], font_size: null, inputs: 0,
+              fields: { role_name: "火神", panel: "", panel_show: "", card_name: "" } },
+            { id: "n2", type: "dmg", pos: [60, 60], size: null, font_size: null, inputs: 1, fields: {} },
+            { id: "n3", type: "crit", pos: [60, 200], size: null, font_size: null, inputs: 1, fields: {} },
+            { id: "n4", type: "base", pos: [3000, 0], size: null, font_size: null, inputs: 0, fields: {} },
+          ],
+          links: [{ src: "n2", dst: "n3", port: 0 }],
+        },
+        savedAt: new Date().toISOString(),
+      }),
+    );
+
+    await renderApp();
+    const roleCard = await screen.findByTestId("card-n1");
+    await waitFor(() => expect(lastBody?.nodes.length).toBe(4));
+
+    // 右键域 →「复制角色域」（等价于选中域后 Ctrl+C）
+    fireEvent.contextMenu(within(roleCard).getByText("火神"));
+    await user.click(await screen.findByText(/复制角色域/));
+    await waitFor(() => expect(screen.getByText(/已复制这个域/)).toBeInTheDocument());
+
+    // Ctrl+V：粘出「火神_2」+ 域内两张卡
+    fireEvent.keyDown(window, { key: "v", ctrlKey: true });
+    await waitFor(() => expect(lastBody?.nodes.length).toBe(7));
+    const roles = (lastBody?.nodes ?? []).filter((n) => n.type === "role");
+    expect(roles.map((r) => r.fields.role_name).sort()).toEqual(["火神", "火神_2"]);
+    // 域内两张卡也跟着来了（各自的 type 计数翻倍）
+    const types = (lastBody?.nodes ?? []).map((n) => n.type);
+    expect(types.filter((t) => t === "dmg")).toHaveLength(2);
+    expect(types.filter((t) => t === "crit")).toHaveLength(2);
+    // 内部那条线按新 id 接回来（总连线数 1 → 2）
+    expect(lastBody?.links).toHaveLength(2);
+    expect(new Set((lastBody?.nodes ?? []).map((n) => n.id)).size).toBe(7);
+  });
+
   it("右键角色标签 →「角色面板…」：宏表可编辑、并显示拐力统计（OUT/IN）", async () => {    const user = userEvent.setup();
     await renderApp();
     await addCard(user, "role");

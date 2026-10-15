@@ -38,7 +38,11 @@ import {
   cardsBlockingHide,
   cardsHidden,
   cardsInside,
+  collectClipboard,
   duplicateRoleNames,
+  pasteClipboard,
+  roleOwnerMap,
+  uniqueRoleName,
   hiddenCardsFor,
   roleBoxCollisions,
   roleNameError,
@@ -760,5 +764,105 @@ describe("角色命名空间的两条硬规则", () => {
     // 已经规规矩矩的工程：原样返回
     const clean = resolveRoleOverlaps([mk("r1", "火神", [0, 0], [560, 380])]);
     expect(clean.moved).toEqual([]);
+  });
+});
+
+describe("卡片 / 域的复制粘贴", () => {
+  const role = (id: string, name: string, pos: [number, number]) => {
+    const n = node(id, "role", pos);
+    n.fields = { ...n.fields, role_name: name };
+    n.size = [520, 340];
+    return n;
+  };
+  const card = (id: string, type: string, pos: [number, number], selected = false) => {
+    const n = node(id, type, pos);
+    n.size = [200, 120];
+    n.selected = selected;
+    return n;
+  };
+  const scene = () => {
+    const r1 = role("r1", "火神", [0, 0]);
+    r1.selected = true;
+    return [
+      r1,
+      card("c1", "dmg", [60, 60]),
+      card("c2", "crit", [60, 200]),
+      card("c3", "base", [2000, 0]),          // 域外
+    ];
+  };
+
+  it("复制域：域容器 + 域内卡片 + 域内连线（域外连线丢掉）", () => {
+    const nodes = scene();
+    const links = [
+      { src: "c1", dst: "c2", port: 0 },      // 域内
+      { src: "c1", dst: "c3", port: 0 },      // 跨域：不带走
+      { src: "c3", dst: "c3", port: 0 },      // 完全在外面
+    ];
+    const payload = collectClipboard(nodes, links);
+    expect(payload.nodes.map((n) => n.id).sort()).toEqual(["c1", "c2", "r1"]);
+    expect(payload.links).toEqual([{ src: "c1", dst: "c2", port: 0 }]);
+    expect(payload.nodes.every((n) => !n.selected)).toBe(true);
+  });
+
+  it("复制单张卡片：只带走它自己，连线只有一端就不带走", () => {
+    const nodes = scene();
+    nodes[0].selected = false;
+    nodes[2].selected = true;                 // 选中 c2
+    const payload = collectClipboard(nodes, [{ src: "c1", dst: "c2", port: 0 }]);
+    expect(payload.nodes.map((n) => n.id)).toEqual(["c2"]);
+    expect(payload.links).toEqual([]);
+  });
+
+  it("粘贴：新 id、平移到空白处、内部连线重接、原选中态清掉", () => {
+    const nodes = scene();
+    const payload = collectClipboard(nodes, [{ src: "c1", dst: "c2", port: 0 }]);
+    const res = pasteClipboard(payload, nodes, nodes.map((n) => n.id));
+    const created = res.nodes.filter((n) => res.created.includes(n.id));
+
+    expect(created).toHaveLength(3);
+    expect(created.every((n) => !["r1", "c1", "c2", "c3"].includes(n.id))).toBe(true);
+    // 内部连线按新 id 接回来
+    expect(res.links).toHaveLength(1);
+    expect(created.map((n) => n.id)).toContain(res.links[0].src);
+    expect(created.map((n) => n.id)).toContain(res.links[0].dst);
+    // 粘贴出来的被选中；原来的清掉；域是"看得见"的
+    expect(created.every((n) => n.selected)).toBe(true);
+    expect(res.nodes.filter((n) => !res.created.includes(n.id)).every((n) => !n.selected)).toBe(true);
+    expect(created.find((n) => isNamespaceNode(n))?.fields.cards_hidden).toBe(false);
+    // 相对布局保持：两张卡都还落在域框里面
+    const owners = roleOwnerMap(res.nodes);
+    const pastedRole = created.find((n) => isNamespaceNode(n))!;
+    for (const c of created.filter((n) => !isNamespaceNode(n))) {
+      expect(owners.get(c.id)).toBe(pastedRole.id);
+    }
+  });
+
+  it("连续粘贴两次不会重号", () => {
+    const nodes = scene();
+    const payload = collectClipboard(nodes, []);
+    const once = pasteClipboard(payload, nodes, nodes.map((n) => n.id));
+    const twice = pasteClipboard(payload, once.nodes, once.nodes.map((n) => n.id));
+    const ids = twice.nodes.map((n) => n.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("粘贴的域撞名就加序号（火神 → 火神_2 → 火神_3），不撞名不动", () => {
+    const nodes = scene();
+    const payload = collectClipboard(nodes, []);
+    const pastedRole = (list: CardNode[]) =>
+      list.find((n) => isNamespaceNode(n) && n.fields.role_name !== "火神");
+    const once = pasteClipboard(payload, nodes, nodes.map((n) => n.id));
+    const name1 = pastedRole(once.nodes)?.fields.role_name;
+    const twice = pasteClipboard(payload, once.nodes, once.nodes.map((n) => n.id));
+    const name2 = pastedRole(twice.nodes.filter((n) => n.fields.role_name !== name1))
+      ?.fields.role_name;
+    expect(name1).toBe("火神_2");
+    expect(name2).toBe("火神_3");
+    // 原域的名字不动；名字都是合法的（能写进 名字::变量）
+    expect(twice.nodes.find((n) => n.id === "r1")?.fields.role_name).toBe("火神");
+    for (const nm of [String(name1), String(name2)]) expect(validRoleName(nm)).toBe(true);
+    // 名字已经带 _2 时先剥掉再加，不会滚成 火神_2_2
+    expect(uniqueRoleName("火神_2", ["火神", "火神_2"])).toBe("火神_3");
+    expect(uniqueRoleName("辅助", ["火神"])).toBe("辅助");
   });
 });

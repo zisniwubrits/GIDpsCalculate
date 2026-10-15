@@ -48,6 +48,7 @@ import {
   cardsBlockingHide,
   cardsHidden,
   cardsInside,
+  collectClipboard,
   connect,
   duplicateRoleNames,
   estimateSize,
@@ -62,6 +63,7 @@ import {
   makeNode,
   nextNodeId,
   parseRolePanel,
+  pasteClipboard,
   roleBoxCollisions,
   roleNameError,
   resolveRoleOverlaps,
@@ -71,12 +73,19 @@ import {
   toggleRoleCardsHidden,
   wouldCycle,
   type AlignMode,
+  type ClipboardPayload,
   type SizeOf,
 } from "./model";
 import { loadLocal, saveLocal } from "./state/persistence";
 import { useEvaluate, useHelp, useSchema } from "./state/useBackend";
 import { useGraphHistory, type GraphState } from "./state/useGraphHistory";
-import type { CardNode as CardNodeModel, FieldValue, GraphJSON, NodeResult, Schema } from "./types";
+import type {
+  CardNode as CardNodeModel,
+  FieldValue,
+  GraphJSON,
+  NodeResult,
+  Schema,
+} from "./types";
 
 const NODE_TYPES = { card: CardNode };
 const EDGE_TYPES = { card: CardEdge };
@@ -639,6 +648,70 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
 
   const onCopy = useCallback((id: string) => copyNodeValue(id), [copyNodeValue]);
 
+  // -- 卡片 / 域的复制粘贴（Ctrl+C / Ctrl+V）------------------------------
+  /** 剪贴板：卡片包（域则连域容器一起），只在本次会话内有效 */
+  const cardClipboard = useRef<ClipboardPayload | null>(null);
+
+  /** Ctrl+C：选中的卡片 → 卡片；选中的角色/武器域 → 域 + 域内卡片 + 域内连线 */
+  const doCopyCards = useCallback(() => {
+    const payload = collectClipboard(nodes, links);
+    if (!payload.nodes.length) {
+      setToast("先选中卡片或角色/武器域，再 Ctrl+C");
+      return;
+    }
+    cardClipboard.current = payload;
+    const roles = payload.nodes.filter(isNamespaceNode).length;
+    const cards = payload.nodes.length - roles;
+    setToast(
+      roles && cards
+        ? `已复制 ${roles} 个域 + ${cards} 张卡片（Ctrl+V 粘贴）`
+        : roles
+          ? `已复制 ${roles} 个域（Ctrl+V 粘贴）`
+          : `已复制 ${cards} 张卡片（Ctrl+V 粘贴）`,
+    );
+  }, [nodes, links]);
+
+  /** Ctrl+Shift+C：把选中卡片的输出数值复制成文本（原来的"复制数值"）。 */
+  const doCopyValues = useCallback(() => {
+    const picked = nodes.filter((n) => n.selected);
+    if (!picked.length) {
+      setToast("先选中卡片，再 Ctrl+Shift+C 复制数值");
+      return;
+    }
+    const lines = picked
+      .map((n) => results[n.id])
+      .filter(Boolean)
+      .map((r) => (r as NodeResult).plain);
+    if (!lines.length) {
+      setToast("选中的卡片还没有算好的数值");
+      return;
+    }
+    const text = lines.join("\n");
+    void copyText(text).then((ok) => setToast(ok ? `已复制数值：${text}` : "复制失败"));
+  }, [nodes, results]);
+
+  /** Ctrl+V：把剪贴板里的卡片贴到一块空白位置（新 id、内部连线重建） */
+  const doPasteCards = useCallback(() => {
+    const payload = cardClipboard.current;
+    if (!payload || !payload.nodes.length) {
+      setToast("剪贴板里没有卡片（先选中再 Ctrl+C）");
+      return;
+    }
+    apply((s) => {
+      const res = pasteClipboard(payload, s.nodes, s.nodes.map((n) => n.id));
+      return { nodes: res.nodes, links: [...s.links, ...res.links] };
+    });
+    const roles = payload.nodes.filter(isNamespaceNode).length;
+    const cards = payload.nodes.length - roles;
+    setToast(
+      roles && cards
+        ? `已粘贴 ${roles} 个域 + ${cards} 张卡片`
+        : roles
+          ? `已粘贴 ${roles} 个域`
+          : `已粘贴 ${cards} 张卡片`,
+    );
+  }, [apply]);
+
   const setFontSize = useCallback(
     (id: string, value: number | null) => {
       apply((s) => ({
@@ -770,6 +843,18 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
         label: spec.weapon_card ? "设置武器名…" : "设置角色名…",
         onClick: () => setRoleNameDialog(menu.id),
       });
+      // 复制这个域（含域内卡片与连线）：选中它再 Ctrl+C 也行，这里给个入口
+      items.push({
+        label: spec.weapon_card ? "复制武器域" : "复制角色域",
+        onClick: () => {
+          const payload = collectClipboard(
+            nodes.map((n) => ({ ...n, selected: n.id === menu.id })),
+            links,
+          );
+          cardClipboard.current = payload;
+          setToast("已复制这个域（含域内卡片与连线），Ctrl+V 粘贴");
+        },
+      });
       if (!spec.weapon_card) {
         items.push({ label: "角色面板…", onClick: () => setPanelDialog(menu.id) });
         // 一键藏起区域内的卡片：藏完这只剩一张最小的牌子（再次右键点回来）
@@ -843,11 +928,30 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
         selectAll();
         return;
       }
+      // 复制卡片 / 域（Ctrl+C）与粘贴（Ctrl+V）：输入框里让浏览器自己处理
+      if (mod && !typing && e.key.toLowerCase() === "c") {
+        if (!e.shiftKey) {
+          e.preventDefault();
+          doCopyCards();
+          return;
+        }
+      }
+      if (mod && e.shiftKey && e.key.toLowerCase() === "c" && !typing) {
+        e.preventDefault();
+        doCopyValues();
+        return;
+      }
+      if (mod && !typing && e.key.toLowerCase() === "v") {
+        e.preventDefault();
+        doPasteCards();
+        return;
+      }
       if (e.key === "Escape" && !typing && !showHelp) clearSelection();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [history, clearSelection, selectAll, showHelp, doSave]);
+  }, [history, clearSelection, selectAll, showHelp, doSave,
+      doCopyCards, doCopyValues, doPasteCards]);
 
   // -- 渲染 ---------------------------------------------------------------
   // 角色容器排在最前面 → React Flow 按数组顺序决定叠放，容器才会画在卡片**下面**

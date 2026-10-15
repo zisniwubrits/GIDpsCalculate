@@ -625,6 +625,154 @@ export function nextNodeId(nodes: CardNode[]): string {
   return `n${max + 1}`;
 }
 
+// ---------------------------------------------------- 卡片 / 域 的复制粘贴
+/** 剪贴板里的一包卡片（含它们之间的连线）。 */
+export interface ClipboardPayload {
+  nodes: CardNode[];
+  links: GraphLinkJSON[];
+}
+
+/**
+ * 选中的这些卡片要复制哪些：**选中的现成卡片 + 选中的角色/武器域里的内容**。
+ *
+ * 口径（用户确认）：
+ *   * 选中一张卡片 → 复制它自己；
+ *   * 选中角色 / 武器域 → 复制**域容器本身** + 域内卡片 + 域内连线；
+ *   * 域内卡片如果自己也被选中了，只算一份（不重复）。
+ */
+export function collectClipboard(nodes: CardNode[], links: GraphLinkJSON[]): ClipboardPayload {
+  const selected = nodes.filter((n) => n.selected);
+  if (!selected.length) return { nodes: [], links: [] };
+  const owners = roleOwnerMap(nodes);
+  const taking = new Set<string>();
+  for (const n of selected) {
+    taking.add(n.id);
+    if (!isNamespaceNode(n)) continue;
+    for (const m of nodes) {
+      if (isNamespaceNode(m)) continue;
+      if (owners.get(m.id) === n.id) taking.add(m.id);
+    }
+  }
+  const picked = nodes.filter((n) => taking.has(n.id));
+  return {
+    nodes: picked.map((n) => ({ ...n, fields: { ...n.fields }, selected: false })),
+    links: links
+      .filter((l) => taking.has(l.src) && taking.has(l.dst))
+      .map((l) => ({ ...l })),
+  };
+}
+
+/**
+ * 把一包卡片贴到画布上：**新 id、按块找一块不重叠的空白位置**，内部连线照原样接回来。
+ *
+ * * `takenIds`：已经占用的 id（粘贴出来的新卡避开它们，连续粘贴也不会重号）；
+ * * 位置：整包的相对布局保持不变，只做整体平移（沿用 `freeSlot` 那套"找空白"的做法）；
+ * * 粘贴出来的卡片会被选中、原来的选中态清掉 —— 这样紧接着还能再拖再贴。
+ * * 域容器上的 `cards_hidden` 会被清掉：粘出来的一包应该是**看得见**的。
+ */
+export function pasteClipboard(
+  payload: ClipboardPayload,
+  nodes: CardNode[],
+  takenIds: readonly string[],
+  sizeOf: SizeOf = estimateSize,
+): { nodes: CardNode[]; links: GraphLinkJSON[]; created: string[] } {
+  if (!payload.nodes.length) return { nodes, links: [], created: [] };
+  const taken = new Set(takenIds);
+  let cursor = 1;
+  const freshId = () => {
+    while (taken.has(`n${cursor}`)) cursor += 1;
+    const id = `n${cursor}`;
+    taken.add(id);
+    return id;
+  };
+  const idMap = new Map<string, string>();
+  for (const n of payload.nodes) idMap.set(n.id, freshId());
+
+  const w = (n: CardNode) => sizeOf(n).w;
+  const h = (n: CardNode) => sizeOf(n).h;
+  const x0 = Math.min(...payload.nodes.map((n) => n.pos[0]));
+  const y0 = Math.min(...payload.nodes.map((n) => n.pos[1]));
+  const bw = Math.max(...payload.nodes.map((n) => n.pos[0] + w(n))) - x0;
+  const bh = Math.max(...payload.nodes.map((n) => n.pos[1] + h(n))) - y0;
+  const [dx, dy] = freeSlotFor(nodes, bw, bh, sizeOf);
+
+  const pasted = payload.nodes.map((n) => ({
+    ...n,
+    id: idMap.get(n.id) as string,
+    pos: [n.pos[0] - x0 + dx, n.pos[1] - y0 + dy] as [number, number],
+    fields: { ...n.fields, ...(isNamespaceNode(n) ? { cards_hidden: false } : {}) },
+    size: n.size ? ([n.size[0], n.size[1]] as [number, number]) : null,
+    selected: true,
+    colliding: false,
+  }) as CardNode);
+  const pastedLinks = payload.links
+    .filter((l) => idMap.has(l.src) && idMap.has(l.dst))
+    .map((l) => ({ src: idMap.get(l.src) as string, dst: idMap.get(l.dst) as string, port: l.port }));
+  const cleared = nodes.map((n) => (n.selected ? { ...n, selected: false } : n));
+  // 域不许重名（用户要求）：粘贴上来的角色/武器域如果撞名，就加序号（火神_2 / 火神_3…）
+  const usedNames = nodes
+    .filter(isNamespaceNode)
+    .map((n) => String(n.fields.role_name ?? "").trim());
+  for (const n of pasted) {
+    if (!isNamespaceNode(n)) continue;
+    const name = String(n.fields.role_name ?? "").trim();
+    if (!name) continue;
+    const unique = uniqueRoleName(name, usedNames);
+    if (unique !== name) {
+      n.fields = { ...n.fields, role_name: unique };
+    }
+    usedNames.push(unique);
+  }
+  return {
+    nodes: [...cleared, ...pasted],
+    links: pastedLinks,
+    created: pasted.map((n) => n.id),
+  };
+}
+
+/** 给一整块（宽 bw × 高 bh）找一块不重叠的空白位置。 */
+function freeSlotFor(
+  nodes: CardNode[],
+  bw: number,
+  bh: number,
+  sizeOf: SizeOf,
+): [number, number] {
+  const cols = 4;
+  const cw = 300;
+  const ch = 260;
+  for (let i = 0; i < 400; i += 1) {
+    const x = 40 + (i % cols) * cw;
+    const y = 60 + Math.floor(i / cols) * ch;
+    if (areaFree(nodes, x, y, bw, bh, sizeOf)) return [x, y];
+  }
+  return [40, 60];
+}
+
+/** 选中的卡片 / 域里有没有东西可复制。 */
+export function hasCopyable(nodes: CardNode[]): boolean {
+  return nodes.some((n) => n.selected);
+}
+
+/**
+ * 给粘贴上来的域起一个**不重名**的名字。
+ *
+ * 用户要求：粘出来的域如果和已有的同名，就在后面加序号。
+ * 分隔符用下划线（`火神_2`）而不是 `-`：角色名/武器名是**标识符**，要能写进
+ * `名字::变量` 里，带空格或 `-` 都会被名字校验拦掉（与画布默认名「角色1」同一套规则）。
+ * 原名字如果已经带 `_2` 这类尾巴，先剥掉再往上加，避免粘三次变成 `火神_2_2`。
+ */
+export function uniqueRoleName(base: string, taken: readonly string[]): string {
+  const raw = (base ?? "").trim() || "角色";
+  const root = raw.replace(/_\d+$/, "") || raw;
+  const used = new Set(taken.map((t) => (t ?? "").trim()));
+  if (!used.has(raw)) return raw;
+  for (let i = 2; i < 1000; i += 1) {
+    const candidate = `${root}_${i}`;
+    if (!used.has(candidate)) return candidate;
+  }
+  return `${root}_${Date.now()}`;
+}
+
 /** 按 schema 造一张新卡片（字段取默认值，可覆盖）。
  *
  * ``siblings`` 是画布上已有的卡片：只有「角色」容器需要它来自动起一个不重名的默认名。
