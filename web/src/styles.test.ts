@@ -93,10 +93,9 @@ describe("字体", () => {
     expect(ruleBody(".f-area")).not.toMatch(/font-family/);
   });
 
-  it("等宽表格的字栈里带中文字体，避免中文回退成宋体", () => {
+  it("等宽表格也走统一的等宽字体变量（中文档位在变量里，别各写一份）", () => {
     const body = ruleBody(".dtable-mono .dtable-cell");
-    expect(body).toMatch(/font-family/);
-    expect(body).toMatch(/Microsoft YaHei/);
+    expect(body).toMatch(/font-family:\s*var\(--font-mono\)/);
   });
   it("F1 教程不单独指定字体族（否则中文会回退成宋体，与界面不一致）", () => {
     // 教程靠 pre-wrap 保排版，不需要等宽；字体族统一由下面那条全局 pre 规则继承。
@@ -294,6 +293,23 @@ describe("工具栏状态区", () => {
     expect(body).toMatch(/font-size:\s*11px/);
     expect(body).toMatch(/color:\s*var\(--muted\)/);
     expect(body).toMatch(/white-space:\s*nowrap/);
+  });
+});
+
+describe("全局字体", () => {
+  it("界面全面等宽：body 用 --font-mono，且这个变量以 monospace 兜底", () => {
+    const css = loadStyles();
+    // body 必须是等宽（用户要求整个界面等宽，不是只有数值）
+    const body = ruleBody("body");
+    expect(body).toMatch(/font-family:\s*var\(--font-mono\)/);
+    // 等宽字体栈：有等宽族名，且以通用族 monospace 收尾
+    const stack = /--font-mono:\s*([^;]+);/.exec(css)?.[1] ?? "";
+    expect(stack).toMatch(/Consolas/);
+    expect(stack.trim().endsWith("monospace")).toBe(true);
+    // 中文要能落到雅黑 / 苹方那一档（不然 monospace 遇中文会掉进宋体）
+    expect(stack).toMatch(/Microsoft YaHei|PingFang SC/);
+    // 各处不要再硬编码自己的字体栈（曾经散着 6 份）
+    expect(css).not.toMatch(/font-family:\s*Consolas/);
   });
 });
 

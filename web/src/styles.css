@@ -13,6 +13,18 @@
   --danger: #c0392b;
   --ok: #1f7a4d;
   --warn: #b8860b;
+  /**
+   * 全局字体：**界面整体用等宽**（用户要求）。
+   *
+   * 为什么这么排：
+   *   * Consolas / Cascadia Mono / DejaVu Sans Mono 管 ASCII（数字、宏名、算式对齐）；
+   *   * 中文没有真正普及的等宽字体，所以退到雅黑 / 苹方（中文按字号自然宽度排，
+   *     数字与英文仍是等宽、能对齐）；
+   *   * 末尾的 monospace 是兜底，保证"一定是等宽族"。
+   * 所有需要等宽的地方都引用这个变量，别再各写一份字体栈。
+   */
+  --font-mono: Consolas, "Cascadia Mono", "Courier New", "Microsoft YaHei",
+    "PingFang SC", "DejaVu Sans Mono", monospace;
 }
 
 * {
@@ -29,7 +41,8 @@ body,
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: "Microsoft YaHei", "PingFang SC", system-ui, -apple-system, sans-serif;
+  /* 用户要求：界面**全面**等宽（原来只有代码/数值那些小块是等宽） */
+  font-family: var(--font-mono);
   font-size: 13px;
 }
 
@@ -82,7 +95,8 @@ textarea {
 
 /* <pre>/<code> 的**浏览器默认字体是 monospace**，而中文 Windows 上 monospace 遇到中文
    会回退成宋体 —— 只删掉自定义的 font-family 是没用的（UA 那条还在，用户报过一次
-   「F1 还是宋体」）。统一让它们继承界面字体：排版靠 white-space 保证，不需要等宽字形。 */
+   「F1 还是宋体」）。统一让它们继承界面字体（现在界面本身就是等宽，中文走雅黑那一档，
+   不会掉进宋体）——排版靠 white-space 保证。 */
 pre,
 code,
 kbd,
@@ -399,7 +413,7 @@ textarea:focus {
 
 .role-panel .rp-key {
   white-space: nowrap;
-  font-family: Consolas, "Courier New", "Microsoft YaHei", monospace;
+  font-family: var(--font-mono);
   color: var(--muted);
 }
 
@@ -524,7 +538,7 @@ textarea:focus {
   color: var(--muted);
   font-size: 11px;
   white-space: nowrap;
-  font-family: Consolas, "Courier New", "Microsoft YaHei", monospace;
+  font-family: var(--font-mono);
 }
 
 /* 角色标记里的「角色名」输入框：只占一小段，不铺满整个区域
@@ -857,7 +871,7 @@ textarea:focus {
 /* 等宽对齐数字，但中文字形要显式回退到界面字体：Consolas / Courier New 都没有中文字形，
    否则变量名（常见中文，如「攻击力」）会被浏览器渲染成宋体，与界面其它文字不一致。 */
 .dtable-mono .dtable-cell {
-  font-family: Consolas, "Courier New", "Microsoft YaHei", "PingFang SC", monospace;
+  font-family: var(--font-mono);
 }
 
 /* ------------------------------------------------------- 菜单 / 弹窗 */
@@ -974,7 +988,7 @@ textarea:focus {
   padding: 8px 10px;
   background: #fdf3f2;
   border-radius: 6px;
-  font-family: Consolas, "Courier New", "Microsoft YaHei", monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   word-break: break-word;
 }
@@ -1042,7 +1056,7 @@ textarea:focus {
 }
 
 .pm-key {
-  font-family: Consolas, "Courier New", "Microsoft YaHei", monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   color: var(--accent);
 }
@@ -1114,7 +1128,7 @@ textarea:focus {
   min-width: 0;
   padding: 6px 6px;
   font-size: 13px;
-  font-family: Consolas, "Courier New", "Microsoft YaHei", monospace;
+  font-family: var(--font-mono);
 }
 
 /* 删除按钮占掉「显示」那一列的位置（自定义项不进画布面板，没有勾选框） */
