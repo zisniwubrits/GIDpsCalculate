@@ -168,6 +168,8 @@ const addCard = async (user: ReturnType<typeof userEvent.setup>, type: string) =
 describe("App 集成（假后端 + 真 schema）", () => {
   beforeEach(() => {
     window.localStorage.clear();
+    // 假剪贴板也要清：粘贴现在优先读系统剪贴板，用例之间不能串
+    (globalThis as unknown as { __clearFakeClipboard?: () => void }).__clearFakeClipboard?.();
     fakeBackend.open = null;
     fakeBackend.webStale = false;
     fakeBackend.schemaOverride = null;
@@ -1070,7 +1072,7 @@ describe("App 集成（假后端 + 真 schema）", () => {
     // 右键域 →「复制角色域」（等价于选中域后 Ctrl+C）
     fireEvent.contextMenu(within(roleCard).getByText("火神"));
     await user.click(await screen.findByText(/复制角色域/));
-    await waitFor(() => expect(screen.getByText(/已复制这个域/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/已复制/)).toBeInTheDocument());
 
     // Ctrl+V：粘出「火神_2」+ 域内两张卡
     fireEvent.keyDown(window, { key: "v", ctrlKey: true });

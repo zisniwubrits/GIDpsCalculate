@@ -632,6 +632,90 @@ export interface ClipboardPayload {
   links: GraphLinkJSON[];
 }
 
+/** 写进系统剪贴板的信封（带标记与版本，方便识别 + 以后演进）。 */
+export const CLIPBOARD_TAG = "GenshinDamageCalc:cards";
+export const CLIPBOARD_VERSION = 1;
+
+/**
+ * 卡片包 → 剪贴板文本（JSON）。
+ *
+ * 为什么要序列化进系统剪贴板（用户要求）：这样**换个页面、换个浏览器**也能粘贴，
+ * 而不是只在当前标签页的内存里。
+ */
+export function clipboardToText(payload: ClipboardPayload): string {
+  return JSON.stringify({
+    app: CLIPBOARD_TAG,
+    v: CLIPBOARD_VERSION,
+    nodes: payload.nodes.map((n) => ({
+      id: n.id,
+      type: n.type,
+      pos: n.pos,
+      size: n.size,
+      font_size: n.font_size,
+      inputs: n.inputs,
+      fields: n.fields,
+      collapsed: Boolean(n.collapsed),
+    })),
+    links: payload.links.map((l) => ({ src: l.src, dst: l.dst, port: l.port })),
+  });
+}
+
+/**
+ * 剪贴板文本 → 卡片包；不是我们的 JSON（或坏的）就返回 null。
+ *
+ * 只做"形状校验"：类型得是 schema 里认识的、字段得是对象；坏条目跳过而不是整包失败。
+ */
+export function clipboardFromText(text: string, schema: Schema): ClipboardPayload | null {
+  const raw = (text ?? "").trim();
+  if (!raw.startsWith("{")) return null;
+  let data: unknown;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  const obj = data as { app?: unknown; nodes?: unknown; links?: unknown };
+  if (!obj || typeof obj !== "object" || obj.app !== CLIPBOARD_TAG) return null;
+  const list = Array.isArray(obj.nodes) ? obj.nodes : [];
+  const nodes: CardNode[] = [];
+  const ids = new Set<string>();
+  for (const item of list) {
+    const n = item as Partial<CardNode> & { fields?: unknown };
+    if (!n || typeof n !== "object") continue;
+    const type = String(n.type ?? "");
+    if (!schema.nodeTypes[type] || ids.has(String(n.id))) continue;
+    const pos = Array.isArray(n.pos) && n.pos.length === 2 ? n.pos : [40, 60];
+    const size =
+      Array.isArray(n.size) && Number(n.size[0]) > 0 && Number(n.size[1]) > 0
+        ? ([Number(n.size[0]), Number(n.size[1])] as [number, number])
+        : null;
+    const fontRaw = Number(n.font_size);
+    ids.add(String(n.id));
+    nodes.push({
+      id: String(n.id),
+      type,
+      pos: [Number(pos[0]) || 0, Number(pos[1]) || 0],
+      size,
+      // null / 缺失都当"没设字号"，别写成 0（往返要稳定）
+      font_size: n.font_size == null || !Number.isFinite(fontRaw) || fontRaw <= 0 ? null : fontRaw,
+      inputs: Number(n.inputs) || 0,
+      fields: { ...(typeof n.fields === "object" && n.fields ? n.fields : {}) } as Fields,
+      collapsed: Boolean(n.collapsed),
+      selected: false,
+    });
+  }
+  if (!nodes.length) return null;
+  const links: GraphLinkJSON[] = [];
+  for (const item of Array.isArray(obj.links) ? obj.links : []) {
+    const l = item as Partial<GraphLinkJSON>;
+    const src = String(l?.src ?? "");
+    const dst = String(l?.dst ?? "");
+    if (!ids.has(src) || !ids.has(dst) || src === dst) continue;
+    links.push({ src, dst, port: Number(l?.port) || 0 });
+  }
+  return { nodes, links };
+}
+
 /**
  * 选中的这些卡片要复制哪些：**选中的现成卡片 + 选中的角色/武器域里的内容**。
  *

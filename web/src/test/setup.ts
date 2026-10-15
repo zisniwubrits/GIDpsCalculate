@@ -60,6 +60,23 @@ if (typeof document.execCommand !== "function") {
   document.execCommand = (() => true) as typeof document.execCommand;
 }
 
+// jsdom 没有 navigator.clipboard：补一个"真的会记住内容"的假剪贴板。
+// 粘贴卡片走的是系统剪贴板里的 JSON（可跨页面），所以测试必须能写入再读回来。
+const fakeClipboard = { text: "" };
+Object.defineProperty(navigator, "clipboard", {
+  configurable: true,
+  value: {
+    writeText: async (t: string) => {
+      fakeClipboard.text = String(t);
+    },
+    readText: async () => fakeClipboard.text,
+  },
+});
+/** 给测试用：清空这份假剪贴板（beforeEach 里调，免得用例互相串） */
+(globalThis as unknown as { __clearFakeClipboard?: () => void }).__clearFakeClipboard = () => {
+  fakeClipboard.text = "";
+};
+
 // React Flow 依赖 offsetWidth/offsetHeight 判断节点是否有尺寸（jsdom 恒为 0，
 // 会让节点被标记 visibility:hidden，从而被 RTL 视为不可访问）。
 const sizeOf = (el: Element, axis: "w" | "h"): number => {

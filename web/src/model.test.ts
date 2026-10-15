@@ -38,6 +38,8 @@ import {
   cardsBlockingHide,
   cardsHidden,
   cardsInside,
+  clipboardFromText,
+  clipboardToText,
   collectClipboard,
   duplicateRoleNames,
   pasteClipboard,
@@ -846,7 +848,7 @@ describe("卡片 / 域的复制粘贴", () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it("粘贴的域撞名就加序号（火神 → 火神_2 → 火神_3），不撞名不动", () => {
+  it("撞名就加序号（火神 → 火神_2 → 火神_3），不撞名不动", () => {
     const nodes = scene();
     const payload = collectClipboard(nodes, []);
     const pastedRole = (list: CardNode[]) =>
@@ -864,5 +866,45 @@ describe("卡片 / 域的复制粘贴", () => {
     // 名字已经带 _2 时先剥掉再加，不会滚成 火神_2_2
     expect(uniqueRoleName("火神_2", ["火神", "火神_2"])).toBe("火神_3");
     expect(uniqueRoleName("辅助", ["火神"])).toBe("辅助");
+  });
+
+  it("剪贴板 JSON：往返稳定，且能跨页面用（纯文本进、卡片包出）", () => {
+    const nodes = scene();
+    const payload = collectClipboard(nodes, [{ src: "c1", dst: "c2", port: 0 }]);
+    const text = clipboardToText(payload);
+    // 是一段能直接看懂的 JSON，带标记，方便识别"这是卡片包"
+    expect(text.startsWith("{")).toBe(true);
+    expect(JSON.parse(text).app).toBe("GenshinDamageCalc:cards");
+    const back = clipboardFromText(text, schema);
+    expect(back?.nodes.map((n) => n.id).sort()).toEqual(["c1", "c2", "r1"]);
+    expect(back?.links).toEqual([{ src: "c1", dst: "c2", port: 0 }]);
+    // 域的关键字段跟着走（名字、面板）
+    const role = back?.nodes.find((n) => isNamespaceNode(n));
+    expect(role?.fields.role_name).toBe("火神");
+    // 往返两遍内容一致（稳定）
+    expect(clipboardToText(back as typeof payload)).toBe(text);
+  });
+
+  it("剪贴板里不是我们的 JSON（普通文本 / 坏 JSON / 未知卡片类型）→ 一律拒绝", () => {
+    expect(clipboardFromText("随便一段文字", schema)).toBeNull();
+    expect(clipboardFromText("{不是合法 json", schema)).toBeNull();
+    expect(clipboardFromText("{}", schema)).toBeNull();
+    expect(clipboardFromText(JSON.stringify({ app: "别的程序", nodes: [] }), schema)).toBeNull();
+    // 标记对、但卡片类型不认识 → 没有可用卡片，也拒绝
+    expect(
+      clipboardFromText(JSON.stringify({ app: "GenshinDamageCalc:cards", nodes: [{ id: "x", type: "不存在的类型" }] }), schema),
+    ).toBeNull();
+    // 混着坏条目：好的留下、坏的跳过、悬空连线丢掉
+    const mixed = JSON.stringify({
+      app: "GenshinDamageCalc:cards",
+      nodes: [
+        { id: "a", type: "dmg", pos: [0, 0], fields: {} },
+        { id: "b", type: "不认识", pos: [10, 10], fields: {} },
+      ],
+      links: [{ src: "a", dst: "b", port: 0 }],
+    });
+    const back = clipboardFromText(mixed, schema);
+    expect(back?.nodes.map((n) => n.id)).toEqual(["a"]);
+    expect(back?.links).toEqual([]);
   });
 });

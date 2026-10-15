@@ -20,7 +20,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { fetchStorage, health, openProject, saveProject, saveReport } from "./api";
-import { copyText } from "./clipboard";
+import { copyText, readText } from "./clipboard";
 import CardNode, {
   ROLE_BOX_COLLIDING_STYLE,
   type CardData,
@@ -48,6 +48,8 @@ import {
   cardsBlockingHide,
   cardsHidden,
   cardsInside,
+  clipboardFromText,
+  clipboardToText,
   collectClipboard,
   connect,
   duplicateRoleNames,
@@ -649,12 +651,11 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
   const onCopy = useCallback((id: string) => copyNodeValue(id), [copyNodeValue]);
 
   // -- 卡片 / 域的复制粘贴（Ctrl+C / Ctrl+V）------------------------------
-  /** 剪贴板：卡片包（域则连域容器一起），只在本次会话内有效 */
+  /** 内存里那一份（剪贴板读不到时兜底；正常路径是系统剪贴板里的 JSON） */
   const cardClipboard = useRef<ClipboardPayload | null>(null);
 
-  /** Ctrl+C：选中的卡片 → 卡片；选中的角色/武器域 → 域 + 域内卡片 + 域内连线 */
-  const doCopyCards = useCallback(() => {
-    const payload = collectClipboard(nodes, links);
+  /** 把一包卡片写进**系统剪贴板**（JSON）+ 内存兜底：Ctrl+C 与右键「复制…域」共用 */
+  const copyCards = useCallback((payload: ClipboardPayload) => {
     if (!payload.nodes.length) {
       setToast("先选中卡片或角色/武器域，再 Ctrl+C");
       return;
@@ -662,14 +663,26 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
     cardClipboard.current = payload;
     const roles = payload.nodes.filter(isNamespaceNode).length;
     const cards = payload.nodes.length - roles;
-    setToast(
+    const what =
       roles && cards
-        ? `已复制 ${roles} 个域 + ${cards} 张卡片（Ctrl+V 粘贴）`
+        ? `${roles} 个域 + ${cards} 张卡片`
         : roles
-          ? `已复制 ${roles} 个域（Ctrl+V 粘贴）`
-          : `已复制 ${cards} 张卡片（Ctrl+V 粘贴）`,
+          ? `${roles} 个域`
+          : `${cards} 张卡片`;
+    // 序列化成 JSON 写进系统剪贴板：换个页面 / 换个浏览器也能粘（用户要求）
+    void copyText(clipboardToText(payload)).then((ok) =>
+      setToast(
+        ok
+          ? `已复制 ${what}（也可到别的页面 Ctrl+V）`
+          : `已复制 ${what}（剪贴板写入失败，仅本页可粘贴）`,
+      ),
     );
-  }, [nodes, links]);
+  }, []);
+
+  /** Ctrl+C：选中的卡片 → 卡片；选中的角色/武器域 → 域 + 域内卡片 + 域内连线 */
+  const doCopyCards = useCallback(() => {
+    copyCards(collectClipboard(nodes, links));
+  }, [nodes, links, copyCards]);
 
   /** Ctrl+Shift+C：把选中卡片的输出数值复制成文本（原来的"复制数值"）。 */
   const doCopyValues = useCallback(() => {
@@ -690,11 +703,13 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
     void copyText(text).then((ok) => setToast(ok ? `已复制数值：${text}` : "复制失败"));
   }, [nodes, results]);
 
-  /** Ctrl+V：把剪贴板里的卡片贴到一块空白位置（新 id、内部连线重建） */
-  const doPasteCards = useCallback(() => {
-    const payload = cardClipboard.current;
+  /** Ctrl+V：优先读**系统剪贴板**里的卡片 JSON（可跨页面/跨浏览器），读不到就用内存那份 */
+  const doPasteCards = useCallback(async () => {
+    const text = await readText();
+    const fromClipboard = text ? clipboardFromText(text, schema) : null;
+    const payload = fromClipboard ?? cardClipboard.current;
     if (!payload || !payload.nodes.length) {
-      setToast("剪贴板里没有卡片（先选中再 Ctrl+C）");
+      setToast("剪贴板里没有卡片（先在画布上选中卡片或域，按 Ctrl+C）");
       return;
     }
     apply((s) => {
@@ -703,14 +718,14 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
     });
     const roles = payload.nodes.filter(isNamespaceNode).length;
     const cards = payload.nodes.length - roles;
-    setToast(
+    const what =
       roles && cards
-        ? `已粘贴 ${roles} 个域 + ${cards} 张卡片`
+        ? `${roles} 个域 + ${cards} 张卡片`
         : roles
-          ? `已粘贴 ${roles} 个域`
-          : `已粘贴 ${cards} 张卡片`,
-    );
-  }, [apply]);
+          ? `${roles} 个域`
+          : `${cards} 张卡片`;
+    setToast(`已粘贴 ${what}${fromClipboard ? "" : "（来自本页缓存）"}`);
+  }, [apply, schema]);
 
   const setFontSize = useCallback(
     (id: string, value: number | null) => {
@@ -843,17 +858,13 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
         label: spec.weapon_card ? "设置武器名…" : "设置角色名…",
         onClick: () => setRoleNameDialog(menu.id),
       });
-      // 复制这个域（含域内卡片与连线）：选中它再 Ctrl+C 也行，这里给个入口
+      // 复制这个域（含域内卡片与连线）：等价于"只选中它再 Ctrl+C"（同样写系统剪贴板）
       items.push({
         label: spec.weapon_card ? "复制武器域" : "复制角色域",
-        onClick: () => {
-          const payload = collectClipboard(
-            nodes.map((n) => ({ ...n, selected: n.id === menu.id })),
-            links,
-          );
-          cardClipboard.current = payload;
-          setToast("已复制这个域（含域内卡片与连线），Ctrl+V 粘贴");
-        },
+        onClick: () => copyCards(collectClipboard(
+          nodes.map((n) => ({ ...n, selected: n.id === menu.id })),
+          links,
+        )),
       });
       if (!spec.weapon_card) {
         items.push({ label: "角色面板…", onClick: () => setPanelDialog(menu.id) });
