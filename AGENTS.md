@@ -82,7 +82,7 @@ git commit -m "feat: 简述这个功能"
 | `web/src/model.ts` | 画布模型纯函数（落位、对齐、预设、JSON 往返）——业务规则放这里，方便单测 |
 | `web/src/components/` | 卡片、连线、表格、右键菜单、弹窗、侧栏、工具栏 |
 | `web/src/state/` | 撤销重做、后端请求、localStorage 持久化 |
-| `test_damage.py` / `test_graph.py` / `test_server.py` / `test_storage.py` / `test_build_check.py` / `test_launcher.py` | 后端与启动器测试（`python -m pytest`） |
+| `test_damage.py` / `test_graph.py` / `test_role_namespace.py` / `test_server.py` / `test_storage.py` / `test_build_check.py` / `test_launcher.py` | 后端与启动器测试（`python -m pytest`） |
 | `web/src/**/*.test.ts(x)` | 前端测试（`pnpm test`） |
 | `private/` | 个人存档与笔记，**已被 .gitignore 忽略，不要提交** |
 
@@ -100,7 +100,14 @@ git commit -m "feat: 简述这个功能"
   前端菜单与卡片渲染**无需改动**。同时补 `test_graph.py` 用例。
 - 改动画布结构（节点、连线、尺寸、缩放、字段）时，必须同步
   `Graph.to_dict()` / `Graph.from_dict()`，保证工程 JSON 可往返（且与旧 tkinter 工程兼容）。
-- 变量求值顺序不要随意改：①变量卡片定义 → ②结果卡片三元组 → ③变量卡片再解析一轮（可引用结果变量，同名以结果卡片为准）。
+- 变量求值顺序不要随意改（完整顺序与理由见 `genshin_dmg/graph.py` 的 `Graph.evaluate` docstring，
+  两处必须保持一致）：①「变量」卡片定义 → ②「★结果」卡片三元组 → ③「赋值变量」卡片（显式连线赋值）
+  → ④「变量」卡片再解析一轮（可引用 ②③，`locked` 保护）→ ⑤「角色 / 武器」卡片的面板宏（`角色::宏`）
+  → ⑥ 拐力与生效值（`own:: / out:: / in::` 子命名空间）→ ⑦ 补算引用了 `in:: / own::` 的定义
+  → ⑧ 逐节点求值。
+  同名优先级：赋值变量卡 > ★结果卡三元组 > 变量卡片；**角色面板宏覆盖同名全局变量**。
+  拐力来源取「拐力生效前」的自身值快照，所以拐力不会顺着拐力传递；
+  带角色归属的「★结果 / 赋值变量」卡片登记进该角色的命名空间（`角色::名字`）。
 
 ### 前端（TypeScript / React）
 
