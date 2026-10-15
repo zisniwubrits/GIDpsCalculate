@@ -181,7 +181,13 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
   const [showHelp, setShowHelp] = useState(false);
   const [selectedEdge, setSelectedEdge] = useState<string | null>(null);
   const [hoverId, setHoverId] = useState<string | null>(null);
+  /** 轻提示：显示 5 秒后自动消失（点一下也能立刻关掉） */
   const [toast, setToast] = useState("");
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(""), 5000);
+    return () => clearTimeout(timer);
+  }, [toast]);
   const rf = useReactFlow<CardRFNode, CardRFEdge>();
   const { zoom: liveZoom } = useViewport();
   const lastSignature = useRef<string | null>(null);
@@ -669,14 +675,10 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
         : roles
           ? `${roles} 个域`
           : `${cards} 张卡片`;
-    // 序列化成 JSON 写进系统剪贴板：换个页面 / 换个浏览器也能粘（用户要求）
-    void copyText(clipboardToText(payload)).then((ok) =>
-      setToast(
-        ok
-          ? `已复制 ${what}（也可到别的页面 Ctrl+V）`
-          : `已复制 ${what}（剪贴板写入失败，仅本页可粘贴）`,
-      ),
-    );
+    // 序列化成 JSON 写进系统剪贴板（静默完成，不再提示"可到别的页面粘贴"）
+    void copyText(clipboardToText(payload)).then((ok) => {
+      if (!ok) setToast(`已复制 ${what}（剪贴板写入失败，仅本页可粘贴）`);
+    });
   }, []);
 
   /** Ctrl+C：选中的卡片 → 卡片；选中的角色/武器域 → 域 + 域内卡片 + 域内连线 */
@@ -1306,7 +1308,13 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
       ) : null}
 
       {toast ? (
-        <button type="button" className="toast" onClick={() => setToast("")}>
+        <button
+          type="button"
+          className="toast"
+          data-testid="toast"
+          title="点一下立刻关掉（不点的话 5 秒后自动消失）"
+          onClick={() => setToast("")}
+        >
           {toast}
         </button>
       ) : null}
