@@ -963,8 +963,8 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
             type: MarkerType.ArrowClosed,
             width: 14,
             height: 14,
-            // 拐力箭头也用蓝色（用户要求）；靠虚线区分它不是伤害连线
-            color: "#2f6fa7",
+            // 拐力箭头：浅蓝（与伤害连线的主蓝区分；用户要求不用虚线）
+            color: "#7fa8cc",
           },
             data: {
               src: l.src,

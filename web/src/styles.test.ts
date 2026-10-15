@@ -270,11 +270,21 @@ describe("角色容器面板", () => {
     expect(inLeft + outLeft).toBe(100);             // 关于 50% 对称
   });
 
-  it("拐力箭头画成蓝色虚线，与伤害连线区分（不用暖色）", () => {
+  it("拐力箭头用浅蓝实线，与伤害连线区分（不用虚线、不用暖色）", () => {
     const body = ruleBody(".react-flow__edge-path.card-edge-buff");
-    expect(body).toMatch(/stroke-dasharray/);
-    expect(body).toMatch(/stroke:\s*var\(--link\)/);
+    // 用户口径：不用虚线，改用浅一点的蓝
+    expect(body).not.toMatch(/stroke-dasharray/);
+    expect(body).toMatch(/stroke:\s*var\(--link-soft\)/);
     expect(body).not.toMatch(/--warn/);
+    // 浅蓝要比主蓝淡（亮度更高），否则区分不出来
+    const css = loadStyles();
+    const soft = /--link-soft:\s*(#[0-9a-f]{6})/i.exec(css) ?? [];
+    const main = /--link:\s*(#[0-9a-f]{6})/i.exec(css) ?? [];
+    const lum = (hex: string) => {
+      const n = Number.parseInt(hex.slice(1), 16);
+      return ((n >> 16) & 255) + ((n >> 8) & 255) + (n & 255);
+    };
+    expect(lum(soft[1])).toBeGreaterThan(lum(main[1]));
   });
 });
 

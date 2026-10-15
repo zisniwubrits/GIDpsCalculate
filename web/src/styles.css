@@ -3,6 +3,8 @@
   --accent: #2f6fa7;
   --accent-hot: #0b57d0;
   --link: #2f6fa7;
+  /* 拐力箭头用的浅蓝：比主蓝淡一档，与伤害连线区分（不用虚线也能看出来） */
+  --link-soft: #7fa8cc;
   --link-dim: #c3ced9;
   --line: #d8dee6;
   --text: #22303c;
@@ -764,11 +766,10 @@ textarea:focus {
   stroke-width: 1.5;
 }
 
-/* 拐力箭头（角色标签 → 角色标签）：**蓝色虚线**（用户要求不要暖色），
-   一眼区别于伤害连线的实线 */
+/* 拐力箭头（角色/武器 → 角色）：**浅一点的蓝色实线**（用户要求：不用虚线，
+   用浅蓝——比伤害连线的主蓝更淡，一眼能区分，也不用靠虚线） */
 .react-flow__edge-path.card-edge-buff {
-  stroke: var(--link);
-  stroke-dasharray: 7 5;
+  stroke: var(--link-soft);
   stroke-width: 2;
 }
 
