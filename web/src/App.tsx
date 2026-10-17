@@ -1381,6 +1381,11 @@ function tableFor(
     const t = schema.tables.relic;
     return { header: t.header, rows: t.rows ?? [] };
   }
+  if (spec.table === "matrix") {
+    // 后端已经把整张表算好了（第一行是表头）：见 genshin_dmg/matrix.py
+    const rows = results[node.id]?.rows ?? [];
+    return { header: rows[0] ?? ["行 \\ 列"], rows: rows.slice(1) };
+  }
   return {
     header: schema.tables.vars.header,
     rows: results[node.id]?.rows ?? [["（暂无变量）", ""]],

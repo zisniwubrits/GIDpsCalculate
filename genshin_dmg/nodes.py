@@ -688,6 +688,18 @@ NODE_TYPES: dict = {
                    compute=_t_result, ctx_menu=True, hidden_fields=[
         _F(k, label, "") for k, label in RESULT_VAR_FIELDS
     ], fields=[]),
+    # 域对照表：行域 × 列域 的期望伤害矩阵（单元格由 matrix 模块现算，要读盘）
+    # 口径：每行 = 一个只含单域、且域内有 ★结果 的文件；每列 = 一个单域文件（拐力来源）；
+    # 左上角再选一个「固定拐力」域，对所有组合都加一次。
+    "matrix": dict(title="域对照表", label="域对照表", group="域", inputs=0,
+                   compute=_t_text, isolated=True, no_output=True, resizable=True,
+                   wide_fields=True, table="matrix", fields=[
+        _F("row_files", "行", "", "textbox"),
+        _F("col_files", "列", "", "textbox"),
+        _F("fixed_file", "固定拐力", "", "text"),
+    ], hidden_fields=[
+        _F("card_name", "卡片名", "", "text"),
+    ]),
 }
 
 

@@ -103,6 +103,10 @@
         {
           "type": "external",
           "label": "外部域"
+        },
+        {
+          "type": "matrix",
+          "label": "域对照表"
         }
       ]
     },
@@ -1377,6 +1381,59 @@
         "var_nc",
         "var_cr",
         "var_ex",
+        "card_name"
+      ]
+    },
+    "matrix": {
+      "type": "matrix",
+      "title": "域对照表",
+      "label": "域对照表",
+      "group": "域",
+      "inputs": 0,
+      "fields": [
+        {
+          "key": "row_files",
+          "label": "行",
+          "default": "",
+          "kind": "textbox"
+        },
+        {
+          "key": "col_files",
+          "label": "列",
+          "default": "",
+          "kind": "textbox"
+        },
+        {
+          "key": "fixed_file",
+          "label": "固定拐力",
+          "default": "",
+          "kind": "text"
+        }
+      ],
+      "defaults": {
+        "row_files": "",
+        "col_files": "",
+        "fixed_file": "",
+        "card_name": ""
+      },
+      "isolated": true,
+      "no_output": true,
+      "resizable": true,
+      "wide_fields": true,
+      "bare": false,
+      "plain": false,
+      "copyable": false,
+      "font_menu": false,
+      "vars_card": false,
+      "weapon_card": false,
+      "role_card": false,
+      "external_domain": false,
+      "ctx_menu": false,
+      "has_factor": false,
+      "sink": false,
+      "table": "matrix",
+      "hidden_fields": [
+        "card_name",
         "card_name"
       ]
     }

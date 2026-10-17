@@ -301,6 +301,9 @@ class Graph:
         self._card_stack: set = set()
         # 拐力：{目标角色: {面板宏: 加总值}}（每次求值由 buff_sources 重算）
         self.buffs: dict = {}
+        # 外部注入的拐力 {目标角色: {名字: 值}}：**由调用方在求值前设置**，求值不重置。
+        # 目前只有「域对照表」用它（把某列域的 out:: + 固定拐力域加成到行角色上）。
+        self.extra_buffs: dict = {}
         # 拐力生效后的面板值 {目标角色: {面板宏: 自身+拐力}}，用于**覆盖式**注入
         # （覆盖而不是相加，保证不管注入几次都不会重复计算）
         self._buff_totals: dict = {}
@@ -797,6 +800,11 @@ class Graph:
         * 顺带刷新 ``own`` / ``out`` / ``in`` 三个子命名空间
         """
         self.buffs = self.buff_sources(own)
+        # 外部注入的拐力（域对照表用）：并进同一份 buffs，后面算 in:: 时自然生效
+        for role, grants in (self.extra_buffs or {}).items():
+            cur = self.buffs.setdefault(role, {})
+            for name, val in (grants or {}).items():
+                cur[name] = cur.get(name, 0.0) + float(val)
         self._buff_stats = self.buff_stats(own)
         # 面板属性不写进变量表（不自动计算）：拐力只通过 in:: 暴露
         self._apply_sub_namespaces(own)
@@ -1183,6 +1191,21 @@ class Graph:
                     panelFields=[], buffed=False)
         if node.type == "vartable":
             info["rows"] = self.variable_rows()
+            return info
+        if spec.get("table") == "matrix":
+            # 域对照表：行文件 × 列文件 的期望伤害矩阵（读盘 + 逐格求值，放这里算）
+            from genshin_dmg import matrix as _matrix
+
+            table = _matrix.build(
+                node.fields.get("row_files") or "",
+                node.fields.get("col_files") or "",
+                node.fields.get("fixed_file") or "",
+                self.base_dir,
+                self.extra_bases,
+            )
+            info["rows"] = table
+            info["display"] = "共 %d 行 × %d 列" % (
+                max(0, len(table) - 1), max(0, len(table[0]) - 1) if table else 0)
             return info
         if spec.get("vars_card"):
             # 只列**本卡片定义**的变量（原来这里打印全局总览，用户要求改掉）；
