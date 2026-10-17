@@ -132,6 +132,36 @@ class TestMatrix(unittest.TestCase):
         out = g.evaluate()
         self.assertEqual(out["nodes"]["m1"]["rows"][1][0], "行.甲")
 
+    def test_row_and_col_ports_only_affect_that_row_and_col(self):
+        """行接入点只加那一行、列接入点只加那一列，与左上角的全局拐力相加。"""
+        row1 = self.make("行1.json", "甲", "atk = 1000 + in::atk")
+        row2 = self.make("行2.json", "乙", "atk = 1000 + in::atk")
+        col1 = self.buff("列1.json", "拐1", "out::atk = 8")     # 列文件自己也声明了一份
+        col2 = self.buff("列2.json", "拐2", "out::atk = 0")
+
+        g = Graph()
+        g.add(GraphNode("r_g", "role", fields={"role_name": "全", "panel": "out::atk = 1"}))
+        g.add(GraphNode("r_r", "role", fields={"role_name": "行", "panel": "out::atk = 2"}))
+        g.add(GraphNode("r_c", "role", fields={"role_name": "列", "panel": "out::atk = 4"}))
+        g.add(GraphNode("m1", "matrix", fields={
+            "row_files": "%s\n%s" % (row1, row2),
+            "col_files": "%s\n%s" % (col1, col2),
+            "fixed_file": "",
+        }))
+        # 端口：0 = 全局；1 = 第 1 行；1000+1 = 第 2 列
+        g.links.append(Link("r_g", "m1", 0))
+        g.links.append(Link("r_r", "m1", 1))
+        g.links.append(Link("r_c", "m1", 1001))
+        table = g.evaluate()["nodes"]["m1"]["rows"]
+        # 行1 列1：1000 + 1（全局）+ 2（行1）+ 8（列1 自己）= 1011
+        self.assertEqual(table[1][1], "1011.00")
+        # 行1 列2：1000 + 1 + 2 + 4（第 2 列的接入点）= 1007
+        self.assertEqual(table[1][2], "1007.00")
+        # 行2 列1：1000 + 1 + 8 = 1009（行2 没接拐力）
+        self.assertEqual(table[2][1], "1009.00")
+        # 行2 列2：1000 + 1 + 4 = 1005
+        self.assertEqual(table[2][2], "1005.00")
+
     def test_parse_spec_reuses_external_syntax(self):
         self.assertEqual(matrix.parse_spec("a.json::dds\nb.json"), [
             ("a.json", "dds"), ("b.json", ""),

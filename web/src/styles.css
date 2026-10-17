@@ -718,6 +718,17 @@ textarea:focus {
   height: 1px;
 }
 
+/* 接入点要贴在**各自那一格**的边缘：th 需要成为定位上下文，
+   否则 handle 会按整张卡去算位置（以前就全挤在左上角） */
+.mx-table th {
+  position: relative;
+}
+
+.mx-port {
+  width: 8px;
+  height: 8px;
+}
+
 .mx-table th,
 .mx-table td {
   border: 1px solid var(--line);

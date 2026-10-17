@@ -414,24 +414,41 @@ class Graph:
                     grants[macro] = grants.get(macro, 0.0) + val
         return out
 
-    def matrix_grants(self, base_vars: dict) -> dict:
-        """``{域对照表节点 id: {对外项名字: 加总值}}``：「外部域 / 角色 / 武器」指向
-        对照表**左上角**的箭头带来的固定拐力（对每个行 × 列都加一次，可多来源相加）。
+    # 「域对照表」的入端口编码（与前端 model.ts 的 matrixRowPort / matrixColPort 一致）：
+    #   0       = 左上角：对所有行 × 列都加
+    #   1..N    = 第 (port-1) 行：只加这一行
+    #   1000+j  = 第 j 列：只加这一列
+    MATRIX_COL_BASE = 1000
 
-        与 ``buff_sources`` 同一套来源规则（只读 ``out::``、多来源相加、不传递），
-        区别只是目标不是角色，而是「域对照表」卡片。
+    def matrix_grants(self, base_vars: dict) -> dict:
+        """``{域对照表 id: {"all": {...}, "rows": {i: {...}}, "cols": {j: {...}}}}``。
+
+        指到对照表**接入点**的拐力箭头：左上角 = 全局，行接入点 = 只作用那一行，
+        列接入点 = 只作用那一列（用户确认的口径：同一格三者相加）。
+        来源规则与 ``buff_sources`` 同一套（只读 ``out::``、多来源相加、不传递）。
         """
         out: dict = {}
+
+        def bucket(node_id: str) -> dict:
+            return out.setdefault(node_id, {"all": {}, "rows": {}, "cols": {}})
+
         for link in self.links:
             src = self.nodes.get(link.src)
             dst = self.nodes.get(link.dst)
             if src is None or dst is None or dst.type != "matrix":
                 continue                        # 目标只能是「域对照表」
-            grants = out.setdefault(dst.id, {})
+            port = int(getattr(link, "port", 0) or 0)
+            grants = bucket(dst.id)
+            if port >= self.MATRIX_COL_BASE:
+                target = grants["cols"].setdefault(port - self.MATRIX_COL_BASE, {})
+            elif port > 0:
+                target = grants["rows"].setdefault(port - 1, {})
+            else:
+                target = grants["all"]
             if self._is_external(src):
                 for macro, val in self._external_grants(src).items():
                     if val:
-                        grants[macro] = grants.get(macro, 0.0) + float(val)
+                        target[macro] = target.get(macro, 0.0) + float(val)
                 continue
             if not self._is_ns(src):
                 continue                        # 源＝角色 / 武器 / 外部域
@@ -441,10 +458,9 @@ class Graph:
             for macro in self._out_names(base_vars, role_from):
                 val = self.role_out_value(base_vars, role_from, macro)
                 if val:
-                    grants[macro] = grants.get(macro, 0.0) + val
+                    target[macro] = target.get(macro, 0.0) + val
         return out
 
-    # -- 外部域（跨文件读拐力）------------------------------------------------
     @staticmethod
     def _is_external(node) -> bool:
         """这张卡是不是「外部域」（按 schema 标记，别在求值里硬编码类型名）。"""

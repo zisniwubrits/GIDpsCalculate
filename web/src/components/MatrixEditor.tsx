@@ -14,9 +14,13 @@
  * 永远留一条）；两边共用 model 里的 sourceLines / setSourceLine / insertSourceLine /
  * removeSourceLine，行为不会出现两套。
  */
+import { Handle, Position } from "@xyflow/react";
 import { useEffect, useRef, useState } from "react";
 import {
+  MATRIX_PORT_ALL,
   insertSourceLine,
+  matrixColPort,
+  matrixRowPort,
   removeSourceLine,
   setSourceLine,
   sourceLines,
@@ -112,6 +116,13 @@ export default function MatrixEditor({
       <thead>
         <tr>
           <th className="mx-corner">
+            {/* 左上角接入点：拖到这里对所有行 × 列都加（全局固定拐力） */}
+            <Handle
+              id={`in-${MATRIX_PORT_ALL}`}
+              type="target"
+              position={Position.Left}
+              className="port port-in mx-port mx-port-all"
+            />
             {/* 左上角：固定拐力（可多选，增删与「外部域」同一套） */}
             <ExternalSources
               id={`${id}-fixed`}
@@ -123,6 +134,13 @@ export default function MatrixEditor({
           </th>
           {colLines.map((_line, index) => (
             <th key={index} className="mx-col" title={header[index + 1] ?? undefined}>
+              {/* 列接入点：拖到这里只作用于**这一列** */}
+              <Handle
+                id={`in-${matrixColPort(index)}`}
+                type="target"
+                position={Position.Top}
+                className="port port-in mx-port mx-port-col"
+              />
               {renderInput("col", index)}
             </th>
           ))}
@@ -131,7 +149,16 @@ export default function MatrixEditor({
       <tbody>
         {rowLines.map((_line, index) => (
           <tr key={index}>
-            <th className="mx-row">{renderInput("row", index)}</th>
+            <th className="mx-row">
+              {/* 行接入点：拖到这里只作用于**这一行** */}
+              <Handle
+                id={`in-${matrixRowPort(index)}`}
+                type="target"
+                position={Position.Left}
+                className="port port-in mx-port mx-port-row"
+              />
+              {renderInput("row", index)}
+            </th>
             {colLines.map((_c, ci) => (
               <td key={ci} className="mx-cell">
                 {body[index]?.[ci + 1] ?? "—"}

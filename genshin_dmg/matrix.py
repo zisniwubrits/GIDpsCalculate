@@ -80,8 +80,13 @@ def build(rows_text: str, cols_text: str, fixed_text: str,
     fixed = parse_spec(fixed_text)
     fixed_grants: dict = {}
     fixed_labels: list = []
-    # 指到卡片左上角的箭头（来自外部域 / 角色 / 武器域）也算固定拐力，先并进来
-    for name, val in (arrow_grants or {}).items():
+    # 指到卡片接入点的箭头（来自外部域 / 角色 / 武器域）也当固定拐力：
+    #   all = 左上角（全局）、rows[i] = 第 i 行、cols[j] = 第 j 列；同一格三者相加
+    arrow = arrow_grants or {}
+    all_grants = dict((arrow.get("all") or {}) if isinstance(arrow, dict) else {})
+    row_grants = (arrow.get("rows") or {}) if isinstance(arrow, dict) else {}
+    col_grants = (arrow.get("cols") or {}) if isinstance(arrow, dict) else {}
+    for name, val in all_grants.items():
         fixed_grants[name] = fixed_grants.get(name, 0.0) + float(val)
     # 固定拐力可以多选（用户要求）：多来源同名**相加**，角标把名字列出来
     for path, role in fixed:
@@ -102,17 +107,21 @@ def build(rows_text: str, cols_text: str, fixed_text: str,
         header.append(_source_label(path, actual) if full and actual else DASH)
 
     table = [header]
-    for path, role in rows:
+    for row_index, (path, role) in enumerate(rows):
         full, row_role, _own = _load(path, role, base_dir, extra_bases)
         row_label = _source_label(path, row_role) if full and row_role else DASH
         line = [row_label if row_label != DASH else _source_label(path, role)]
-        for _cfull, _crole, grants in col_loaded:
+        for col_index, (_cfull, _crole, grants) in enumerate(col_loaded):
             if not full or not row_role or not _crole:
                 line.append(DASH)
                 continue
             merged = dict(fixed_grants)
-            for name, val in grants.items():
-                merged[name] = merged.get(name, 0.0) + float(val)
+            # 行接入点 / 列接入点带来的拐力：只作用于这一行 / 这一列
+            for extra in (row_grants.get(row_index) or {},
+                          col_grants.get(col_index) or {},
+                          grants):
+                for name, val in extra.items():
+                    merged[name] = merged.get(name, 0.0) + float(val)
             got = _expected(full, row_role, merged)
             line.append(_fmt(got))
         table.append(line)

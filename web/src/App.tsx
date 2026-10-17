@@ -78,6 +78,7 @@ import {
   type AlignMode,
   type ClipboardPayload,
   type SizeOf,
+  isMatrixNode,
 } from "./model";
 import { loadLocal, saveLocal } from "./state/persistence";
 import { useEvaluate, useHelp, useSchema } from "./state/useBackend";
@@ -603,12 +604,20 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
       if (!source || !target) return;
       const port = parsePort(conn.targetHandle);
       const buff = isBuffPairCb(source, target);
+      const dstIsMatrix = isMatrixNode(
+        nodes.find((n) => n.id === target) ?? ({ type: "" } as CardNodeModel),
+      );
       apply((s) => {
         const targetNode = s.nodes.find((n) => n.id === target);
         if (!targetNode) return s;
         // 拐力箭头（角色→角色）：端口与环路都不按伤害链的规则来
         // （拐力只作用于直接目标、不传递，所以成环也没关系）
-        if (buff) return { ...s, links: connect(s.links, source, target, 0) };
+        if (buff) {
+          // 拐力箭头：目标是角色 → 端口恒为 0（角色只有一个入点）；
+          // 目标是「域对照表」→ 保留点到的那个接入点（左上角 / 某行 / 某列）
+          const port = dstIsMatrix ? parsePort(conn.targetHandle) : 0;
+          return { ...s, links: connect(s.links, source, target, port) };
+        }
         if (port >= targetNode.inputs) return s;
         if (wouldCycle(s.links, source, target)) return s;
         return { ...s, links: connect(s.links, source, target, port) };
