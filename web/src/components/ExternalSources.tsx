@@ -56,14 +56,14 @@ export default function ExternalSources({
 
   // 聚焦只做一次：以前写在 ref 回调里、且 focusAt 用完不清，于是每次重渲染都会把
   // 光标抢回那一行 —— 表现就是"在别的行打字，光标跳到那一行末尾"。
+  // 现在只搬一次，而且**等新加的那一行渲染出来**再搬（元素还没到时留着，下次再来）。
   useEffect(() => {
     if (focusAt === null) return;
     const el = inputs.current[focusAt];
-    if (el) {
-      el.focus();
-      const end = el.value.length;
-      el.setSelectionRange(end, end);
-    }
+    if (!el) return;
+    el.focus();
+    const end = el.value.length;
+    el.setSelectionRange(end, end);
     setFocusAt(null);
   }, [focusAt, lines.length]);
 
