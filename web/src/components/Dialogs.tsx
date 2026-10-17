@@ -424,17 +424,11 @@ export function RoleNameDialog({ initialName, check, onSave, onClose }: RoleName
         onMouseDown={(e) => e.stopPropagation()}
       >
         <h2>设置角色名</h2>
-        <p className="modal-hint">
-          角色名用来给这个命名空间里的变量加前缀（写 <code>角色名::变量名</code> 引用），
-          所以不能带空格、<code>::</code> 或连续下划线；名字同样会被「拐力箭头」引用。
-          名字必须**唯一**，两个角色也不能重名。
-        </p>
         <label className="modal-row">
           <span>角色名</span>
           <input
             value={name}
             data-testid="role-name-input"
-            placeholder="例如 火神 / 主C / 辅助"
             autoFocus
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => {
