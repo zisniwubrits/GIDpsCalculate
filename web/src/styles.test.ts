@@ -331,6 +331,24 @@ describe("关键字高亮与页面图标", () => {
     expect(ruleBody(".mx-table thead")).toMatch(/height:\s*1px/);
   });
 
+  it("域对照表的接入点贴在自己那一格的边上（列头正中 / 行头左缘）", () => {
+    // 卡片通用的 .react-flow__handle.port-in 有 left: -6px，会把接入点顶到单元格右上角
+    // 甚至卡片外面 —— 这里必须是更具体的 3 类选择器才能盖住
+    const col = ruleBody(".react-flow__handle.mx-port.mx-port-col");
+    expect(col).toMatch(/left:\s*50%/);
+    expect(col).toMatch(/top:\s*0/);
+    expect(col).toMatch(/translate\(-50%, -50%\)/);
+
+    const row = ruleBody(".react-flow__handle.mx-port.mx-port-row");
+    expect(row).toMatch(/left:\s*0/);
+    expect(row).toMatch(/top:\s*50%/);
+
+    // 单元格要是定位上下文，否则 handle 会按整张卡算位置
+    expect(ruleBody(".mx-table th")).toMatch(/position:\s*relative/);
+    // 边缘留出空间，overflow:auto 才不会把骑在边线上的点裁掉
+    expect(ruleBody(".mx-wrap")).toMatch(/padding:/);
+  });
+
   it("页面用自己的图标，不用浏览器默认的那个", () => {
     const html = ["index.html", "web/index.html"]
       .map((p) => resolve(process.cwd(), p))

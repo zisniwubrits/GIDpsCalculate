@@ -701,6 +701,8 @@ textarea:focus {
   flex: 1 1 auto;
   min-height: 0;
   max-width: 100%;
+  /* 留出边缘：接入点是骑在单元格边线上的，overflow:auto 会把它们裁掉 */
+  padding: 6px 0 0 6px;
   overflow: auto;
 }
 
@@ -724,9 +726,32 @@ textarea:focus {
   position: relative;
 }
 
+/* 接入点按"点在自己那一格的边上"来摆：行接入点贴在行头的**左边缘、垂直居中**，
+   列接入点贴在列头的**上边缘、水平居中**。
+   选择器特意写成 3 个类：卡片通用样式里的 `.react-flow__handle.port-in { left: -6px }`
+   会把它顶到单元格右上角 / 卡片外面（用户报过），这里必须更具体才能盖住。 */
 .mx-port {
-  width: 8px;
-  height: 8px;
+  width: 9px;
+  height: 9px;
+  z-index: 5;
+}
+
+.react-flow__handle.mx-port.mx-port-row {
+  left: 0;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.react-flow__handle.mx-port.mx-port-all {
+  left: 0;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.react-flow__handle.mx-port.mx-port-col {
+  left: 50%;
+  top: 0;
+  transform: translate(-50%, -50%);
 }
 
 .mx-table th,
