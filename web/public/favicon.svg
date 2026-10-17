@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- 伤害计算器的图标：深蓝底 + 一柱上升的伤害条 + 星（★结果） -->
+  <rect width="32" height="32" rx="7" fill="#123a6b"/>
+  <rect x="6" y="18" width="4" height="8" rx="1" fill="#9fc3e8"/>
+  <rect x="13" y="13" width="4" height="13" rx="1" fill="#cfe2f6"/>
+  <rect x="20" y="8" width="4" height="18" rx="1" fill="#ffffff"/>
+  <path d="M24.5 5.2l1.1 2.3 2.5.3-1.8 1.7.4 2.5-2.2-1.2-2.2 1.2.4-2.5-1.8-1.7 2.5-.3z"
+        fill="#ffd35c"/>
+</svg>
