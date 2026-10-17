@@ -265,6 +265,15 @@ class Graph:
         # "自身"里（用户报的 own::month_dmg 累加了 in:: 就是这条）。这里记下定义
         # 那一刻算出来的值，``own::`` 只认它。
         self._own_values: dict = {}
+        # 同一个域里同名 ``out::`` 的**逐条贡献**：``out 全名键 -> {owner: 值}``。
+        #
+        # 用户口径：一个角色域里有两张变量卡都写 ``out::atk = 5``，对面收到的
+        # ``in::atk`` 应该是 10（求和），而不是"后写的覆盖前面的"。
+        # ``owner`` 是"哪张卡的第几行"，所以同一张卡被解析两轮（变量卡本来就会解析
+        # 两轮）时是**覆盖自己那份**，不会把一行算两次。
+        self._out_contrib: dict = {}
+        # 普通名里"只是 out:: 兜底来的"那些（同名 out:: 累加时要跟着刷新，见 _record_out）
+        self._out_defaulted: set = set()
         # 当时算不出来、等拐力就绪后再补算的定义（引用了 in::/own:: 等）
         self._deferred: list = []
 
@@ -428,16 +437,20 @@ class Graph:
         就是它）。认固定词表里的宏名；另外允许 ``out::名字`` 这种**自定义对外项**
         （名字合法即可，用于"面板外拐"：本角色没有该属性，但对外提供这份拐力）。
         值支持算式（在本角色作用域里求值）。
+
+        **武器没有面板**：它的 ``panel`` 字段一律忽略（只在变量卡里写 ``out::``）。
         """
         for node in self.nodes.values():
             if not self._is_ns(node):
                 continue
+            if self._is_weapon(node):
+                continue                    # 武器只有 out::（写在变量卡里），没有面板
             role = _valid_role(node.fields.get("role_name"))
             if not role:
                 continue
             token = _nodes.use_env(self.scoped_env(node, env, role=role))
             try:
-                for line in (node.fields.get("panel") or "").splitlines():
+                for index, line in enumerate((node.fields.get("panel") or "").splitlines()):
                     parsed = split_var_line(line)
                     if parsed is None:
                         continue
@@ -457,9 +470,17 @@ class Graph:
                         value = _nodes.eval_field(parsed[1])
                     except ValueError:
                         # 同变量卡片：可能是引用了 in::/own::（拐力算完才有）→ 等会儿补算
-                        self._defer("panel", key, parsed[1], node, role=role, name=macro)
+                        self._defer("panel", key, parsed[1], node, role=role, name=macro,
+                                    out=(kind == SUB_OUT), owner="p%d:%d" % (id(node), index))
                         continue                    # 算不出来的行忽略
-                    env[key] = value
+                    if kind == SUB_OUT:
+                        # 同名 out:: 在一个域里可以写多行 / 多张卡：求和后输出
+                        #（普通名若不是真定义，也一起刷新成总数）
+                        value = self._record_out(
+                            env, key, own_key, "p%d:%d" % (id(node), index), value
+                        )
+                    else:
+                        env[key] = value
                     # 记下"用户自己写的那个值"：own:: 只认它、且**先写的为准**
                     # （`atk_pct = 10` 与 `out::atk_pct = 40` 并存时，自身值仍是 10）；
                     # 自指定义不算（见 `_self_referential`）。
@@ -535,15 +556,50 @@ class Graph:
                     self.variables[prefix + SUB_IN + NS_JOIN + name] = inc
 
     # -- 延迟补算（引用了 in::/own:: 这类要等拐力才知道的名字）-----------------
-    def _defer(self, kind: str, key: str, expr: str, node, role=None, name=None) -> None:
+    def _defer(self, kind: str, key: str, expr: str, node, role=None, name=None,
+               out=False, owner=None) -> None:
         """记下一条"当时算不出来"的定义，等拐力/子命名空间就绪后补算。
 
         ``name`` 是这条定义的名字（不含角色前缀）：补算成功后要把结果记进
         "自身值"那张表（``_own_values``），``own::名字`` 才有正确的自身值。
+        ``out`` / ``owner`` 给 ``out::`` 用：补算成功后仍按"逐条贡献"累加（见
+        :meth:`_accumulate_out`），不能直接覆盖。
         """
         self._deferred.append(
-            dict(kind=kind, key=key, expr=expr, nid=node.id, role=role, name=name)
+            dict(kind=kind, key=key, expr=expr, nid=node.id, role=role, name=name,
+                 out=out, owner=owner)
         )
+
+    def _accumulate_out(self, env: dict, out_key: str, owner: str, value: float) -> float:
+        """把一条 ``out::名字 = 值`` 记进贡献表，返回**该名字当前的总数**并写进 ``env``。
+
+        用户口径：同一个域里多张卡各写一行 ``out::atk = 5``，对面应该收到 10。
+        ``owner`` 标明"哪张卡的第几行"，所以同一张卡被重复解析（变量卡解析两轮、
+        补算再来一遍）时只覆盖自己那条，不会重复累加。
+        """
+        terms = self._out_contrib.setdefault(out_key, {})
+        terms[owner] = float(value)
+        total = float(sum(terms.values()))
+        env[out_key] = total
+        return total
+
+    def _record_out(self, env: dict, out_key: str, plain_key: str, owner: str,
+                    value: float) -> float:
+        """记一条 ``out::`` 并同步"普通名"。
+
+        普通名的默认口径是"没单独定义自身值时，对外值同时就是自身值"。既然对外值
+        现在会随同名多行**累加**，这个默认值也得跟着刷新 —— 否则两张卡各写
+        ``out::atk = 5`` 时，``out::atk`` 是 10 而普通名 ``atk`` 还停在 5。
+        只要普通名被**真正的定义**占着（不是靠 out:: 兜底来的），就不动它。
+        """
+        total = self._accumulate_out(env, out_key, owner, value)
+        if not plain_key:
+            return total
+        if plain_key not in env:
+            self._out_defaulted.add(plain_key)
+        if plain_key in self._out_defaulted:
+            env[plain_key] = total
+        return total
 
     def _retry_deferred(self, env: dict, locked=()) -> None:
         """把延迟的定义再算一遍：能算出来的写进 env，仍算不出的继续留着。
@@ -570,8 +626,14 @@ class Graph:
             finally:
                 _nodes.reset_env(token)
             # 只更新普通名：own:: 的键在 _apply_sub_namespaces 里按"定义时的自身值"写，
-            # 这里不要碰它（原来把合成值写进去，会盖住 own:: 的语义）
-            env[item["key"]] = value
+            # 这里不要碰它（原来把合成值写进去，会盖住 own:: 的语义）。
+            # out:: 例外：同名多行要**累加**（见 _accumulate_out），不能直接覆盖。
+            if item.get("out"):
+                value = self._accumulate_out(
+                    env, item["key"], item.get("owner") or ("d" + str(item["nid"])), value
+                )
+            else:
+                env[item["key"]] = value
             # 定义拖到补算才成功时（如面板写 `X = in::X`），在这里补记"自身值"
             # （先写的为准、自指不算）；否则 own::X 会读成 0
             role = item.get("role") or ""
@@ -845,6 +907,8 @@ class Graph:
         self._deferred = []             # 本次求值里"当时算不出来"的定义（稍后补算）
         self._user_sub_ns = set()       # 本次求值里用户显式声明的 out:: 键
         self._own_values = {}           # 本次求值里各名字的"自身值"（own:: 只认它）
+        self._out_contrib = {}          # 本次求值里同名 out:: 的逐条贡献（求和用）
+        self._out_defaulted = set()     # 普通名里"只是 out:: 兜底来的"
         # 清掉上一次求值的运行时缓存：同一个 Graph 对象可能被反复求值
         # （测试里就是这样），残留的拐力值会串进新一轮的解析
         self.buffs = {}
@@ -1051,7 +1115,7 @@ class Graph:
                 continue
             token = _nodes.use_env(self.scoped_env(node, env))
             try:
-                for line in (node.fields.get("defs") or "").splitlines():
+                for index, line in enumerate((node.fields.get("defs") or "").splitlines()):
                     parsed = split_var_line(line)
                     if parsed is None:
                         continue
@@ -1077,9 +1141,16 @@ class Graph:
                     except ValueError:
                         # 引用 `in::`/`own::` 这类要等拐力算完才知道的名字时，
                         # 这里必然算不出来 —— 记下来等拐力就绪后补算（见 _retry_deferred）
-                        self._defer("var", key, parsed[1], node, role=role_here, name=base)
+                        self._defer("var", key, parsed[1], node, role=role_here, name=base,
+                                    out=(kind == SUB_OUT), owner="v%d:%d" % (id(node), index))
                         continue
-                    env[key] = value
+                    if kind == SUB_OUT:
+                        # 同一域里多张卡/多行 out:: 同名 → 求和（用户口径）
+                        value = self._record_out(
+                            env, key, env_key(display), "v%d:%d" % (id(node), index), value
+                        )
+                    else:
+                        env[key] = value
                     # 记下"用户自己写的那个值"：own:: 只认它、先写的为准、自指不算
                     own_key = env_key(qualify(base, role_here))
                     if (kind != SUB_OUT and own_key not in self._own_values
@@ -1087,10 +1158,6 @@ class Graph:
                         self._own_values[own_key] = value
                     if kind == SUB_OUT:
                         self._user_sub_ns.add(key)
-                        # 没另外定义自身值时，对外值同时就是自身值（"宏就是对外值"的默认）
-                        base_key = env_key(display)
-                        if base_key not in env:
-                            env[base_key] = value
                     # 同一张卡的后续行要能引用刚定义的变量：重建一次作用域
                     _nodes.use_env(self.scoped_env(node, env))
             finally:

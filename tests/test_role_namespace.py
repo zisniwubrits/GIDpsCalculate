@@ -810,9 +810,73 @@ class TestOutDeclarations(unittest.TestCase):
         g.add(GraphNode("c1", "calc", fields={"expr": "in::atk_pct"}, role="a"))
         self.assertEqual(g.evaluate()["nodes"]["c1"]["values"]["noncrit"], 40)
 
+class TestOutSum(unittest.TestCase):
+    """同一个域里同名 out:: 写多处要**求和**（用户口径）。
+
+    场景：一个角色域里两张变量卡都写 out::atk = 5，对面收到的 in::atk 应该是 10。
+    """
+
+    def build(self):
+        g = Graph()
+        g.add(GraphNode("ra", "role", fields={"role_name": "辅助"}))
+        g.add(GraphNode("rb", "role", fields={"role_name": "火神"}))
+        g.add(GraphNode("c1", "calc", fields={"expr": "in::atk"}, role="火神"))
+        g.add(GraphNode("c2", "calc", fields={"expr": "out::atk"}, role="辅助"))
+        g.add(GraphNode("c3", "calc", fields={"expr": "atk"}, role="辅助"))
+        g.links.append(Link("ra", "rb", 0))
+        return g
+
+    def read(self, g):
+        out = g.evaluate()["nodes"]
+        return (out["c1"]["values"]["noncrit"], out["c2"]["values"]["noncrit"],
+                out["c3"]["values"]["noncrit"])
+
+    def test_two_cards_same_name_sum(self):
+        g = self.build()
+        g.add(var_card("v1", "out::atk = 5", role="辅助"))
+        g.add(var_card("v2", "out::atk = 5", role="辅助"))
+        # 对面收到 10；本角色的 out:: 也是 10；普通名（没单独定义）跟着是 10
+        self.assertEqual(self.read(g), (10, 10, 10))
+
+    def test_single_card_is_not_double_counted(self):
+        """回归：变量卡本来会解析两轮，逐条贡献要按"哪张卡第几行"记账，不能翻倍。"""
+        g = self.build()
+        g.add(var_card("v1", "out::atk = 5", role="辅助"))
+        self.assertEqual(self.read(g), (5, 5, 5))
+
+    def test_two_lines_in_one_card_sum(self):
+        g = self.build()
+        g.add(var_card("v1", "out::atk = 5\nout::atk = 3", role="辅助"))
+        self.assertEqual(self.read(g), (8, 8, 8))
+
+    def test_card_plus_panel_sum(self):
+        g = self.build()
+        g.add(var_card("v1", "out::atk = 5", role="辅助"))
+        g.add(GraphNode("rp", "role", fields={"role_name": "辅助", "panel": "out::atk = 7"}))
+        self.assertEqual(self.read(g), (12, 12, 12))
+
+    def test_real_definition_still_wins_for_plain_name(self):
+        """普通名有真定义时不被 out 合计顶掉（自身值仍是自己写的那个）。"""
+        g = self.build()
+        g.add(var_card("v1", "atk = 100\nout::atk = 5", role="辅助"))
+        g.add(var_card("v2", "out::atk = 5", role="辅助"))
+        self.assertEqual(self.read(g), (10, 10, 100))
+
+    def test_different_names_stay_separate(self):
+        g = self.build()
+        g.add(var_card("v1", "out::atk = 5\nout::dmg = 30", role="辅助"))
+        g.add(GraphNode("c4", "calc", fields={"expr": "in::dmg"}, role="火神"))
+        out = g.evaluate()["nodes"]
+        self.assertEqual(out["c1"]["values"]["noncrit"], 5)    # in::atk
+        self.assertEqual(out["c4"]["values"]["noncrit"], 30)   # in::dmg
+        # OUT 统计里两个名字各一条，不会合并成一个数
+        stats = g.evaluate()["buffStats"]["辅助"]["out"]
+        self.assertEqual(sorted((r["macro"], r["value"]) for r in stats),
+                         [("atk", 5), ("dmg", 30)])
+
+
 class TestCustomOutNames(unittest.TestCase):
     """out:: 后面可以是**任意名字**（不限于面板宏），对面用 in::那个名字 收到。"""
-
     def test_custom_out_name_is_granted(self):
         g = Graph()
         g.add(GraphNode("ra", "role", fields={"role_name": "辅助"}))
