@@ -27,6 +27,8 @@ const fakeBackend = {
   schemaOverride: null as Schema | null,
   /** 需要指定教程内容时用它（默认给一节「基本概念」） */
   helpOverride: null as null | { text: string; sections: string[] },
+  /** 需要模拟后端告警（如外部域互相引用）时给它 */
+  warnings: null as string[] | null,
 };
 
 const jsonResponse = (data: unknown) =>
@@ -86,7 +88,9 @@ function evaluateStub(body: GraphJSON): EvaluateResult {
       })),
     nodes,
     chainTypes: [],
-    warnings: resultNode ? [] : ["没有「结果」卡片：请加一张 ★结果 卡片并把链条接到它上面"],
+    warnings: fakeBackend.warnings ?? (resultNode
+      ? []
+      : ["没有「结果」卡片：请加一张 ★结果 卡片并把链条接到它上面"]),
     // 「角色面板」弹窗要用的拐力统计（固定造一份：辅助把 攻击%40 拐给火神）
     buffStats: {
       辅助: { out: [{ macro: "atk_pct", label: "攻击%", value: 40, role: "火神" }], in: [] },
@@ -178,6 +182,7 @@ describe("App 集成（假后端 + 真 schema）", () => {
     fakeBackend.webStale = false;
     fakeBackend.schemaOverride = null;
     fakeBackend.helpOverride = null;
+    fakeBackend.warnings = null;
     installFetch();
   });
 
@@ -1140,6 +1145,15 @@ describe("App 集成（假后端 + 真 schema）", () => {
     expect(within(dlg).getByRole("heading")).toHaveTextContent("设置武器名");
     expect(within(dlg).getByText("武器名")).toBeInTheDocument();
     expect(within(dlg).queryByText("角色名")).toBeNull();
+  });
+
+  it("后端报「外部域互相引用」时在底部提示一次", async () => {
+    fakeBackend.warnings = ["外部域：「a.json」与「b.json」互相引用，环上那条来源按 0 计算"];
+    await renderApp();
+    // 底部提示（toast）里能看到，说明用户知道某个来源被按 0 算了
+    expect(
+      await screen.findByText(/外部域：「a\.json」与「b\.json」互相引用/),
+    ).toBeInTheDocument();
   });
 
   it("右键角色标签 →「角色面板…」：宏表可编辑、并显示拐力统计（OUT/IN）", async () => {    const user = userEvent.setup();

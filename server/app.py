@@ -32,7 +32,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
-from genshin_dmg import __version__, nodes, report, tutorial
+from genshin_dmg import __version__, external, nodes, report, tutorial
 from genshin_dmg.graph import Graph, GraphError
 from server import build_check, dialogs, storage
 
@@ -145,6 +145,7 @@ def create_app() -> FastAPI:
             # 「外部域」卡片的相对路径：前端给的工程目录优先，再试后端记住的目录
             # （从哪读/存就往哪找），让 dds.json / dds 这种写法真的能用
             _attach_bases(graph)
+            external.begin()            # 记下本次求值遇到的「文件互相引用」
             out = graph.evaluate()
         except GraphError as e:
             return JSONResponse(status_code=400, content=dict(ok=False, error=str(e)))
@@ -152,6 +153,13 @@ def create_app() -> FastAPI:
             return JSONResponse(status_code=200, content=dict(
                 ok=False, error=str(e), nodes={}, variables=[],
                 result=None, chainTypes=[], warnings=[]))
+        # 文件成环：环上那条来源按 0 算了，这里如实告诉前端去底部提示
+        cycles = external.take_cycles()
+        out["warnings"] = list(out.get("warnings") or []) + [
+            "外部域：「%s」与「%s」互相引用，环上那条来源按 0 计算"
+            % (os.path.basename(a) or a, os.path.basename(b) or b)
+            for a, b in cycles
+        ]
         out["graph"] = graph.to_dict()      # 回传规范化后的图（字段类型已统一）
         return out
 

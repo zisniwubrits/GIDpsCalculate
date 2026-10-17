@@ -417,24 +417,64 @@ class Graph:
         """这张卡是不是「外部域」（按 schema 标记，别在求值里硬编码类型名）。"""
         return bool(NODE_TYPES.get(node.type, {}).get("external_domain"))
 
-    def _external_grants(self, node) -> dict:
-        """外部域卡读到的 ``{名字: 值}``（同一次求值里只读一次盘）。"""
-        cache = getattr(self, "_ext_grants", None)
+    def _external_parts(self, node) -> list:
+        """外部域卡片的每个来源：``[(来源标签, {out::名字: 值}), …]``。
+
+        一张卡可以列多个来源（每行 ``文件::域``）。标签是 ``文件名.域名``，拐力统计里
+        用它当来源名字，一眼看出这份拐来自哪个文件的哪个域。
+        """
+        if getattr(self, "skip_external", False):
+            return []
+        cache = getattr(self, "_ext_parts", None)
         if cache is None:
-            cache = self._ext_grants = {}
-        if node.id not in cache:
-            cache[node.id] = _external.out_values(
-                str(node.fields.get("ext_file") or ""),
-                str(node.fields.get("ext_role") or ""),
-                self.base_dir,
-                self.extra_bases,
-            )
-        return cache[node.id]
+            cache = self._ext_parts = {}
+        if node.id in cache:
+            return cache[node.id]
+        sources = _external.parse_sources(
+            node.fields.get("ext_sources"),
+            node.fields.get("ext_file"),
+            node.fields.get("ext_role"),
+        )
+        parts: list = []
+        for path, role in sources:
+            names, per_role = _external.load(path, self.base_dir, self.extra_bases)
+            actual = role or (names[0] if len(names) == 1 else "")
+            if not actual:
+                continue                    # 域名没写、文件里又不唯一 → 这个来源作废
+            parts.append((_external.source_label(path, actual),
+                          dict(per_role.get(actual) or {})))
+        cache[node.id] = parts
+        return parts
+
+    def _external_grants(self, node) -> dict:
+        """外部域卡读到的 ``{名字: 值}``（多来源同名**求和**；同一次求值只读一次盘）。
+
+        ``self.skip_external`` 为真时一律读 0：仅在「文件之间环状引用」时由
+        :mod:`genshin_dmg.external` 设置 —— 那时要停止继续往外读，但这个文件
+        **自己的** ``out::`` 仍然照常求值（不会因为环就变成 0）。
+        """
+        if getattr(self, "skip_external", False):
+            return {}
+        out: dict = {}
+        for _label, values in self._external_parts(node):
+            for name, value in values.items():
+                out[name] = out.get(name, 0.0) + float(value)
+        return out
 
     def _external_domains(self, node) -> list:
-        """外部域卡指向的那个工程文件里有哪些域（前端据此藏「里面的域」那一栏）。"""
-        return _external.domains(str(node.fields.get("ext_file") or ""),
-                                 self.base_dir, self.extra_bases)
+        """外部域卡指向的那些文件里有哪些域（前端据此藏「里面的域」那一栏）。"""
+        if getattr(self, "skip_external", False):
+            return []
+        found: list = []
+        for path, _role in _external.parse_sources(
+            node.fields.get("ext_sources"),
+            node.fields.get("ext_file"),
+            node.fields.get("ext_role"),
+        ):
+            for name in _external.domains(path, self.base_dir, self.extra_bases):
+                if name not in found:
+                    found.append(name)
+        return found
 
     @staticmethod
     def _out_names(base_vars: dict, role: str) -> list:
@@ -770,24 +810,33 @@ class Graph:
             if not rb:
                 continue
             if self._is_external(a):
-                # 外部域：来源角色名就用它在那个文件里的域名字（统计里能看到是谁给的）
-                ra = str(a.fields.get("ext_role") or "").strip() or "外部域"
-                grants = list(self._external_grants(a).items())
-            elif self._is_ns(a):
-                ra = _valid_role(a.fields.get("role_name"))
-                if not ra or ra == rb:
-                    continue
-                grants = [(macro, self.role_out_value(base_vars, ra, macro))
-                          for macro in self._out_names(base_vars, ra)]
-            else:
+                # 外部域：一张卡可能有好几个来源，逐个按「文件名.域名」分别记账，
+                # 这样面板弹窗里一眼看出这份拐来自哪个文件的哪个域（用户要求）
+                for source, values in self._external_parts(a):
+                    for macro, val in values.items():
+                        if not val:
+                            continue
+                        self._add_stat(out, source, rb, macro,
+                                       labels.get(macro, macro), val)
                 continue
-            for macro, val in grants:
-                if not val:
-                    continue
-                row = dict(macro=macro, label=labels.get(macro, macro), value=float(val))
-                out.setdefault(ra, {"out": [], "in": []})["out"].append(dict(row, role=rb))
-                out.setdefault(rb, {"out": [], "in": []})["in"].append(dict(row, role=ra))
+            if not self._is_ns(a):
+                continue
+            ra = _valid_role(a.fields.get("role_name"))
+            if not ra or ra == rb:
+                continue
+            for macro in self._out_names(base_vars, ra):
+                val = self.role_out_value(base_vars, ra, macro)
+                if val:
+                    self._add_stat(out, ra, rb, macro, labels.get(macro, macro), val)
         return out
+
+    @staticmethod
+    def _add_stat(out: dict, source: str, target: str, macro: str, label: str,
+                  value) -> None:
+        """往拐力统计里记一条（OUT: 源→目标；IN: 目标←源）。"""
+        row = dict(macro=macro, label=label, value=float(value))
+        out.setdefault(source, {"out": [], "in": []})["out"].append(dict(row, role=target))
+        out.setdefault(target, {"out": [], "in": []})["in"].append(dict(row, role=source))
 
     def buff_edges(self) -> list:
         """拐力箭头列表 ``[(源角色名, 目标角色名)]``（给报告/自检用）。"""

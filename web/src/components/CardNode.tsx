@@ -6,7 +6,6 @@
  */
 import { Handle, NodeResizer, Position, type Node, type NodeProps } from "@xyflow/react";
 import { memo, useCallback, type CSSProperties } from "react";
-import { autoExternalDomain } from "../model";
 import type { BuffStatRow, CardNode, FieldSpec, FieldValue, NodeResult, NodeTypeSpec } from "../types";
 import DataTable from "./DataTable";
 
@@ -209,29 +208,16 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
           testId={`table-${spec.table}-${id}`}
         />
       ) : null}
-      {spec.fields.map((f) => {
-        // 「外部域」：目标工程里**只有一个域**时，这一栏没得选也用不着填 —— 直接藏掉，
-        // 用一小段文字说明自动用的是哪个（用户要求）。
-        const autoDomain = f.key === "ext_role" ? autoExternalDomain(spec, result) : "";
-        if (autoDomain) {
-          return (
-            <div className="f-row" key={f.key} data-testid={`auto-${f.key}-${id}`}>
-              <span className="f-label">{f.label}</span>
-              <span className="f-auto">{autoDomain}</span>
-            </div>
-          );
-        }
-        return (
-          <div className={`f-row${spec.bare ? " f-row-bare" : ""}`} key={f.key}>
-            <FieldControl
-              field={f}
-              value={node.fields[f.key]}
-              onChange={(v) => onField(f.key, v)}
-              bare={spec.bare}
-            />
-          </div>
-        );
-      })}
+      {spec.fields.map((f) => (
+        <div className={`f-row${spec.bare ? " f-row-bare" : ""}`} key={f.key}>
+          <FieldControl
+            field={f}
+            value={node.fields[f.key]}
+            onChange={(v) => onField(f.key, v)}
+            bare={spec.bare}
+          />
+        </div>
+      ))}
     </div>
   );
 

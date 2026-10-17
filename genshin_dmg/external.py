@@ -9,7 +9,9 @@
 * 只读**显式声明过**的 ``out::名字 = 值``（面板里的普通项不给出去）；
 * 取那个文件**求值之后**的 ``out::`` 值，所以那个文件**自己内部**的拐力已经算进去了；
 * 只读不写：不动被引用的文件；
-* 有环就停（A 引用 B、B 又引用 A 时返回空，不会卡死），并且按 mtime 缓存，
+* 文件互相引用（A→B→A）时**只切断"再往下读"**：被重新进入的那个文件仍然照常求值
+  自己的 ``out::``（跟环无关），所以不会因为环就变成 0，也不会卡死；被切断的那次
+  结果不进缓存。按 mtime 缓存，
   敲键盘时不会反复读盘。
 
 路径怎么写（用户要求）：
@@ -27,11 +29,73 @@ import json
 import os
 from contextvars import ContextVar
 
-__all__ = ["out_values", "domains", "resolve", "clear_cache"]
+__all__ = ["out_values", "domains", "resolve", "clear_cache", "begin", "take_cycles",
+           "parse_sources", "source_label"]
+
+
+def parse_sources(text, legacy_file="", legacy_role="") -> list:
+    """把「外部域」卡片的文本解析成 ``[(文件, 域), …]``。
+
+    一行一个外部域，格式 ``文件::域``（**只认 ``::``**，用户定的）：
+    * ``data/幻灭米提亚::dds`` —— 文件 + 域；
+    * ``data/幻灭米提亚`` —— 只给文件，域留空（那个文件里只有一个域时自动用它）；
+    * 空行与 ``#`` 开头的行跳过。
+
+    老工程只有 ``ext_file`` / ``ext_role`` 两个字段（一张卡一个来源），
+    这里在文本为空时退回读它们，旧项目不用改。
+    """
+    out: list = []
+    for raw in str(text or "").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        path, sep, role = line.partition("::")
+        path = path.strip()
+        role = role.strip() if sep else ""
+        if path:
+            out.append((path, role))
+    if not out:
+        legacy = str(legacy_file or "").strip()
+        if legacy:
+            out.append((legacy, str(legacy_role or "").strip()))
+    return out
+
+
+def source_label(path: str, role: str = "") -> str:
+    """拐力统计里用的来源名字：``文件名.域名``（用户要求，一眼看出是哪个文件的哪个域）。"""
+    base = os.path.splitext(os.path.basename(str(path or "")))[0] or str(path or "")
+    role = str(role or "").strip()
+    return "%s.%s" % (base, role) if role else base
 
 # 正在解析的文件栈（防环）。用 ContextVar 而不是模块级 set：
 # 后端是并发的，两个请求同时求值不能互相干扰。
 _STACK: ContextVar[tuple] = ContextVar("genshin_external_stack", default=())
+
+# 本次求值里遇到的「文件互相引用」（环）记录：[(被重入的文件, 正在读它的文件)]
+# 后端求值完取走，随 /api/evaluate 的 warnings 回给前端提示（用户要求：环上按 0 算，
+# 但要在界面上说清楚）。
+_CYCLES: ContextVar[object] = ContextVar("genshin_external_cycles", default=None)
+
+
+def begin() -> None:
+    """开始一次求值的环记录（后端在 evaluate 前调用）。"""
+    _CYCLES.set([])
+
+
+def take_cycles() -> list:
+    """取走本次求值记录到的环，并清空。"""
+    found = _CYCLES.get()
+    _CYCLES.set(None)
+    return list(found or [])
+
+
+def _note_cycle(reentered: str, reader: str) -> None:
+    found = _CYCLES.get()
+    if found is None:
+        _CYCLES.set([(reentered, reader)])
+        return
+    if (reentered, reader) not in found:
+        found.append((reentered, reader))
 
 # 缓存：{(绝对路径, mtime, size): (域名字列表, {角色: {名字: 值}})}
 # 文件改了 mtime 就变，缓存自然失效；条目数＝用户实际引用过的工程文件数。
@@ -99,7 +163,12 @@ def resolve(path: str, base_dir: str | None = None, extra_bases=()) -> str:
 
 
 def load(path: str, base_dir: str | None = None, extra_bases=()) -> tuple:
-    """读并求值一个工程文件：``(域名字列表, {域: {out::名字: 值}})``。读不到就是空。"""
+    """读并求值一个工程文件：``(域名字列表, {域: {out::名字: 值}})``。读不到就是空。
+
+    文件之间**互相引用**（A→B→A）时，只切断"再往下读"这一步：被重入的那个文件
+    仍然**照常求值自己的 out::**（它自己的面板 / 变量卡声明跟环没关系），
+    所以不会因为环就变成 0。被切断的那次结果**不进缓存**，免得把 0 记死。
+    """
     full = resolve(path, base_dir, extra_bases)
     if not full:
         return ([], {})
@@ -107,10 +176,18 @@ def load(path: str, base_dir: str | None = None, extra_bases=()) -> tuple:
         stat = os.stat(full)
     except OSError:
         return ([], {})
+    # 已经在解析栈里 → 这次不再往下跟外部域（否则死循环），但仍解析它自己
+    follow = full not in _STACK.get()
+    if not follow:
+        stack = _STACK.get()
+        _note_cycle(full, stack[-1] if stack else "")
     key = (full, stat.st_mtime_ns, stat.st_size)
-    hit = _CACHE.get(key)
-    if hit is None:
-        hit = _read_file(full)
+    if follow:
+        hit = _CACHE.get(key)
+        if hit is not None:
+            return hit
+    hit = _read_file(full, follow)
+    if follow:
         _CACHE[key] = hit
     return hit
 
@@ -137,10 +214,12 @@ def out_values(path: str, role: str = "", base_dir: str | None = None,
     return dict(per_role.get(wanted) or {})
 
 
-def _read_file(full: str) -> tuple:
-    """把一个工程文件求值，返回 ``(域列表, {域: {out::名字: 值}})``。"""
-    if full in _STACK.get():
-        return ([], {})                  # 环：A 引用 B，B 又引用 A
+def _read_file(full: str, follow: bool = True) -> tuple:
+    """把一个工程文件求值，返回 ``(域列表, {域: {out::名字: 值}})``。
+
+    ``follow=False``（说明这个文件已经在上层解析里出现过）时**不跟它的外部域**：
+    只算它自己的声明，避免无限递归 —— 但自己的 ``out::`` 照样算出来。
+    """
     try:
         with open(full, encoding="utf-8") as f:
             data = json.load(f)
@@ -153,6 +232,11 @@ def _read_file(full: str) -> tuple:
         from .graph import Graph
 
         graph = Graph.from_dict(data)
+        graph.skip_external = not follow
+        # 这个文件里的「外部域」再写相对路径时，基准是**它自己所在的目录**
+        # （不然嵌套引用的相对路径会按外层工程或进程目录解析，链一多就断）
+        graph.base_dir = os.path.dirname(full)
+        graph.extra_bases = []
         graph.evaluate()
         names: list = []
         out: dict = {}

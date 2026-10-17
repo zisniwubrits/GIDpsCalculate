@@ -1273,19 +1273,14 @@
       "inputs": 0,
       "fields": [
         {
-          "key": "ext_file",
-          "label": "工程文件",
+          "key": "ext_sources",
+          "label": "外部域（每行 文件::域）",
           "default": "",
-          "kind": "text"
-        },
-        {
-          "key": "ext_role",
-          "label": "里面的域",
-          "default": "",
-          "kind": "text"
+          "kind": "textbox"
         }
       ],
       "defaults": {
+        "ext_sources": "",
         "ext_file": "",
         "ext_role": "",
         "card_name": ""
@@ -1307,6 +1302,8 @@
       "sink": false,
       "table": null,
       "hidden_fields": [
+        "ext_file",
+        "ext_role",
         "card_name",
         "card_name"
       ]

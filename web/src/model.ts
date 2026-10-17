@@ -84,12 +84,16 @@ export function isNamespaceNode(node: CardNode): boolean {
 /**
  * 是不是「外部域」卡片（读**另一个工程文件**里某个域的 out:: 当拐力来源）。
  *
- * 判据用字段名（和后端 schema 的 `ext_role` 对应），和 `isNamespaceNode` 一样是
- * "看字段"而不是"看类型名"，这样后端加/改卡片类型时前端不用跟着改。
+ * 判据用字段名，和 `isNamespaceNode` 一样是"看字段"而不是"看类型名"：
+ * 新版看 `ext_sources`（一行一个 `文件::域`），老工程只有 `ext_file` / `ext_role`。
  * 注意它**不是**命名空间容器：没有虚线区域、不参与重名与碰撞规则。
  */
 export function isExternalNode(node: CardNode): boolean {
-  return Object.prototype.hasOwnProperty.call(node.fields ?? {}, "ext_role");
+  const f = node.fields ?? {};
+  return (
+    Object.prototype.hasOwnProperty.call(f, "ext_sources") ||
+    Object.prototype.hasOwnProperty.call(f, "ext_role")
+  );
 }
 
 /**
@@ -105,20 +109,6 @@ export function isBuffPair(nodes: CardNode[], source: string, target: string): b
   return (isNamespaceNode(a) || isExternalNode(a)) && isNamespaceNode(b);
 }
 
-/**
- * 「外部域」卡片：目标工程文件里**只有一个域**时，那一栏自动用它。
- *
- * 用户要求：唯一就不用手填、直接把输入框藏掉（返回非空串 = 该藏）。
- * 有两个以上就不猜（返回空串），让用户自己选。
- */
-export function autoExternalDomain(
-  spec: { external_domain?: boolean },
-  result: { extDomains?: string[] } | null | undefined,
-): string {
-  if (!spec?.external_domain) return "";
-  const list = result?.extDomains ?? [];
-  return list.length === 1 ? String(list[0] ?? "") : "";
-}
 
 /**
  * 是不是**带面板**的命名空间容器（角色）：武器没有面板。

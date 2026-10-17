@@ -250,6 +250,21 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
   const evaluation = useEvaluate(evalPayload);
   const results = useMemo(() => evaluation.data?.nodes ?? {}, [evaluation.data]);
 
+  // 后端报的告警（目前只有「外部域」文件互相引用）：在界面底部提示一次。
+  // 同一条只提示一次，免得每敲一个字就弹；问题消掉后再出现会重新提示。
+  const warnKey = (evaluation.data?.warnings ?? []).join("\n");
+  const lastWarn = useRef("");
+  useEffect(() => {
+    if (!warnKey) {
+      lastWarn.current = "";
+      return;
+    }
+    if (warnKey !== lastWarn.current) {
+      lastWarn.current = warnKey;
+      setToast(warnKey.split("\n").join("；"));
+    }
+  }, [warnKey]);
+
   // -- 序列化（脏标记 / 本地自动保存 / 导出）-------------------------------
   const graphJSON = useMemo(
     () => graphToJSON(nodes, links, savedZoom, name, roles),
@@ -627,6 +642,9 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
       setSavedZoom(parsed.zoom);
       rf.setViewport({ x: 0, y: 0, zoom: parsed.zoom });
       if (res.dir) setSaveDir(res.dir);           // 从哪读就往哪存
+      // 让下一次序列化比较被当成"首次装载"：否则刚打开的工程会立刻显示「● 未保存」
+      // （序列化内容跟上一份不同 → 脏标记被误置）
+      lastSignature.current = null;
       setDirty(fixed.moved.length > 0);
       const notes = [
         `已打开 ${res.path}（${fixed.nodes.length} 张卡片）`,

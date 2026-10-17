@@ -656,14 +656,17 @@ NODE_TYPES: dict = {
     # 外部域：把**另一个工程文件**里某个域声明过的 out:: 引进来当拐力来源
     # （跨文件复用"别人那套配置的拐力"，只读，不改原文件）。
     # 它不是命名空间容器（没有 role_name 字段），只是一张"只出不进"的来源卡：
-    # 从它拖箭头到角色，等于把外部那个域的 out:: 加过去。
-    # 输出与「那个文件里有哪些域」由 graph._node_result 现算（要读盘，不能放这）。
+    # 从它拖箭头到角色，等于把外部那些域的 out:: 加过去。
+    # 一张卡可以列多个来源：一行一个，格式 `文件::域`（只认 ::，域可省略 = 自动）。
+    # 输出与「读到了哪些域」由 graph._node_result 现算（要读盘，不能放这）。
     "external": dict(title="外部域", label="外部域", group="域", inputs=0,
                      external_domain=True, no_output=False, resizable=True,
                      wide_fields=True, fields=[
+        _F("ext_sources", "外部域（每行 文件::域）", "", "textbox"),
+    ], hidden_fields=[
+        # 老工程兼容：一张卡只有一个来源时用的两个字段（新卡不再显示，读到时候会合并）
         _F("ext_file", "工程文件", "", "text"),
         _F("ext_role", "里面的域", "", "text"),
-    ], hidden_fields=[
         _F("card_name", "卡片名", "", "text"),
     ]),
     "role": dict(title="角色", label="角色", group="域", inputs=0,

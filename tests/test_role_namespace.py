@@ -950,6 +950,73 @@ class TestExternalDomain(unittest.TestCase):
         g.add(GraphNode("c1", "calc", fields={"expr": "in::atk_pct"}, role="火神"))
         self.assertEqual(g.evaluate()["nodes"]["c1"]["values"]["noncrit"], 40)
 
+    def test_multi_line_sources(self):
+        """一张卡写多行 `文件::域`：多来源分别读，同名求和；面板里显示 文件名.域名。"""
+        def build(name, role, panel):
+            def make(g):
+                g.add(GraphNode("r1", "role", fields={"role_name": role,
+                                                      "panel": panel}))
+            return self.write_project(name, make)
+
+        a = build("幻灭米提亚.json", "dds", "out::atk_pct = 18")
+        b = build("胡桃.json", "胡桃", "out::atk_pct = 30\nout::em = 100")
+
+        g = Graph()
+        g.add(GraphNode("x1", "external", fields={
+            "ext_sources": "%s::dds\n%s::胡桃" % (a, b)}))
+        g.add(GraphNode("r1", "role", fields={"role_name": "火神"}))
+        g.links.append(Link("x1", "r1", 0))
+        g.add(GraphNode("c1", "calc", fields={"expr": "in::atk_pct"}, role="火神"))
+        g.add(GraphNode("c2", "calc", fields={"expr": "in::em"}, role="火神"))
+        out = g.evaluate()
+        self.assertEqual(out["nodes"]["c1"]["values"]["noncrit"], 48)   # 18 + 30
+        self.assertEqual(out["nodes"]["c2"]["values"]["noncrit"], 100)
+        # 面板弹窗的 IN 明细：来源名字是 文件名.域名（用户要求）
+        rows = {(r["macro"], r["value"], r["role"]) for r in out["buffStats"]["火神"]["in"]}
+        self.assertIn(("atk_pct", 18.0, "幻灭米提亚.dds"), rows)
+        self.assertIn(("atk_pct", 30.0, "胡桃.胡桃"), rows)
+        self.assertIn(("em", 100.0, "胡桃.胡桃"), rows)
+
+    def test_line_without_domain_uses_the_only_one(self):
+        def make(g):
+            g.add(GraphNode("r1", "role", fields={"role_name": "胡桃",
+                                                  "panel": "out::atk_pct = 40"}))
+        path = self.write_project("dds.json", make)
+        g = Graph()
+        g.add(GraphNode("x1", "external", fields={"ext_sources": str(path)}))
+        g.add(GraphNode("r1", "role", fields={"role_name": "火神"}))
+        g.links.append(Link("x1", "r1", 0))
+        g.add(GraphNode("c1", "calc", fields={"expr": "in::atk_pct"}, role="火神"))
+        self.assertEqual(g.evaluate()["nodes"]["c1"]["values"]["noncrit"], 40)
+
+    def test_legacy_single_file_fields_still_work(self):
+        """老工程只有 ext_file / ext_role：照样读（新字段为空时退回它们）。"""
+        def make(g):
+            g.add(GraphNode("r1", "role", fields={"role_name": "胡桃",
+                                                  "panel": "out::atk_pct = 40"}))
+        path = self.write_project("dds.json", make)
+        g = Graph()
+        g.add(GraphNode("x1", "external",
+                        fields={"ext_file": str(path), "ext_role": "胡桃"}))
+        g.add(GraphNode("r1", "role", fields={"role_name": "火神"}))
+        g.links.append(Link("x1", "r1", 0))
+        g.add(GraphNode("c1", "calc", fields={"expr": "in::atk_pct"}, role="火神"))
+        self.assertEqual(g.evaluate()["nodes"]["c1"]["values"]["noncrit"], 40)
+
+    def test_parse_sources_format(self):
+        """一行一个 `文件::域`；只认 ::；空行和 # 注释跳过。"""
+        parse = self.ext.parse_sources
+        self.assertEqual(parse("a.json::dds\nb.json::胡桃"), [("a.json", "dds"), ("b.json", "胡桃")])
+        self.assertEqual(parse("  a.json  ::  dds  "), [("a.json", "dds")])
+        self.assertEqual(parse("a.json"), [("a.json", "")])
+        self.assertEqual(parse("\n\n# 注释\na.json::x\n"), [("a.json", "x")])
+        # 新字段为空 → 退回老的两个字段
+        self.assertEqual(parse("", "old.json", "老域"), [("old.json", "老域")])
+        self.assertEqual(parse("", "", ""), [])
+        # 需要名字时：文件名（去扩展名）+ 域名
+        self.assertEqual(self.ext.source_label("D:/x/幻灭米提亚.json", "dds"), "幻灭米提亚.dds")
+        self.assertEqual(self.ext.source_label("D:/x/a.json", ""), "a")
+
     def test_missing_file_and_unknown_role_give_zero(self):
         path = self.write_project("donor.json", lambda g: g.add(
             GraphNode("ra", "role", fields={"role_name": "胡桃",
@@ -967,19 +1034,78 @@ class TestExternalDomain(unittest.TestCase):
         g.add(GraphNode("c1", "calc", fields={"expr": "in::atk_pct"}, role="火神"))
         self.assertEqual(g.evaluate()["nodes"]["c1"]["values"]["noncrit"], 0)
 
-    def test_cycle_does_not_hang(self):
-        """A 引用 B、B 又引用 A：不卡死，值当 0。"""
+    def test_cycle_still_evaluates_own_out(self):
+        """文件互相引用时**只切断再往下读**：被引用文件自己的 out:: 照常求值，不是 0。
+
+        用户口径：即使文件间成环，out 的求值字段本身没循环，就该正常算。
+        """
         a_path = self.dir / "a.json"
         b_path = self.dir / "b.json"
-        ga = self.build_consumer(b_path, ext_role="胡桃")
-        ga.add(GraphNode("c1", "calc", fields={"expr": "in::atk_pct"}, role="火神"))
+
+        def donor(g, role, out, other):
+            g.add(GraphNode("r1", "role", fields={"role_name": role,
+                                                 "panel": "out::atk_pct = %s" % out}))
+            g.add(GraphNode("x1", "external",
+                            fields={"ext_file": str(other), "ext_role": ""}))
+            g.links.append(Link("x1", "r1", 0))
+
+        ga = Graph()
+        donor(ga, "胡桃", 40, b_path)                    # A: out::atk_pct = 40，指向 B
         a_path.write_text(json.dumps(ga.to_dict(), ensure_ascii=False), encoding="utf-8")
-        gb = self.build_consumer(a_path, ext_role="火神")
+        gb = Graph()
+        donor(gb, "雷神", 70, a_path)                    # B: out::atk_pct = 70，指回 A
         b_path.write_text(json.dumps(gb.to_dict(), ensure_ascii=False), encoding="utf-8")
-        out = self.build_consumer(b_path, ext_role="胡桃")
-        out.add(GraphNode("c1", "calc", fields={"expr": "in::atk_pct"}, role="火神"))
-        # 能算完就是胜利（没递归爆栈）
-        self.assertIsNotNone(out.evaluate()["nodes"]["c1"]["values"])
+
+        # 各自都读得到自己的 40 / 70（不会因为环变成 0）
+        self.assertEqual(self.ext.out_values(str(a_path), "胡桃"), {"atk_pct": 40.0})
+        self.assertEqual(self.ext.out_values(str(b_path), "雷神"), {"atk_pct": 70.0})
+        # 再读一遍：被切断的那次结果不能进缓存（否则会永久读成 0）
+        self.assertEqual(self.ext.out_values(str(a_path), "胡桃"), {"atk_pct": 40.0})
+        self.assertEqual(self.ext.out_values(str(b_path), "雷神"), {"atk_pct": 70.0})
+
+        # 实际用到它的工程也能拿到 40（不卡死、不报错）
+        consumer = self.build_consumer(a_path, ext_role="胡桃")
+        consumer.add(GraphNode("c1", "calc", fields={"expr": "in::atk_pct"}, role="火神"))
+        self.assertEqual(consumer.evaluate()["nodes"]["c1"]["values"]["noncrit"], 40)
+
+    def test_cycle_is_reported_to_frontend(self):
+        """环要能被记录到（后端据此在界面底部提示），且提示里带上文件名。"""
+        self.ext.begin()
+        a_path = self.dir / "a.json"
+        b_path = self.dir / "b.json"
+
+        def donor(g, role, out, other):
+            g.add(GraphNode("r1", "role", fields={"role_name": role,
+                                                 "panel": "out::atk_pct = %s" % out}))
+            g.add(GraphNode("x1", "external",
+                            fields={"ext_file": str(other), "ext_role": ""}))
+            g.links.append(Link("x1", "r1", 0))
+
+        ga = Graph()
+        donor(ga, "胡桃", 40, b_path)
+        a_path.write_text(json.dumps(ga.to_dict(), ensure_ascii=False), encoding="utf-8")
+        gb = Graph()
+        donor(gb, "雷神", 70, a_path)
+        b_path.write_text(json.dumps(gb.to_dict(), ensure_ascii=False), encoding="utf-8")
+
+        self.assertEqual(self.ext.out_values(str(a_path), "胡桃"), {"atk_pct": 40.0})
+        cycles = self.ext.take_cycles()
+        self.assertTrue(cycles, "成环时应该记录下来，好让界面提示")
+        reentered, reader = cycles[0]
+        self.assertEqual(os.path.basename(reentered), "a.json")
+        self.assertEqual(os.path.basename(reader), "b.json")
+        # take_cycles 取完就清空（不会把上一次的环重复报出来）
+        self.assertEqual(self.ext.take_cycles(), [])
+
+    def test_no_cycle_no_warning(self):
+        """没环就什么都不报（别为正常情况弹提示）。"""
+        self.ext.begin()
+        self.write_project("donor.json", lambda g: g.add(
+            GraphNode("r", "role", fields={"role_name": "胡桃",
+                                           "panel": "out::atk_pct = 40"})))
+        self.assertEqual(self.ext.out_values("donor.json", "", str(self.dir)),
+                         {"atk_pct": 40.0})
+        self.assertEqual(self.ext.take_cycles(), [])
 
     def test_cache_follows_file_changes(self):
         """改了被引用的文件要能读到新值（按 mtime 失效，不是永久缓存）。"""
