@@ -414,6 +414,36 @@ class Graph:
                     grants[macro] = grants.get(macro, 0.0) + val
         return out
 
+    def matrix_grants(self, base_vars: dict) -> dict:
+        """``{域对照表节点 id: {对外项名字: 加总值}}``：「外部域 / 角色 / 武器」指向
+        对照表**左上角**的箭头带来的固定拐力（对每个行 × 列都加一次，可多来源相加）。
+
+        与 ``buff_sources`` 同一套来源规则（只读 ``out::``、多来源相加、不传递），
+        区别只是目标不是角色，而是「域对照表」卡片。
+        """
+        out: dict = {}
+        for link in self.links:
+            src = self.nodes.get(link.src)
+            dst = self.nodes.get(link.dst)
+            if src is None or dst is None or dst.type != "matrix":
+                continue                        # 目标只能是「域对照表」
+            grants = out.setdefault(dst.id, {})
+            if self._is_external(src):
+                for macro, val in self._external_grants(src).items():
+                    if val:
+                        grants[macro] = grants.get(macro, 0.0) + float(val)
+                continue
+            if not self._is_ns(src):
+                continue                        # 源＝角色 / 武器 / 外部域
+            role_from = _valid_role(src.fields.get("role_name"))
+            if not role_from:
+                continue
+            for macro in self._out_names(base_vars, role_from):
+                val = self.role_out_value(base_vars, role_from, macro)
+                if val:
+                    grants[macro] = grants.get(macro, 0.0) + val
+        return out
+
     # -- 外部域（跨文件读拐力）------------------------------------------------
     @staticmethod
     def _is_external(node) -> bool:
@@ -805,6 +835,8 @@ class Graph:
             cur = self.buffs.setdefault(role, {})
             for name, val in (grants or {}).items():
                 cur[name] = cur.get(name, 0.0) + float(val)
+        # 「域对照表」左上角的入箭头：这些域的 out:: 当成**固定拐力**（对所有格子加一次）
+        self._matrix_grants = self.matrix_grants(own)
         self._buff_stats = self.buff_stats(own)
         # 面板属性不写进变量表（不自动计算）：拐力只通过 in:: 暴露
         self._apply_sub_namespaces(own)
@@ -1202,6 +1234,7 @@ class Graph:
                 node.fields.get("fixed_file") or "",
                 self.base_dir,
                 self.extra_bases,
+                arrow_grants=(getattr(self, "_matrix_grants", {}) or {}).get(nid, {}),
             )
             info["rows"] = table
             info["display"] = "共 %d 行 × %d 列" % (

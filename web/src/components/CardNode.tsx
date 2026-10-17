@@ -375,6 +375,20 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
       />,
     );
   } else {
+    if (spec.table === "matrix") {
+      // 「域对照表」左上角的**固定拐力入口**：外部域 / 角色 / 武器域拉过来的箭头都收在这里，
+      // 每条箭头带来的 out:: 对所有行 × 列都加一次（多来源相加，见 Graph.matrix_grants）
+      handles.push(
+        <Handle
+          key="buff"
+          id="in-0"
+          type="target"
+          position={Position.Left}
+          className="port port-in matrix-buff-in"
+          title="固定拐力：把外部域/角色/武器域的拐力端口拖到这里，对所有格子都加"
+        />,
+      );
+    }
     if (hasInput) {
       const n = Math.max(1, node.inputs);
       for (let i = 0; i < n; i += 1) {

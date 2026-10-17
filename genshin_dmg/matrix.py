@@ -73,13 +73,16 @@ def _expected(full: str, role: str, grants: dict) -> float | None:
 
 
 def build(rows_text: str, cols_text: str, fixed_text: str,
-          base_dir=None, extra_bases=()) -> list:
+          base_dir=None, extra_bases=(), arrow_grants=None) -> list:
     """生成矩阵（第一行是表头，可直接给前端的表格卡片）。"""
     rows = parse_spec(rows_text)
     cols = parse_spec(cols_text)
     fixed = parse_spec(fixed_text)
     fixed_grants: dict = {}
     fixed_labels: list = []
+    # 指到卡片左上角的箭头（来自外部域 / 角色 / 武器域）也算固定拐力，先并进来
+    for name, val in (arrow_grants or {}).items():
+        fixed_grants[name] = fixed_grants.get(name, 0.0) + float(val)
     # 固定拐力可以多选（用户要求）：多来源同名**相加**，角标把名字列出来
     for path, role in fixed:
         full, actual, grants = _load(path, role, base_dir, extra_bases)

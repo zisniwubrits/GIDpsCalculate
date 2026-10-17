@@ -103,6 +103,35 @@ class TestMatrix(unittest.TestCase):
         row = self.make("行.json", "甲", "atk = 1000")
         self.assertEqual(matrix.build(str(row), "", "", str(self.dir))[0][0], "行 \\ 列")
 
+    def test_arrow_from_other_domain_counts_as_fixed_buff(self):
+        """指向对照表左上角的箭头（角色 / 外部域）也当固定拐力，可多来源相加。"""
+        row = self.make("行.json", "甲", "atk = 1000 + in::atk\natk_pct = in::atk_pct")
+        col = self.buff("列.json", "拐", "out::atk_pct = 50")
+        f1 = self.buff("砂糖.json", "砂", "out::atk = 200")
+
+        # 在「本工程」里搭：角色卡 + 对照表卡，箭头从角色指到对照表
+        g = Graph()
+        g.add(GraphNode("ra", "role", fields={"role_name": "瓦", "panel": "out::atk = 300"}))
+        g.add(GraphNode("m1", "matrix", fields={
+            "row_files": str(row), "col_files": str(col), "fixed_file": str(f1)}))
+        g.links.append(Link("ra", "m1", 0))
+        out = g.evaluate()
+        table = out["nodes"]["m1"]["rows"]
+        # 1000 + 200（固定拐力那格） + 300（箭头） = 1500，再 ×1.5
+        self.assertEqual(table[1][1], "2250.00")
+
+    def test_arrow_from_external_domain(self):
+        """外部域卡指进对照表也要算；外部域的 out:: 从被引用的文件里读。"""
+        row = self.make("行.json", "甲", "atk = 1000 + in::atk")
+        donor = self.buff("捐赠.json", "捐", "out::atk = 400")
+        g = Graph()
+        g.add(GraphNode("x1", "external", fields={"ext_sources": "%s::捐" % donor}))
+        g.add(GraphNode("m1", "matrix", fields={
+            "row_files": str(row), "col_files": "", "fixed_file": ""}))
+        g.links.append(Link("x1", "m1", 0))
+        out = g.evaluate()
+        self.assertEqual(out["nodes"]["m1"]["rows"][1][0], "行.甲")
+
     def test_parse_spec_reuses_external_syntax(self):
         self.assertEqual(matrix.parse_spec("a.json::dds\nb.json"), [
             ("a.json", "dds"), ("b.json", ""),

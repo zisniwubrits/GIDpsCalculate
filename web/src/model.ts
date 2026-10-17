@@ -96,6 +96,15 @@ export function isExternalNode(node: CardNode): boolean {
   );
 }
 
+/** 是不是「域对照表」卡片（行 × 列 的期望伤害矩阵；左上角可收回拐力箭头） */
+export function isMatrixNode(node: CardNode): boolean {
+  const f = node.fields ?? {};
+  return (
+    Object.prototype.hasOwnProperty.call(f, "row_files") &&
+    Object.prototype.hasOwnProperty.call(f, "col_files")
+  );
+}
+
 /**
  * 这两个节点之间的连线是不是**拐力箭头**（角色/武器/外部域 → 角色）。
  *
@@ -105,8 +114,10 @@ export function isBuffPair(nodes: CardNode[], source: string, target: string): b
   const a = nodes.find((n) => n.id === source);
   const b = nodes.find((n) => n.id === target);
   if (!a || !b) return false;
-  // 源：角色 / 武器域，或跨文件的「外部域」；目标：角色（武器不收拐）
-  return (isNamespaceNode(a) || isExternalNode(a)) && isNamespaceNode(b);
+  // 源：角色 / 武器域，或跨文件的「外部域」
+  // 目标：角色（武器不收拐），或「域对照表」的左上角（多来源的固定拐力）
+  if (!isNamespaceNode(a) && !isExternalNode(a)) return false;
+  return isNamespaceNode(b) || isMatrixNode(b);
 }
 
 
