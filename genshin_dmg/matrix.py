@@ -79,12 +79,17 @@ def build(rows_text: str, cols_text: str, fixed_text: str,
     cols = parse_spec(cols_text)
     fixed = parse_spec(fixed_text)
     fixed_grants: dict = {}
-    fixed_label = ""
-    if fixed:
-        full, role, grants = _load(*fixed[0], base_dir, extra_bases)
-        if full and role:
-            fixed_grants = grants
-            fixed_label = _source_label(fixed[0][0], role)
+    fixed_labels: list = []
+    # 固定拐力可以多选（用户要求）：多来源同名**相加**，角标把名字列出来
+    for path, role in fixed:
+        full, actual, grants = _load(path, role, base_dir, extra_bases)
+        if not (full and actual):
+            fixed_labels.append(_source_label(path, role))
+            continue
+        fixed_labels.append(_source_label(path, actual))
+        for name, val in grants.items():
+            fixed_grants[name] = fixed_grants.get(name, 0.0) + float(val)
+    fixed_label = " + ".join(fixed_labels)
 
     header = [fixed_label or "行 \\ 列"]
     col_loaded = []

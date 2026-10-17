@@ -1181,32 +1181,30 @@ describe("App 集成（假后端 + 真 schema）", () => {
     ).toBeInTheDocument();
   });
 
-it("域对照表的行 / 列是单行输入框列表：回车加一行、空行退格删一行", async () => {
+it("域对照表：行列直接写在表格里（不再有底部字段），回车加一条并把光标搬过去", async () => {
     const user = userEvent.setup();
     await renderApp();
     await addCard(user, "matrix");
     const card = await screen.findByTestId("card-n1");
 
-    // 行、列各一个列表；每个列表至少一行输入框
-    const rowsBox = within(card).getByTestId("ext-sources-n1-row_files");
-    const colsBox = within(card).getByTestId("ext-sources-n1-col_files");
-    expect(rowsBox).toBeInTheDocument();
-    expect(colsBox).toBeInTheDocument();
-    expect(within(card).getByTestId("ext-source-n1-row_files-0")).toBeInTheDocument();
+    // 表格在；底部不再有「固定拐力」这种普通字段
+    expect(within(card).getByTestId("matrix-n1")).toBeInTheDocument();
+    expect(within(card).queryByText("固定拐力")).toBeNull();
 
-    // 回车 → 下面多一行
-    fireEvent.keyDown(within(card).getByTestId("ext-source-n1-row_files-0"), { key: "Enter" });
-    await waitFor(() =>
-      expect(within(card).getByTestId("ext-source-n1-row_files-1")).toBeInTheDocument(),
-    );
+    // 列 / 行各一个单行输入框；左上角是固定拐力（可多选，至少一个输入框）
+    expect(within(card).getByTestId("mx-col-n1-0")).toBeInTheDocument();
+    expect(within(card).getByTestId("mx-row-n1-0")).toBeInTheDocument();
+    expect(within(card).getByTestId("ext-source-n1-fixed-0")).toBeInTheDocument();
 
-    // 空行按退格 → 这一行消失
-    fireEvent.keyDown(within(card).getByTestId("ext-source-n1-row_files-1"), {
-      key: "Backspace",
-    });
-    await waitFor(() =>
-      expect(within(card).queryByTestId("ext-source-n1-row_files-1")).toBeNull(),
-    );
+    // 行里回车 → 在下面加一条，并且光标落到新加的那条上
+    fireEvent.keyDown(within(card).getByTestId("mx-row-n1-0"), { key: "Enter" });
+    const row1 = await within(card).findByTestId("mx-row-n1-1");
+    await waitFor(() => expect(document.activeElement).toBe(row1));
+
+    // 空行按退格 → 删掉，光标回到上一条
+    fireEvent.keyDown(row1, { key: "Backspace" });
+    await waitFor(() => expect(within(card).queryByTestId("mx-row-n1-1")).toBeNull());
+    expect(document.activeElement).toBe(within(card).getByTestId("mx-row-n1-0"));
   });
 
   it("右键角色标签 →「角色面板…」：宏表可编辑、并显示拐力统计（OUT/IN）", async () => {    const user = userEvent.setup();

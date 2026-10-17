@@ -1407,7 +1407,7 @@
           "key": "fixed_file",
           "label": "固定拐力",
           "default": "",
-          "kind": "text"
+          "kind": "textbox"
         }
       ],
       "defaults": {

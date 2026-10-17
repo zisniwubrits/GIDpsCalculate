@@ -696,7 +696,9 @@ NODE_TYPES: dict = {
                    wide_fields=True, table="matrix", fields=[
         _F("row_files", "行", "", "textbox"),
         _F("col_files", "列", "", "textbox"),
-        _F("fixed_file", "固定拐力", "", "text"),
+        # 固定拐力也可以多选（多个来源同名相加）；这三个字段都不画在卡片底部，
+        # 由卡片自绘的表格编辑器就地编辑（见 web/src/components/MatrixEditor.tsx）
+        _F("fixed_file", "固定拐力", "", "textbox"),
     ], hidden_fields=[
         _F("card_name", "卡片名", "", "text"),
     ]),

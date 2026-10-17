@@ -680,6 +680,47 @@ textarea:focus {
   border-color: var(--accent);
 }
 
+/* 「域对照表」：行 / 列 / 固定拐力都在表格里就地编辑 */
+.mx-table {
+  border-collapse: collapse;
+  font-size: 12px;
+  max-width: 100%;
+}
+
+.mx-table th,
+.mx-table td {
+  border: 1px solid var(--line);
+  padding: 2px 3px;
+  vertical-align: middle;
+  font-weight: 400;
+  text-align: left;
+}
+
+.mx-table thead th {
+  background: #f4f7fb;
+}
+
+.mx-corner {
+  min-width: 120px;
+}
+
+.mx-col,
+.mx-row {
+  min-width: 130px;
+}
+
+.mx-input {
+  width: 100%;
+  min-width: 0;
+}
+
+.mx-cell {
+  font-family: var(--font-mono);
+  text-align: right;
+  white-space: nowrap;
+  color: var(--text);
+}
+
 /* 便签式卡片（schema 里 bare=true：「文本」卡与「变量」卡）：没有标签列、没有内层边框，
    文本框随卡片铺满（横向 + 纵向），因此卡片右下角只留自己的缩放手柄 */
 .card-body-bare {

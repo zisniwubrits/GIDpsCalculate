@@ -10,6 +10,7 @@ import type { BuffStatRow, CardNode, FieldSpec, FieldValue, NodeResult, NodeType
 import CodeField from "./CodeField";
 import DataTable from "./DataTable";
 import ExternalSources from "./ExternalSources";
+import MatrixEditor from "./MatrixEditor";
 
 export interface CardData extends Record<string, unknown> {
   node: CardNode;
@@ -214,7 +215,24 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
           testId={`table-${spec.table}-${id}`}
         />
       ) : null}
+      {spec.table === "matrix" ? (
+        // 「域对照表」：行 / 列 / 固定拐力都在表格里就地编辑，不再画在卡片底部
+        <MatrixEditor
+          id={id}
+          rows={node.fields.row_files}
+          cols={node.fields.col_files}
+          fixed={node.fields.fixed_file}
+          table={result?.rows ?? null}
+          disabled={collapsed}
+          baseDir={data.baseDir}
+          onRows={(v) => onField("row_files", v)}
+          onCols={(v) => onField("col_files", v)}
+          onFixed={(v) => onField("fixed_file", v)}
+        />
+      ) : null}
       {spec.fields.map((f) =>
+        // 「域对照表」的三个来源字段由表格自己渲染，别再当普通字段画一遍
+        spec.table === "matrix" ? null :
         // 「外部域」的来源：一行一个单行输入框（回车加一行、空行退格删一行），
         // 不画字段标签、不写任何提示文字（用户要求）
         spec.external_domain && f.key === "ext_sources" ? (
@@ -235,19 +253,6 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
               macros={data.macros}
               disabled={collapsed}
               testId={`defs-${id}`}
-              onChange={(v) => onField(f.key, v)}
-            />
-          </div>
-        ) : spec.table === "matrix" && (f.key === "row_files" || f.key === "col_files") ? (
-          // 「域对照表」的行 / 列：**一行一个单行输入框**，增删逻辑与「外部域」完全一致
-          // （回车在下面加一行、空行退格删一行、永远留一个）
-          <div className="f-row" key={f.key}>
-            <span className="f-label">{f.label}</span>
-            <ExternalSources
-              id={`${id}-${f.key}`}
-              value={node.fields[f.key]}
-              disabled={collapsed}
-              baseDir={data.baseDir}
               onChange={(v) => onField(f.key, v)}
             />
           </div>

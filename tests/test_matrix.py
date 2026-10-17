@@ -88,6 +88,21 @@ class TestMatrix(unittest.TestCase):
         self.assertEqual(table[0], ["行 \\ 列"])
         self.assertTrue(table[1][0].endswith("没有"))       # 行标签仍给出文件名
 
+    def test_multiple_fixed_buffs_are_summed(self):
+        """固定拐力可以多选：多个来源的 out:: 同名相加，角标把名字列出来。"""
+        row = self.make("行.json", "甲", "atk = 1000 + in::atk\natk_pct = in::atk_pct")
+        col = self.buff("列.json", "拐", "out::atk_pct = 50")
+        f1 = self.buff("砂糖.json", "砂", "out::atk = 200")
+        f2 = self.buff("瓦.json", "瓦", "out::atk = 300")
+        table = matrix.build(str(row), str(col), "%s\n%s" % (f1, f2), str(self.dir))
+        self.assertEqual(table[0][0], "砂糖.砂 + 瓦.瓦")
+        # (1000 + 200 + 300) × 1.5
+        self.assertEqual(table[1][1], "2250.00")
+
+    def test_fixed_label_is_plain_when_nothing_picked(self):
+        row = self.make("行.json", "甲", "atk = 1000")
+        self.assertEqual(matrix.build(str(row), "", "", str(self.dir))[0][0], "行 \\ 列")
+
     def test_parse_spec_reuses_external_syntax(self):
         self.assertEqual(matrix.parse_spec("a.json::dds\nb.json"), [
             ("a.json", "dds"), ("b.json", ""),
