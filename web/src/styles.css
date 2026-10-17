@@ -670,6 +670,13 @@ textarea:focus {
   white-space: nowrap;
 }
 
+/* 「外部域」自动选定的域（那一栏不用填，只显示结果）：灰字、不可点 */
+.f-auto {
+  color: var(--text);
+  padding-top: 2px;
+  overflow-wrap: anywhere;
+}
+
 .f-wrap {
   display: flex;
   align-items: center;

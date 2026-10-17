@@ -351,22 +351,6 @@ def _t_text(get, ins):
     return (0.0, 0.0, 0.0)
 
 
-def _t_external(get, ins):
-    """外部域卡片的"输出"＝从那个文件读到的 out:: 合计（读不到就是 0）。
-
-    拐力本身不走这里（拐力在 ``graph.buff_sources`` 里按名字逐个取），这里只负责
-    让卡片上显示一个数，方便一眼看出"到底引到东西没有"。
-    """
-    from . import external as _external      # 延迟 import：避免与 graph 互相依赖
-
-    total = 0.0
-    for value in _external.out_values(str(get("ext_file") or ""),
-                                      str(get("ext_role") or "")).values():
-        total += float(value)
-    # 卡片输出的三元组：未暴击 / 暴击 / 期望 这里没有区分，三个都一样
-    return (total, total, total)
-
-
 def _t_setvar(get, ins):
     """赋值变量卡片：把上游三元组原样传出（供登记变量用）。
 
@@ -673,9 +657,10 @@ NODE_TYPES: dict = {
     # （跨文件复用"别人那套配置的拐力"，只读，不改原文件）。
     # 它不是命名空间容器（没有 role_name 字段），只是一张"只出不进"的来源卡：
     # 从它拖箭头到角色，等于把外部那个域的 out:: 加过去。
+    # 输出与「那个文件里有哪些域」由 graph._node_result 现算（要读盘，不能放这）。
     "external": dict(title="外部域", label="外部域", group="域", inputs=0,
-                     compute=_t_external, resizable=True, wide_fields=True,
-                     external_domain=True, fields=[
+                     external_domain=True, no_output=False, resizable=True,
+                     wide_fields=True, fields=[
         _F("ext_file", "工程文件", "", "text"),
         _F("ext_role", "里面的域", "", "text"),
     ], hidden_fields=[

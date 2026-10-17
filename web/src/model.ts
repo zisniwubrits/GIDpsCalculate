@@ -106,6 +106,21 @@ export function isBuffPair(nodes: CardNode[], source: string, target: string): b
 }
 
 /**
+ * 「外部域」卡片：目标工程文件里**只有一个域**时，那一栏自动用它。
+ *
+ * 用户要求：唯一就不用手填、直接把输入框藏掉（返回非空串 = 该藏）。
+ * 有两个以上就不猜（返回空串），让用户自己选。
+ */
+export function autoExternalDomain(
+  spec: { external_domain?: boolean },
+  result: { extDomains?: string[] } | null | undefined,
+): string {
+  if (!spec?.external_domain) return "";
+  const list = result?.extDomains ?? [];
+  return list.length === 1 ? String(list[0] ?? "") : "";
+}
+
+/**
  * 是不是**带面板**的命名空间容器（角色）：武器没有面板。
  * 判据用 `panel_show`（控制面板显示哪些项的字段）—— 武器的字段里没有它。
  */

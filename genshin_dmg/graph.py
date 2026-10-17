@@ -247,6 +247,8 @@ class Graph:
             if link.src in self.nodes and link.dst in self.nodes:
                 self.links.append(link)
         self.variables: dict = {}
+        # 当前工程所在目录：解析「外部域」卡片的相对路径用（前端在载荷的 dir 里给）
+        self.base_dir: str = ""
         # 命名卡片的惰性取值表（每次求值重建）与环路栈
         self._cardvars: dict | None = None
         self._card_stack: set = set()
@@ -377,8 +379,13 @@ class Graph:
             cache[node.id] = _external.out_values(
                 str(node.fields.get("ext_file") or ""),
                 str(node.fields.get("ext_role") or ""),
+                self.base_dir,
             )
         return cache[node.id]
+
+    def _external_domains(self, node) -> list:
+        """外部域卡指向的那个工程文件里有哪些域（前端据此藏「里面的域」那一栏）。"""
+        return _external.domains(str(node.fields.get("ext_file") or ""), self.base_dir)
 
     @staticmethod
     def _out_names(base_vars: dict, role: str) -> list:
@@ -1066,6 +1073,26 @@ class Graph:
                              else "%s=未解析" % name)
             info["varsText"] = "变量: " + (", ".join(parts) if parts else "(无)")
             return info
+        if spec.get("external_domain"):
+            # 外部域：值 = 从那个文件读到的 out:: 合计；顺带把"那个文件里有哪些域"
+            # 告诉前端（只有一个时前端就把「里面的域」这一栏藏掉，自动用它）。
+            grants = self._external_grants(node)
+            names = self._external_domains(node)
+            info["extDomains"] = names
+            total = float(sum(grants.values()))
+            info["values"] = dict(noncrit=total, crit=total, expected=total)
+            info["plain"] = plain_num(total)
+            info["plainTriple"] = [plain_num(total)] * 3
+            label = str(node.fields.get("ext_role") or "").strip()
+            if not label and len(names) == 1:
+                label = names[0]
+            parts = ["输出 %s" % fmt_num(total)]
+            if not grants:
+                parts.append("没读到 out::" if names or label else "没读到文件")
+            elif label:
+                parts.append(label)
+            info["display"] = " ｜ ".join(parts)
+            return info
         if spec.get("no_output"):
             return info
         try:
@@ -1272,6 +1299,8 @@ class Graph:
         if not isinstance(data, dict):
             raise GraphError("工程数据格式不正确")
         g = cls(zoom=data.get("zoom", 1.0), name=data.get("name") or "")
+        # 当前工程所在目录（前端在求值载荷里给）：解析「外部域」的相对路径用
+        g.base_dir = str(data.get("dir") or "")
         idmap: dict = {}
         for i, nd in enumerate(data.get("nodes") or []):
             if not isinstance(nd, dict):

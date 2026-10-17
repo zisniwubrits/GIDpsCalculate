@@ -11,6 +11,13 @@
 * 只读不写：不动被引用的文件；
 * 有环就停（A 引用 B、B 又引用 A 时返回空，不会卡死），并且按 mtime 缓存，
   敲键盘时不会反复读盘。
+
+路径怎么写（用户要求）：
+* 绝对路径：直接用；
+* **相对路径按"当前工程文件所在目录"解析**（`dir`），例如同目录下填
+  ``dds.json``、甚至只写 ``dds``（自动补 ``.json``）；
+* 找不到再退回后端进程的工作目录（就是仓库根），并支持 ``~/``；
+* 域名字留空且那个文件里**只有一个域**时，直接用那个域（前端会把这一栏藏起来）。
 """
 
 from __future__ import annotations
@@ -19,14 +26,14 @@ import json
 import os
 from contextvars import ContextVar
 
-__all__ = ["out_values", "clear_cache"]
+__all__ = ["out_values", "domains", "resolve", "clear_cache"]
 
 # 正在解析的文件栈（防环）。用 ContextVar 而不是模块级 set：
 # 后端是并发的，两个请求同时求值不能互相干扰。
 _STACK: ContextVar[tuple] = ContextVar("genshin_external_stack", default=())
 
-# 缓存：{(绝对路径, mtime, size): {角色: {名字: 值}}}
-# 文件改了 mtime 就变，缓存自然失效；不设上限是因为条目数＝用户实际引用过的工程文件数。
+# 缓存：{(绝对路径, mtime, size): (域名字列表, {角色: {名字: 值}})}
+# 文件改了 mtime 就变，缓存自然失效；条目数＝用户实际引用过的工程文件数。
 _CACHE: dict = {}
 
 
@@ -35,66 +42,113 @@ def clear_cache() -> None:
     _CACHE.clear()
 
 
-def out_values(path: str, role: str) -> dict:
-    """读 ``path`` 这个工程文件里 ``role`` 声明过的 ``out::``，返回 ``{名字: 值}``。
+def resolve(path: str, base_dir: str | None = None) -> str:
+    """把用户填的路径解析成绝对路径；找不到就返回空串。
 
-    读不到（文件不存在 / 不是合法工程 / 那个域不存在 / 有环）一律返回空字典 ——
-    调用方按"给了 0"处理，不会让整个求值失败。
+    相对路径优先按 ``base_dir``（当前工程所在目录）解析，其次按进程工作目录；
+    不带扩展名时自动补 ``.json``。
     """
-    role = str(role or "").strip()
     raw = str(path or "").strip()
-    if not raw or not role:
-        return {}
+    if not raw:
+        return ""
+    expanded = os.path.expanduser(raw)
+    names = [expanded]
+    if not expanded.lower().endswith(".json"):
+        names.append(expanded + ".json")
+    roots = [""]
+    if base_dir:
+        roots.insert(0, str(base_dir))
+    for name in names:
+        if os.path.isabs(name):
+            if os.path.isfile(name):
+                return os.path.abspath(name)
+            continue
+        for root in roots:
+            full = os.path.abspath(os.path.join(root, name) if root else name)
+            if os.path.isfile(full):
+                return full
+    return ""
+
+
+def load(path: str, base_dir: str | None = None) -> tuple:
+    """读并求值一个工程文件：``(域名字列表, {域: {out::名字: 值}})``。读不到就是空。"""
+    full = resolve(path, base_dir)
+    if not full:
+        return ([], {})
     try:
-        full = os.path.abspath(os.path.expanduser(raw))
         stat = os.stat(full)
     except OSError:
-        return {}
+        return ([], {})
     key = (full, stat.st_mtime_ns, stat.st_size)
-    per_role = _CACHE.get(key)
-    if per_role is None:
-        per_role = _read_file(full)
-        _CACHE[key] = per_role
-    return dict(per_role.get(role) or {})
+    hit = _CACHE.get(key)
+    if hit is None:
+        hit = _read_file(full)
+        _CACHE[key] = hit
+    return hit
 
 
-def _read_file(full: str) -> dict:
-    """把一个工程文件求值，抽出所有 ``角色::out::名字`` → ``{角色: {名字: 值}}``。"""
+def domains(path: str, base_dir: str | None = None) -> list:
+    """那个文件里有哪些域（角色 / 武器名）。"""
+    return list(load(path, base_dir)[0])
+
+
+def out_values(path: str, role: str = "", base_dir: str | None = None) -> dict:
+    """读 ``path`` 这个工程文件里 ``role`` 声明过的 ``out::``，返回 ``{名字: 值}``。
+
+    ``role`` 留空且文件里只有一个域时，自动用那个域（用户要求：唯一就不用手填）。
+    读不到（文件不存在 / 不是合法工程 / 域不存在 / 有环）一律返回空字典 ——
+    调用方按"给了 0"处理，不会让整个求值失败。
+    """
+    names, per_role = load(path, base_dir)
+    wanted = str(role or "").strip()
+    if not wanted:
+        if len(names) != 1:
+            return {}
+        wanted = names[0]
+    return dict(per_role.get(wanted) or {})
+
+
+def _read_file(full: str) -> tuple:
+    """把一个工程文件求值，返回 ``(域列表, {域: {out::名字: 值}})``。"""
     if full in _STACK.get():
-        return {}                       # 环：A 引用 B，B 又引用 A
+        return ([], {})                  # 环：A 引用 B，B 又引用 A
     try:
         with open(full, encoding="utf-8") as f:
             data = json.load(f)
     except (OSError, ValueError):
-        return {}
+        return ([], {})
     token = _STACK.set(_STACK.get() + (full,))
     try:
         # 延迟 import：graph 模块本身会 import 本模块（见模块文档）
+        from .expr import demangle
         from .graph import Graph
 
         graph = Graph.from_dict(data)
         graph.evaluate()
+        names: list = []
+        out: dict = {}
         # 变量名在内部是 ``角色__out__名字`` 这种 mangled 形式，先 demangle 回
         # ``角色::out::名字`` 再切
-        from .expr import demangle
-
-        out: dict = {}
         for key in graph.variables:
-            full = demangle(key)
-            role, sep, rest = full.partition("::out::")
-            if not sep:
+            full_name = demangle(key)
+            role, sep, rest = full_name.partition("::")
+            if not sep or not role:
                 continue
-            name = rest
-            if "::" in name:
-                continue                # 其它子命名空间（own::x 之类）不要
+            if role not in names:
+                names.append(role)       # 这个文件里出现过的域（含只写了普通宏的）
+            if not rest.startswith("out::"):
+                continue
+            name = rest[len("out::"):]
+            if not name or "::" in name:
+                continue                 # 其它子命名空间的键
             value = graph.variables[key]
             try:
                 num = float(value() if callable(value) else value)
             except (TypeError, ValueError):
                 continue
             if not num:
-                continue                # 0 等于"没给"，不进结果（面板宏会有一堆 0）
+                continue                 # 0 等于"没给"，不进结果（面板宏会有一堆 0）
             out.setdefault(role, {})[name] = num
-        return out
+        return (names, out)
     finally:
         _STACK.reset(token)

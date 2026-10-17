@@ -140,6 +140,11 @@ export interface GraphJSON {
   name: string;
   nodes: GraphNodeJSON[];
   links: GraphLinkJSON[];
+  /**
+   * 当前工程所在目录：后端解析「外部域」卡片的**相对路径**用的基准
+   * （填 `dds.json` / `dds` 就指这个目录下的文件）。只随求值载荷发送，不落盘。
+   */
+  dir?: string;
 }
 
 export interface Triple {
@@ -162,6 +167,8 @@ export interface NodeResult {
   /** 未暴击值的纯数字字符串（复制用） */
   plain: string;
   plainTriple: string[];
+  /** 「外部域」卡片：指向的工程文件里有哪些域（只有一个时前端藏掉「里面的域」那一栏） */
+  extDomains?: string[];
   /** 哪些字段是"留空 → 用角色面板兜底"的（卡片上标「含面板」） */
   panelFields?: string[];
   /** 本角色是否收了别的角色的拐（卡片上标「含拐」） */

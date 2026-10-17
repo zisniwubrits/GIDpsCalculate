@@ -870,6 +870,50 @@ class TestExternalDomain(unittest.TestCase):
         out = g.evaluate()["nodes"]
         self.assertEqual(out["x1"]["values"]["noncrit"], 70)     # 40 + 30，一眼看出读到没
 
+    def test_relative_path_uses_project_dir(self):
+        """相对路径按**当前工程所在目录**解析；不带扩展名时自动补 .json（用户要求）。"""
+        def build(g):
+            g.add(GraphNode("ra", "role", fields={"role_name": "胡桃",
+                                                  "panel": "out::atk_pct = 40"}))
+
+        self.write_project("dds.json", build)
+        for filled in ("dds.json", "dds"):
+            g = self.build_consumer(filled)
+            g.base_dir = str(self.dir)          # 相当于前端在载荷里带的 dir
+            g.add(GraphNode("c1", "calc", fields={"expr": "in::atk_pct"}, role="火神"))
+            self.assertEqual(g.evaluate()["nodes"]["c1"]["values"]["noncrit"], 40, filled)
+
+    def test_single_domain_needs_no_name(self):
+        """文件里只有一个域时，「里面的域」留空也读得到（前端会把那一栏藏掉）。"""
+        def build(g):
+            g.add(GraphNode("ra", "role", fields={"role_name": "胡桃",
+                                                  "panel": "out::atk_pct = 40"}))
+
+        self.write_project("dds.json", build)
+        g = self.build_consumer("dds.json", ext_role="")
+        g.base_dir = str(self.dir)
+        g.add(GraphNode("c1", "calc", fields={"expr": "in::atk_pct"}, role="火神"))
+        out = g.evaluate()
+        self.assertEqual(out["nodes"]["c1"]["values"]["noncrit"], 40)
+        # 域名列表也带给前端，好让它藏掉那一栏
+        self.assertEqual(out["nodes"]["x1"]["extDomains"], ["胡桃"])
+
+    def test_two_domains_need_a_name(self):
+        """有两个域时留空不猜（免得读错人的拐力）。"""
+        def build(g):
+            g.add(GraphNode("ra", "role", fields={"role_name": "胡桃",
+                                                  "panel": "out::atk_pct = 40"}))
+            g.add(GraphNode("rb", "role", fields={"role_name": "雷神",
+                                                  "panel": "out::atk_pct = 70"}))
+
+        self.write_project("two.json", build)
+        g = self.build_consumer("two.json", ext_role="")
+        g.base_dir = str(self.dir)
+        g.add(GraphNode("c1", "calc", fields={"expr": "in::atk_pct"}, role="火神"))
+        out = g.evaluate()
+        self.assertEqual(out["nodes"]["c1"]["values"]["noncrit"], 0)
+        self.assertEqual(sorted(out["nodes"]["x1"]["extDomains"]), ["胡桃", "雷神"])
+
     def test_missing_file_and_unknown_role_give_zero(self):
         path = self.write_project("donor.json", lambda g: g.add(
             GraphNode("ra", "role", fields={"role_name": "胡桃",

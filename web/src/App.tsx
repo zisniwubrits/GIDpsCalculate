@@ -230,6 +230,9 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
       app: "GenshinDamageCalc",
       zoom: 1,
       name: "",
+      // 当前工程的落地目录：后端解析「外部域」卡片的**相对路径**时用它
+      // （填 dds.json / dds 就指同目录下的那个文件）
+      dir: saveDir || undefined,
       nodes: nodes.map((n) => ({
         id: n.id,
         type: n.type,
@@ -242,7 +245,7 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
       })),
       links: links.map((l) => ({ ...l })),
     }),
-    [nodes, links, roles],
+    [nodes, links, roles, saveDir],
   );
   const evaluation = useEvaluate(evalPayload);
   const results = useMemo(() => evaluation.data?.nodes ?? {}, [evaluation.data]);

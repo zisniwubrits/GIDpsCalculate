@@ -26,6 +26,7 @@ import {
   fillPresetForDropped,
   isNamespaceNode,
   isExternalNode,
+  autoExternalDomain,
   isBuffPair,
   isPanelNode,
   buildRoleMap,
@@ -817,6 +818,16 @@ describe("拐力箭头判定", () => {
     expect(isNamespaceNode(nodes[0])).toBe(false);      // 不该被当成域（不吃重名/碰撞规则）
     expect(isBuffPair(nodes, "x1", "r2")).toBe(true);
     expect(isBuffPair(nodes, "r2", "x1")).toBe(false);  // 外部域不收拐
+  });
+
+  it("「外部域」只有一个域时自动用它（输入框藏掉），多个就不猜", () => {
+    const spec = { external_domain: true };
+    expect(autoExternalDomain(spec, { extDomains: ["胡桃"] })).toBe("胡桃");
+    expect(autoExternalDomain(spec, { extDomains: ["胡桃", "雷神"] })).toBe("");
+    expect(autoExternalDomain(spec, { extDomains: [] })).toBe("");
+    expect(autoExternalDomain(spec, null)).toBe("");
+    // 普通卡片没有这个概念
+    expect(autoExternalDomain({}, { extDomains: ["胡桃"] })).toBe("");
   });
 });
 
