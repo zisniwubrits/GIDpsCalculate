@@ -1092,9 +1092,15 @@ export function addPreset(
   };
 }
 
-export type AlignMode = "left" | "top" | "hcenter" | "vcenter";
+export type AlignMode = "left" | "top" | "hcenter" | "vcenter" | "right" | "bottom";
 
-/** 对齐选中的卡片（与旧版一致：hcenter/vcenter 以包围盒中心为准）。 */
+/**
+ * 对齐选中的卡片（与旧版一致：hcenter/vcenter 以包围盒中心为准）。
+ *
+ * 六个方向：左 / 右 / 顶 / 底 / 水平居中 / 垂直居中。
+ * 左对齐取**最小**左边、右对齐取**最大**右边（即"最靠右那张卡不动，其余靠过去"），
+ * 顶 / 底同理 —— 相对位置不会整体平移跑掉。
+ */
 export function alignPositions(
   nodes: CardNode[],
   ids: string[],
@@ -1115,9 +1121,15 @@ export function alignPositions(
   if (mode === "left") {
     const tx = Math.min(...lefts);
     for (const b of boxes) out[b.id] = [tx, b.y];
+  } else if (mode === "right") {
+    const tx = Math.max(...rights);          // 以最右那条边为基准
+    for (const b of boxes) out[b.id] = [tx - b.w, b.y];
   } else if (mode === "top") {
     const ty = Math.min(...tops);
     for (const b of boxes) out[b.id] = [b.x, ty];
+  } else if (mode === "bottom") {
+    const ty = Math.max(...bottoms);         // 以最下面那条边为基准
+    for (const b of boxes) out[b.id] = [b.x, ty - b.h];
   } else if (mode === "hcenter") {
     const cx = (Math.min(...lefts) + Math.max(...rights)) / 2;
     for (const b of boxes) out[b.id] = [cx - b.w / 2, b.y];

@@ -13,7 +13,9 @@ export interface SidebarProps {
 
 const ALIGN_OPS: { mode: AlignMode; label: string }[] = [
   { mode: "left", label: "左对齐" },
+  { mode: "right", label: "右对齐" },
   { mode: "top", label: "顶对齐" },
+  { mode: "bottom", label: "底对齐" },
   { mode: "hcenter", label: "水平居中" },
   { mode: "vcenter", label: "垂直居中" },
 ];

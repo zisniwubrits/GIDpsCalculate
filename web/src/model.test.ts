@@ -169,6 +169,19 @@ describe("对齐", () => {
     expect(v.n2[1]).toBeCloseTo(150 - 50);
   });
 
+  it("右对齐 / 底对齐取最大边（最靠右 / 最靠下的那张不动）", () => {
+    // n1: x0..100（宽 100）、y0..100；n2: x300..500（宽 200）、y200..300
+    // → 右边最大 500、下边最大 300
+    expect(alignPositions(nodes, ["n1", "n2"], "right")).toEqual({
+      n1: [500 - 100, 0],
+      n2: [500 - 200, 200],
+    });
+    expect(alignPositions(nodes, ["n1", "n2"], "bottom")).toEqual({
+      n1: [0, 300 - 100],
+      n2: [300, 300 - 100],
+    });
+  });
+
   it("少于两张不做对齐", () => {
     expect(alignPositions(nodes, ["n1"], "left")).toEqual({});
   });
