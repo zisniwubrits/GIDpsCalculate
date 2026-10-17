@@ -96,6 +96,13 @@ export function isExternalNode(node: CardNode): boolean {
   );
 }
 
+/** 「域对照表」的入端口编码：0 = 左上角（全局），1.. = 第 N 行，1000+ = 第 N 列。
+ *  必须与后端 ``Graph.matrix_grants`` 的解析一致（两边一起改）。 */
+export const MATRIX_PORT_ALL = 0;
+export const MATRIX_COL_BASE = 1000;
+export const matrixRowPort = (index: number): number => index + 1;
+export const matrixColPort = (index: number): number => MATRIX_COL_BASE + index;
+
 /** 是不是「域对照表」卡片（行 × 列 的期望伤害矩阵；左上角可收回拐力箭头） */
 export function isMatrixNode(node: CardNode): boolean {
   const f = node.fields ?? {};
@@ -1389,11 +1396,14 @@ export function jsonToGraph(
     // 会落到下面的伤害链分支、因目标 inputs=0 被当成越界丢掉 —— 存一次就没了。
     const isBuff = isBuffPair(nodes, src, dst);
     if (isBuff) {
-      // 「拐力箭头」：目标除了角色卡不是别的，且**入度只有一个点** ——
-      // 旧工程里可能写着 port 1 / 2（那时每个来源一个端口），一律归到 0，
-      // 不然箭头会去找一个不存在的端口、直接画不出来。
-      if (!target || target.type !== "role") continue;
-      links.push({ src, dst, port: 0 });
+      // 「拐力箭头」：目标是角色卡、或「域对照表」（全局 / 某行 / 某列 的接入点）。
+      // 旧工程里角色可能写着 port 1 / 2（那时每个来源一个端口），一律归到 0，
+      // 不然箭头会去找一个不存在的端口、直接画不出来；对照表的端口号有意义，原样保留。
+      if (!target) continue;
+      const raw = Number((l as { port?: unknown })?.port ?? 0);
+      const port =
+        isMatrixNode(target) && Number.isFinite(raw) && raw > 0 ? Math.trunc(raw) : 0;
+      links.push({ src, dst, port });
       continue;
     }
     // 伤害链：端口号必须落在目标卡片真实的输入端口范围内（旧存档里多余的端口会被丢弃）
