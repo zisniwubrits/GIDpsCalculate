@@ -1253,30 +1253,24 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
         />
       ) : null}
 
-      {roleNameDialog ? (
-        <RoleNameDialog
-          initialName={String(
-            nodes.find((n) => n.id === roleNameDialog)?.fields.role_name ?? "",
-          ).trim()}
-          check={(name) =>
-            roleNameError(
-              nodes,
-              name,
-              roleNameDialog,
-              schema.nodeTypes[
-                nodes.find((n) => n.id === roleNameDialog)?.type ?? ""
-              ]?.weapon_card
-                ? "武器"
-                : "角色",
-            )
-          }
-          onSave={(name) => {
-            onField(roleNameDialog, "role_name", name);
-            setRoleNameDialog(null);
-          }}
-          onClose={() => setRoleNameDialog(null)}
-        />
-      ) : null}
+      {roleNameDialog ? (() => {
+        const dialogNode = nodes.find((n) => n.id === roleNameDialog);
+        // 武器与角色是同一套命名空间，但弹窗标题/标签要分开（用户要求）
+        const kind: "角色" | "武器" =
+          schema.nodeTypes[dialogNode?.type ?? ""]?.weapon_card ? "武器" : "角色";
+        return (
+          <RoleNameDialog
+            initialName={String(dialogNode?.fields.role_name ?? "").trim()}
+            kind={kind}
+            check={(name) => roleNameError(nodes, name, roleNameDialog, kind)}
+            onSave={(name) => {
+              onField(roleNameDialog, "role_name", name);
+              setRoleNameDialog(null);
+            }}
+            onClose={() => setRoleNameDialog(null)}
+          />
+        );
+      })() : null}
 
       {panelDialog ? (() => {
         const node = nodes.find((n) => n.id === panelDialog);

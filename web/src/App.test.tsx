@@ -1110,6 +1110,21 @@ describe("App 集成（假后端 + 真 schema）", () => {
     expect(btn).not.toHaveClass("on");
   });
 
+  it("右键武器域 →「设置武器名…」：弹窗标题与标签都是「武器名」", async () => {
+    const user = userEvent.setup();
+    await renderApp();
+    await addCard(user, "weapon");
+    const card = await screen.findByTestId("card-n1");
+
+    fireEvent.contextMenu(card.querySelector(".card-head") as Element);
+    await user.click(await screen.findByText("设置武器名…"));
+    const dlg = await screen.findByTestId("role-name-dialog");
+    // 武器与角色共用这套命名空间逻辑，但字面上要区分（用户要求）
+    expect(within(dlg).getByRole("heading")).toHaveTextContent("设置武器名");
+    expect(within(dlg).getByText("武器名")).toBeInTheDocument();
+    expect(within(dlg).queryByText("角色名")).toBeNull();
+  });
+
   it("右键角色标签 →「角色面板…」：宏表可编辑、并显示拐力统计（OUT/IN）", async () => {    const user = userEvent.setup();
     await renderApp();
     await addCard(user, "role");

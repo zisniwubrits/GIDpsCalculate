@@ -389,22 +389,31 @@ export interface RoleNameDialogProps {
   initialName: string;
   /** 名字能不能用（重名 / 格式非法）；返回错误文案，空串 = 可以 */
   check?: (name: string) => string;
+  /** 「角色」还是「武器」：只影响标题与输入框的标签（两者是同一套命名空间） */
+  kind?: "角色" | "武器";
   onSave: (name: string) => void;
   onClose: () => void;
 }
 
 /**
- * 设置角色名（右键角色标记的标题栏打开）。
- * 角色名原来放在卡面上的单行输入框里，用户要求改成右键设置 —— 卡面省下这一行，
+ * 设置角色 / 武器名（右键标记的标题栏打开）。
+ * 名字原来放在卡面上的单行输入框里，用户要求改成右键设置 —— 卡面省下这一行，
  * 也就能把卡片收窄。
  *
- * 名字必须**唯一**（用户要求：不许同名角色）：重名时当场红字提示并禁用「确定」，
+ * 名字必须唯一（用户要求：不许同名角色）：重名时当场红字提示并禁用「确定」，
  * 否则两个同名区域会互相干扰（变量前缀、拐力箭头、一键隐藏都按名字找）。
  */
-export function RoleNameDialog({ initialName, check, onSave, onClose }: RoleNameDialogProps) {
+export function RoleNameDialog({
+  initialName,
+  check,
+  kind = "角色",
+  onSave,
+  onClose,
+}: RoleNameDialogProps) {
   const [name, setName] = useState(initialName);
   const error = check ? check(name.trim()) : "";
   const canSave = !error;
+  const title = `设置${kind}名`;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -419,13 +428,13 @@ export function RoleNameDialog({ initialName, check, onSave, onClose }: RoleName
       <div
         className="modal"
         role="dialog"
-        aria-label="设置角色名"
+        aria-label={title}
         data-testid="role-name-dialog"
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <h2>设置角色名</h2>
+        <h2>{title}</h2>
         <label className="modal-row">
-          <span>角色名</span>
+          <span>{kind}名</span>
           <input
             value={name}
             data-testid="role-name-input"
