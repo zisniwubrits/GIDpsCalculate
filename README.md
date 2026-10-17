@@ -59,6 +59,20 @@
 > 也可以在资源管理器里右键 `launcher.bat` →「属性」→ 常规页底部勾选**解除锁定(Unblock)** → 确定。
 > 用 `git clone` 拿到的仓库不会带这个标记；从 GitHub 下载 ZIP 再解压则每个文件都可能带，
 > 解压后跑一次上面的整目录命令最省事。
+>
+> **如果整目录都查不到下载标记、双击却仍然弹「无法验证发布者」**（用
+> `Get-Item .\launcher.bat -Stream Zone.Identifier` 查，报错就是没有标记），那和 Unblock 无关：
+> 那是 Windows 对 `.bat` 的「启动应用程序和不安全文件」策略（Internet 选项 → 安全 → 自定义级别）
+> 在提示，点「运行」即可。不想看这个框就改用终端启动，不走 ShellExecute 就不会弹：
+>
+> ```bat
+> cd /d E:\WorkStation\GI\DpsCalculate && launcher.bat   :: cmd
+> python main.py                                          :: 或者直接起后端（已构建过前端时够用）
+> ```
+>
+> ```powershell
+> cd E:\WorkStation\GI\DpsCalculate; .\launcher.bat       :: PowerShell
+> ```
 
 也可以带参数直接调用（不弹菜单）：
 
