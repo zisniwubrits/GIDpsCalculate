@@ -207,7 +207,8 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
         spec.table ? " card-body-table" : ""
       }`}
     >
-      {spec.table && table ? (
+      {/* 「域对照表」自己就是表格编辑器（见下面的 MatrixEditor），别再画一遍通用表格 */}
+      {spec.table && spec.table !== "matrix" && table ? (
         <DataTable
           header={table.header}
           rows={table.rows}
