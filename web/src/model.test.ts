@@ -41,6 +41,7 @@ import {
   clipboardFromText,
   clipboardToText,
   collectClipboard,
+  displayWidthCh,
   duplicateRoleNames,
   pasteClipboard,
   roleOwnerMap,
@@ -773,6 +774,17 @@ describe("角色命名空间的两条硬规则", () => {
     // 已经规规矩矩的工程：原样返回
     const clean = resolveRoleOverlaps([mk("r1", "火神", [0, 0], [560, 380])]);
     expect(clean.moved).toEqual([]);
+  });
+});
+
+describe("工具栏文字宽度", () => {
+  it("显示宽度按 ch 算：ASCII 1、中文/全角 2 —— 工程名输入框用它自适应", () => {
+    expect(displayWidthCh("")).toBe(0);
+    expect(displayWidthCh("abc")).toBe(3);
+    expect(displayWidthCh("雷神直伤")).toBe(8);
+    expect(displayWidthCh("雷神 abc")).toBe(4 + 1 + 3);   // 中文 4ch + 空格 + abc
+    // 全角标点也算宽（“保存到：”那种）
+    expect(displayWidthCh("：")).toBe(2);
   });
 });
 

@@ -619,8 +619,31 @@ export function formatPanelShow(keys: readonly string[]): string {
   return keys.join(" ");
 }
 
-/** 生成不重复的节点 id：n1、n2… */
-export function nextNodeId(nodes: CardNode[]): string {
+/**
+ * 一段文字的**显示宽度**（单位 ch，界面是等宽字体所以能精确换算）。
+ *
+ * 用途：工程名输入框按内容自适应宽度，名字再长也能整串看见，不会被截成半个。
+ * 全角 / 中文 / 日文 / 韩文按 2ch 计，ASCII 按 1ch（等宽字体下这就是真实占位）。
+ */
+export function displayWidthCh(text: string): number {
+  let w = 0;
+  for (const ch of String(text ?? "")) {
+    const code = ch.codePointAt(0) ?? 0;
+    // 常见的宽字符区段：CJK、假名、谚文、全角标点
+    const wide =
+      (code >= 0x1100 && code <= 0x115f) ||
+      (code >= 0x2e80 && code <= 0xa4cf) ||
+      (code >= 0xac00 && code <= 0xd7a3) ||
+      (code >= 0xf900 && code <= 0xfaff) ||
+      (code >= 0xfe30 && code <= 0xfe6f) ||
+      (code >= 0xff00 && code <= 0xff60) ||
+      (code >= 0xffe0 && code <= 0xffe6);
+    w += wide ? 2 : 1;
+  }
+  return w;
+}
+
+/** 生成不重复的节点 id：n1、n2… */export function nextNodeId(nodes: CardNode[]): string {
   let max = 0;
   for (const n of nodes) {
     const m = /^n(\d+)$/.exec(n.id);

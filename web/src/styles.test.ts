@@ -296,6 +296,20 @@ describe("工具栏状态区", () => {
   });
 });
 
+describe("工具栏状态区", () => {
+  it("工程名与保存目录都完整显示：目录允许换行，不再用省略号截断", () => {
+    const dir = ruleBody(".tb-dir");
+    // 用户要求：确保能完整显示项目名和项目目录，换行显示
+    expect(dir).toMatch(/white-space:\s*normal/);
+    expect(dir).not.toMatch(/text-overflow:\s*ellipsis/);
+    expect(dir).not.toMatch(/overflow:\s*hidden/);
+    // 左半边容器要能换行，目录长了就落到下一行
+    expect(ruleBody(".tb-left")).toMatch(/flex-wrap:\s*wrap/);
+    // 工程名输入框不再写死 150px（宽度由 TSX 按内容算）
+    expect(ruleBody(".tb-name input")).not.toMatch(/width:\s*150px/);
+  });
+});
+
 describe("全局字体", () => {
   it("界面全面等宽：body 用 --font-mono，且这个变量以 monospace 兜底", () => {
     const css = loadStyles();

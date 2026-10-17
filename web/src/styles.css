@@ -198,6 +198,12 @@ textarea:focus {
   gap: 6px;
 }
 
+/* 左半边（工程名 + 保存状态 + 目录）允许换行：目录长了就占下一行，不截断 */
+.tb-left {
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+
 .tb-mid {
   flex: 1 1 auto;
   flex-wrap: wrap;
@@ -208,10 +214,12 @@ textarea:focus {
   align-items: center;
   gap: 6px;
   color: var(--muted);
+  max-width: 100%;
 }
 
+/* 宽度由 TSX 按内容算好（ch 单位，等宽字体下就是真实占位）；这里只兜住"别撑出窗口" */
 .tb-name input {
-  width: 150px;
+  max-width: 100%;
 }
 
 .tb-dirty {
@@ -223,14 +231,14 @@ textarea:focus {
   color: var(--warn);
 }
 
-/* 一键保存的落地目录：太长就省略，完整路径放 title 里 */
+/* 一键保存的落地目录：完整显示，太长就换行（原来省略号截断，看不出存到哪） */
 .tb-dir {
-  max-width: 320px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   font-size: 12px;
   color: var(--muted);
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+  max-width: 100%;
 }
 
 .tb-sep {

@@ -1,4 +1,6 @@
 /** 顶部工具栏：工程名、保存目录、撤销/重做、文件操作、缩放、帮助与状态提示。 */
+import { displayWidthCh } from "../model";
+
 export interface ToolbarProps {
   name: string;
   onName: (v: string) => void;
@@ -36,10 +38,13 @@ export default function Toolbar(props: ToolbarProps) {
       <div className="tb-left">
         <label className="tb-name">
           <span>工程名</span>
+          {/* 输入框按内容自适应宽度（ch = 等宽字体的一个字符宽），名字再长也能整串看见 */}
           <input
             value={props.name}
             placeholder="未命名"
             data-testid="project-name"
+            style={{ width: `${Math.max(displayWidthCh(props.name || "未命名") + 2, 8)}ch` }}
+            title={props.name || "未命名"}
             onChange={(e) => props.onName(e.target.value)}
           />
         </label>
@@ -47,6 +52,7 @@ export default function Toolbar(props: ToolbarProps) {
           {props.dirty ? "● 未保存" : "○ 已保存"}
         </span>
         {props.saveDir ? (
+          // 目录完整显示并允许换行（原来超长会被省略号截掉，看不出存到哪）
           <span className="tb-dir" title={`一键保存会写到这里：${props.saveDir}`} data-testid="save-dir">
             保存到：{props.saveDir}
           </span>
