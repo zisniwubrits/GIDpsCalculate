@@ -1,7 +1,7 @@
 /**
  * 弹窗：设置结果变量（★结果卡片右键）、F1 教程。
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   DEFAULT_PANEL_CUSTOM_PATTERN,
   nextCustomOutName,
@@ -529,6 +529,8 @@ export interface HelpDialogProps {
 }
 
 export function HelpDialog({ text, sections, onClose }: HelpDialogProps) {
+  const preRef = useRef<HTMLPreElement | null>(null);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape" || e.key === "F1") {
@@ -540,6 +542,30 @@ export function HelpDialog({ text, sections, onClose }: HelpDialogProps) {
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
+  /**
+   * 点章节名跳到那一节。
+   *
+   * 教程是一整块 `<pre>`（`pre-wrap` 会换行，按行数折算位置不准），所以用一个
+   * 1 字符的 Range 量出那一节的**可视位置**，再把滚动条挪过去 —— 换行、缩放都不影响。
+   */
+  const jumpTo = (title: string) => {
+    const pre = preRef.current;
+    const node = pre?.firstChild;
+    if (!pre || !node) return;
+    const at = text.indexOf(`【${title}】`);
+    if (at < 0) return;
+    try {
+      const range = document.createRange();
+      range.setStart(node, at);
+      range.setEnd(node, Math.min(at + 1, node.textContent?.length ?? at + 1));
+      const target = range.getBoundingClientRect().top - pre.getBoundingClientRect().top;
+      // 现位置 + 目标相对位置就是该滚到的 scrollTop（Range 与 pre 用同一坐标系）
+      pre.scrollTop = Math.max(0, pre.scrollTop + target - 4);
+    } catch {
+      /* 量不出来就算了：不影响阅读 */
+    }
+  };
+
   return (
     <div className="modal-mask" onMouseDown={onClose}>
       <div
@@ -550,14 +576,24 @@ export function HelpDialog({ text, sections, onClose }: HelpDialogProps) {
         onMouseDown={(e) => e.stopPropagation()}
       >
         <h2>使用教程 (F1)</h2>
+        {/* 章节导航：点一下跳到那一节（教程很长，没有导航很难读） */}
         <div className="help-nav">
           {sections.map((s) => (
-            <span className="help-chip" key={s}>
+            <button
+              type="button"
+              className="help-chip"
+              key={s}
+              data-testid={`help-nav-${s}`}
+              title={`跳到「${s}」`}
+              onClick={() => jumpTo(s)}
+            >
               {s}
-            </span>
+            </button>
           ))}
         </div>
-        <pre className="help-text">{text}</pre>
+        <pre className="help-text" ref={preRef}>
+          {text}
+        </pre>
         <div className="modal-actions">
           <span className="grow" />
           <button type="button" className="primary" onClick={onClose}>

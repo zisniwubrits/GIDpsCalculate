@@ -25,6 +25,8 @@ const fakeBackend = {
   webStale: false,
   /** 模拟旧后端：/api/schema 缺字段（用来验证界面不会白屏） */
   schemaOverride: null as Schema | null,
+  /** 需要指定教程内容时用它（默认给一节「基本概念」） */
+  helpOverride: null as null | { text: string; sections: string[] },
 };
 
 const jsonResponse = (data: unknown) =>
@@ -112,10 +114,12 @@ function installFetch() {
       });
     if (url.includes("/api/schema")) return jsonResponse(fakeBackend.schemaOverride ?? schema);
     if (url.includes("/api/help"))
-      return jsonResponse({
-        text: "【基本概念】\n· 每张卡片 = 一个乘区节点",
-        sections: ["基本概念"],
-      });
+      return jsonResponse(
+        fakeBackend.helpOverride ?? {
+          text: "【基本概念】\n· 每张卡片 = 一个乘区节点",
+          sections: ["基本概念"],
+        },
+      );
     if (url.includes("/api/storage"))
       return jsonResponse({
         dir: fakeBackend.dir,
@@ -173,6 +177,7 @@ describe("App 集成（假后端 + 真 schema）", () => {
     fakeBackend.open = null;
     fakeBackend.webStale = false;
     fakeBackend.schemaOverride = null;
+    fakeBackend.helpOverride = null;
     installFetch();
   });
 
@@ -529,13 +534,23 @@ describe("App 集成（假后端 + 真 schema）", () => {
     expect(screen.getByText("画布是空的")).toBeInTheDocument();
   });
 
-  it("F1 打开教程并显示后端返回的文本", async () => {
+  it("F1 打开教程并显示后端返回的文本，章节导航可点", async () => {
     const user = userEvent.setup();
+    // 假后端给两节，好验证"点第二节"这条路
+    fakeBackend.helpOverride = {
+      text: "【基本概念】\n· 每张卡片 = 一个乘区节点\n\n【变量】\n· 变量 = 名字 = 表达式",
+      sections: ["基本概念", "变量"],
+    };
     await renderApp();
     await user.keyboard("{F1}");
 
     const dialog = await screen.findByTestId("help-dialog");
     expect(dialog).toHaveTextContent("基本概念");
+    // 顶部那排章节名是真按钮（点一下跳到那一节）；教程长，没有导航很难读
+    const nav = within(dialog).getByTestId("help-nav-变量");
+    expect(nav.tagName).toBe("BUTTON");
+    await user.click(nav);                       // 跳转本身不该抛错 / 关掉弹窗
+    expect(screen.getByTestId("help-dialog")).toBeInTheDocument();
     await user.click(within(dialog).getByRole("button", { name: "关闭 (Esc)" }));
     expect(screen.queryByTestId("help-dialog")).not.toBeInTheDocument();
   });

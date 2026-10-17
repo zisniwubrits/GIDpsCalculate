@@ -1181,8 +1181,20 @@ textarea:focus {
   font-size: 11px;
   color: var(--accent);
   background: #eef3f8;
+  border: 1px solid transparent;
   border-radius: 10px;
   padding: 1px 8px;
+  cursor: pointer;
+}
+
+/* 章节导航是可点的：悬停给一点反馈，键盘聚焦也能看见 */
+.help-chip:hover {
+  border-color: var(--accent);
+}
+
+.help-chip:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 1px;
 }
 
 .help-text {
