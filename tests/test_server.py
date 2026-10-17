@@ -98,9 +98,9 @@ class TestApiBasics(unittest.TestCase):
 
     def test_root_page_without_build(self):
         """没有 web/dist 时给出可读的后端就绪提示页。"""
-        if os.path.isfile(os.path.join(
-                os.path.dirname(os.path.abspath(__file__)),
-                "web", "dist", "index.html")):
+        # 本文件在 tests/ 里，仓库根是上一层
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        if os.path.isfile(os.path.join(root, "web", "dist", "index.html")):
             self.skipTest("已构建前端，跳过占位页断言")
         r = client.get("/")
         self.assertEqual(r.status_code, 200)

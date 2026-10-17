@@ -22,7 +22,8 @@
 import os
 import unittest
 
-ROOT = os.path.dirname(os.path.abspath(__file__))
+# 本文件在 tests/ 里，仓库根是上一层
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PATH = os.path.join(ROOT, "launcher.bat")
 
 

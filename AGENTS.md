@@ -47,7 +47,7 @@
 **每新增或修改一个功能，单独产生一个 git 提交**，便于用 git 精确回滚某一个功能。
 
 ```bash
-python -m pytest -q                    # 后端测试（公式 / 图求值 / 接口）
+python -m pytest -q                    # 后端测试（全部在 tests/ 里）
 cd web && pnpm test && pnpm typecheck  # 前端测试 + 类型检查
 git add -A
 git commit -m "feat: 简述这个功能"
@@ -82,7 +82,8 @@ git commit -m "feat: 简述这个功能"
 | `web/src/model.ts` | 画布模型纯函数（落位、对齐、预设、JSON 往返）——业务规则放这里，方便单测 |
 | `web/src/components/` | 卡片、连线、表格、右键菜单、弹窗、侧栏、工具栏 |
 | `web/src/state/` | 撤销重做、后端请求、localStorage 持久化 |
-| `test_damage.py` / `test_graph.py` / `test_role_namespace.py` / `test_server.py` / `test_storage.py` / `test_build_check.py` / `test_launcher.py` | 后端与启动器测试（`python -m pytest`） |
+| `tests/` | **后端测试全都在这里**（公式 / 图求值 / 接口 / 落盘 / 启动器），根目录只留 `main.py` 与配置；`tests/conftest.py` 会把仓库根补进 `sys.path`，所以在仓库根或 `tests/` 里跑都行 |
+| `tests/test_*.py` | 后端与启动器测试（`python -m pytest`），一个模块一个文件 |
 | `web/src/**/*.test.ts(x)` | 前端测试（`pnpm test`） |
 | `private/` | 个人存档与笔记，**已被 .gitignore 忽略，不要提交** |
 
@@ -97,7 +98,7 @@ git commit -m "feat: 简述这个功能"
 - 有效暴击率封顶 100%。
 - **新增卡片类型**：只在 `genshin_dmg/nodes.py` 的 `NODE_TYPES` 里注册
   （`inputs` / `fields` / `compute` / 可选 `factor`），`schema()` 会自动把它给到前端，
-  前端菜单与卡片渲染**无需改动**。同时补 `test_graph.py` 用例。
+  前端菜单与卡片渲染**无需改动**。同时补 `tests/test_graph.py` 用例。
 - 改动画布结构（节点、连线、尺寸、缩放、字段）时，必须同步
   `Graph.to_dict()` / `Graph.from_dict()`，保证工程 JSON 可往返（且与旧 tkinter 工程兼容）。
 - 变量求值顺序不要随意改（完整顺序与理由见 `genshin_dmg/graph.py` 的 `Graph.evaluate` docstring，
@@ -166,13 +167,13 @@ cmd.exe 按「读文件那一刻的控制台代码页」解析批处理。中文
 - 不要加 `chcp`（会改掉用户控制台代码页，纯 ASCII 下没有必要）；
 - 中文本地化留给 README 与网页界面，命令行只保留英文。
 
-`test_launcher.py` 会守住这些约束（纯 ASCII / CRLF / 无 BOM / 无 chcp / 包管理器顺序 / 默认端口与 main.py 一致）。
+`tests/test_launcher.py` 会守住这些约束（纯 ASCII / CRLF / 无 BOM / 无 chcp / 包管理器顺序 / 默认端口与 main.py 一致）。
 
 ## 7. 公式来源
 
 - 通用伤害：<https://ellen.rth1.xyz/原神产球及附着/index.html>
 - 月 / 星等进阶：<https://yuhuazhe.cn/zlk/gongshi.html>
 - 两处跨源差异：
-  - **激化精通项已定为 `5×EM/(EM+1200)`**（ellen 口径，用户已确认，勿改成 +2000）；由 `test_damage.py::test_mastery_term_is_1200` 锁定。
+  - **激化精通项已定为 `5×EM/(EM+1200)`**（ellen 口径，用户已确认，勿改成 +2000）；由 `tests/test_damage.py::test_mastery_term_is_1200` 锁定。
     手动搭激化链时「精通增益」卡片填 k=5 / 分母=1200；星月与剧变仍用 +2000。
   - 扩散倍率 ellen `0.6` vs 羽化哲 `0.65`：当前沿用 `0.6`。

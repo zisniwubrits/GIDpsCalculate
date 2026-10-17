@@ -89,8 +89,8 @@ Vite 已把 `/api` 代理到后端；后端换端口时用环境变量指过去�
 ### 4. 测试
 
 ```bash
-python -m pytest -q                  # 后端：公式 47 项 + 图求值 46 项 + 接口 29 项
-cd web && pnpm test                  # 前端：模型 20 项 + 表格 7 项 + 界面集成 21 项
+python -m pytest -q                  # 后端测试（全部在 tests/ 里，约 300 项）
+cd web && pnpm test                  # 前端测试（模型 / 样式 / 组件 / 界面集成，约 160 项）
 cd web && pnpm typecheck             # 前端类型检查
 ```
 
@@ -126,9 +126,15 @@ DpsCalculate/
 │   ├── src/components/         # 卡片、连线、表格、菜单、弹窗、侧栏、工具栏
 │   ├── src/state/              # 状态：撤销重做、后端请求、localStorage 持久化
 │   └── src/test/               # 测试环境补丁 + schema 夹具
-├── test_damage.py              # 公式单元测试
-├── test_graph.py               # 节点图求值测试
-├── test_server.py              # 后端接口测试
+├── tests/                      # 后端测试全部在这里（根目录不再堆 test_*.py）
+│   ├── conftest.py             # 把仓库根补进 sys.path（在根或 tests/ 里跑都行）
+│   ├── test_damage.py          # 公式单元测试
+│   ├── test_graph.py           # 节点图求值测试
+│   ├── test_role_namespace.py  # 角色/武器命名空间、拐力、子命名空间
+│   ├── test_server.py          # 后端接口测试
+│   ├── test_storage.py         # 工程落盘测试
+│   ├── test_build_check.py     # 前端产物过期判定
+│   └── test_launcher.py        # 启动器约束（纯 ASCII / CRLF / 端口）
 ├── requirements.txt            # Python 依赖
 ├── AGENTS.md                   # 给 AI 助手/开发者的约定
 └── LICENSE                     # MIT
@@ -293,7 +299,7 @@ DpsCalculate/
 
 ### 两处跨参考源的差异提醒
 
-- **激化值**：采用 `5×EM/(EM+1200)`（ellen 页口径，**已确认**）。羽化哲页写作 `+2000`，本项目不采用；`test_damage.py::test_mastery_term_is_1200` 锁定该口径，勿改。
+- **激化值**：采用 `5×EM/(EM+1200)`（ellen 页口径，**已确认**）。羽化哲页写作 `+2000`，本项目不采用；`tests/test_damage.py::test_mastery_term_is_1200` 锁定该口径，勿改。
   - 手动搭激化链时，「精通增益」卡片请填 **k=5 / 分母=1200**（「激化值」预设已自动填好）。
   - 星 / 月反应与剧变反应统一用 `+2000`（k=6 星月、k=16 剧变）。
 - **扩散倍率**：ellen 页 0.6，羽化哲页 0.65。当前代码沿用 ellen（0.6）。

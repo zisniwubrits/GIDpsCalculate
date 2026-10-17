@@ -4,6 +4,8 @@ __pycache__/
 *.egg-info/
 .venv/
 venv/
+# pytest 的缓存目录（测试搬进 tests/ 之后，跑一次仍会在仓库根留下它）
+.pytest_cache/
 
 # PyInstaller 打包产物（可自行重新生成）
 build/

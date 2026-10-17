@@ -20,7 +20,7 @@ rem  NOTE: keep this file PURE ASCII and CRLF. cmd.exe parses batch files using
 rem        the console code page at read time; non-ASCII text (Chinese) makes it
 rem        lose byte alignment on a CP-936 console, so `echo ` gets eaten and a
 rem        menu line is executed as a command ("'[4]' is not recognized").
-rem        test_launcher.py enforces this.
+rem        tests/test_launcher.py enforces this.
 rem ===========================================================================
 setlocal EnableExtensions
 
