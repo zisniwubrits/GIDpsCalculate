@@ -524,9 +524,34 @@ describe("App 集成（假后端 + 真 schema）", () => {
     await renderApp();
     await user.click(screen.getByRole("button", { name: "打开工程…" }));
 
+    // 工程名以**文件名**为准（用户要求）：这里故意让文件里的 name 与文件名不同
     await waitFor(() => expect(screen.getByTestId("project-name")).toHaveValue("旧工程"));
     expect(await screen.findByTestId("card-n1")).toBeInTheDocument();
     expect(screen.getByTestId("save-dir")).toHaveTextContent("E:\\别处");
+  });
+
+  it("打开工程时工程名同步成文件名（文件里的 name 不同也以文件名为准）", async () => {
+    const user = userEvent.setup();
+    fakeBackend.open = {
+      ok: true,
+      path: "E:\\别处\\米c0.json",
+      dir: "E:\\别处",
+      graph: {
+        version: 1,
+        app: "GenshinDamageCalc",
+        zoom: 1,
+        name: "米奥瓦砂",                       // 文件里写的旧名字
+        nodes: [],
+        links: [],
+      } as GraphJSON,
+    };
+
+    await renderApp();
+    await user.click(screen.getByRole("button", { name: "打开工程…" }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("project-name")).toHaveValue("米c0"),
+    );
   });
 
   it("打开工程被取消时静默处理（不报错、不改画布）", async () => {

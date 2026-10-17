@@ -638,7 +638,9 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
       const fixed = resolveRoleOverlaps(parsed.nodes);
       const dup = duplicateRoleNames(parsed.nodes);
       history.reset({ nodes: fixed.nodes, links: parsed.links });
-      setName(parsed.name);
+      // 工程名跟着**文件名**走（用户要求）：打开哪个文件就叫什么名字，
+      // 免得"文件叫 A.json、里面的工程名是 B"时保存写到别的文件去
+      setName(projectNameFromPath(res.path) || parsed.name);
       setSavedZoom(parsed.zoom);
       rf.setViewport({ x: 0, y: 0, zoom: parsed.zoom });
       if (res.dir) setSaveDir(res.dir);           // 从哪读就往哪存
@@ -1367,6 +1369,14 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
       ) : null}
     </div>
   );
+}
+
+/** 从工程文件路径里取工程名（去掉目录与 .json 后缀）；取不到就返回空串。 */
+function projectNameFromPath(path?: string): string {
+  const raw = String(path ?? "").trim();
+  if (!raw) return "";
+  const base = raw.split(/[\\/]/).pop() ?? "";
+  return base.replace(/\.json$/i, "").trim();
 }
 
 /** 表格类卡片（理想圣遗物 / 变量表）的内容。 */
