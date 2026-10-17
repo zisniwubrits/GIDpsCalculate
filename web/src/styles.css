@@ -672,8 +672,12 @@ textarea:focus {
 
 .src-pop-item {
   font: inherit;
+  /* 关键：父级是 flex + max-height，默认 flex-shrink:1 会把每项压扁
+     （20 项被压到 10.6px，行高不够 → 文字叠在一起糊成一片） */
+  flex: 0 0 auto;
+  line-height: 1.5;
   text-align: left;
-  padding: 2px 6px;
+  padding: 3px 6px;
   border: none;
   border-radius: 4px;
   background: transparent;

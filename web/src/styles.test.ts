@@ -311,6 +311,17 @@ describe("关键字高亮与页面图标", () => {
     expect(ruleBody(".code-input")).toMatch(/caret-color:/);   // 光标要看得见
   });
 
+  it("补全弹窗的候选项不能被 flex 压扁（否则文字会叠在一起）", () => {
+    const item = ruleBody(".src-pop-item");
+    expect(item).toMatch(/flex:\s*0 0 auto/);
+    expect(item).toMatch(/line-height:\s*1\.5/);
+    // 弹窗本身：浮在最上层、白底、可滚动
+    const pop = ruleBody(".src-pop");
+    expect(pop).toMatch(/position:\s*fixed/);
+    expect(pop).toMatch(/overflow-y:\s*auto/);
+    expect(pop).toMatch(/background:\s*#fff/);
+  });
+
   it("页面用自己的图标，不用浏览器默认的那个", () => {
     const html = ["index.html", "web/index.html"]
       .map((p) => resolve(process.cwd(), p))
