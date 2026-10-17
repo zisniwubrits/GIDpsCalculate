@@ -855,6 +855,44 @@ describe("卡片 / 域的复制粘贴", () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
+  it("粘贴优先落在鼠标处：整包以 anchor 为中心，附近被占就小步避让", () => {
+    const nodes = scene();
+    const payload = collectClipboard(nodes, []);
+    const anchor: [number, number] = [5000, 3000];
+    const res = pasteClipboard(payload, nodes, nodes.map((n) => n.id), estimateSize, anchor);
+    const created = res.nodes.filter((n) => res.created.includes(n.id));
+    // 整包的几何中心 ≈ 鼠标位置（卡片包 = 一个域 520×340 起）
+    const role = created.find((n) => isNamespaceNode(n)) as CardNode;
+    expect(role.pos[0]).toBeGreaterThan(4000);
+    expect(role.pos[0]).toBeLessThan(anchor[0]);
+    expect(role.pos[1]).toBeLessThan(anchor[1]);
+    // 附近已经被占：会在 anchor 附近小步挪，不会跳回左上角
+    const node = card("x1", "dmg", [anchor[0] - 100, anchor[1] - 60]);
+    const blocked = [...nodes, node];
+    const res2 = pasteClipboard(
+      collectClipboard(nodes, []),
+      blocked,
+      blocked.map((n) => n.id),
+      estimateSize,
+      anchor,
+    );
+    const created2 = res2.nodes.filter((n) => res2.created.includes(n.id));
+    const role2 = created2.find((n) => isNamespaceNode(n)) as CardNode;
+    expect(role2.pos[0]).toBeGreaterThan(anchor[0] - 300);
+    expect(role2.pos[0]).toBeLessThan(anchor[0] + 300);
+  });
+
+  it("鼠标停在角色域里粘贴：卡片落在域内（归这个角色），不会被硬推到域外", () => {
+    const nodes = scene();
+    const single = card("c9", "dmg", [0, 0]);
+    single.selected = true;
+    const payload = collectClipboard([single], []);
+    const inside: [number, number] = [200, 150];      // r1 的 520×340 区域里
+    const res = pasteClipboard(payload, nodes, nodes.map((n) => n.id), estimateSize, inside);
+    const created = res.nodes.filter((n) => res.created.includes(n.id));
+    expect(roleOwnerMap(res.nodes).get(created[0].id)).toBe("r1");
+  });
+
   it("撞名就加序号（火神 → 火神_2 → 火神_3），不撞名不动", () => {
     const nodes = scene();
     const payload = collectClipboard(nodes, []);

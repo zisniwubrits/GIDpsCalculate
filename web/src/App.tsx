@@ -195,6 +195,8 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
   const boxSelecting = useRef(false);
   /** 框选时是否也选角色/武器域（工具栏「框选域」开关，默认关；见 ignoredByBoxSelect） */
   const [boxSelectDomains, setBoxSelectDomains] = useState(false);
+  /** 鼠标在画布上的**屏幕坐标**（粘贴时换算成流坐标，把卡片放到鼠标附近） */
+  const pointer = useRef<{ x: number; y: number } | null>(null);
   /** 拖动角色区域被"重叠"规则挡回时，记下要写回 React Flow 的位置（apply 之后处理） */
   const revertTo = useRef<{ id: string; pos: [number, number]; blockedBy: CardNodeModel[] } | null>(
     null,
@@ -716,8 +718,18 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
       setToast("剪贴板里没有卡片（先在画布上选中卡片或域，按 Ctrl+C）");
       return;
     }
+    // 粘贴位置：鼠标在哪儿就贴到哪儿（换算成流坐标；鼠标还没进过画布则退回找空白）
+    const anchor = pointer.current
+      ? rf.screenToFlowPosition({ x: pointer.current.x, y: pointer.current.y })
+      : null;
     apply((s) => {
-      const res = pasteClipboard(payload, s.nodes, s.nodes.map((n) => n.id));
+      const res = pasteClipboard(
+        payload,
+        s.nodes,
+        s.nodes.map((n) => n.id),
+        estimateSize,
+        anchor ? [anchor.x, anchor.y] : null,
+      );
       return { nodes: res.nodes, links: [...s.links, ...res.links] };
     });
     const roles = payload.nodes.filter(isNamespaceNode).length;
@@ -729,7 +741,7 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
           ? `${roles} 个域`
           : `${cards} 张卡片`;
     setToast(`已粘贴 ${what}${fromClipboard ? "" : "（来自本页缓存）"}`);
-  }, [apply, schema]);
+  }, [apply, schema, rf]);
 
   const setFontSize = useCallback(
     (id: string, value: number | null) => {
@@ -1158,7 +1170,14 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
           onAlign={onAlign}
           onClearSelection={clearSelection}
         />
-        <div className="canvas" data-testid="canvas">
+        {/* 画布容器：顺手记下鼠标屏幕坐标 —— 粘贴时换算成流坐标，卡片就出现在鼠标附近 */}
+        <div
+          className="canvas"
+          data-testid="canvas"
+          onMouseMove={(e) => {
+            pointer.current = { x: e.clientX, y: e.clientY };
+          }}
+        >
           <ReactFlow
             nodes={rfNodes}
             edges={rfEdges}

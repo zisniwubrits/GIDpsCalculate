@@ -751,11 +751,15 @@ export function collectClipboard(nodes: CardNode[], links: GraphLinkJSON[]): Cli
 }
 
 /**
- * 把一包卡片贴到画布上：**新 id、按块找一块不重叠的空白位置**，内部连线照原样接回来。
+ * 把一包卡片贴到画布上：**新 id**，内部连线照原样接回来。
  *
  * * `takenIds`：已经占用的 id（粘贴出来的新卡避开它们，连续粘贴也不会重号）；
- * * 位置：整包的相对布局保持不变，只做整体平移（沿用 `freeSlot` 那套"找空白"的做法）；
- * * 粘贴出来的卡片会被选中、原来的选中态清掉 —— 这样紧接着还能再拖再贴。
+ * * `anchor`：**粘贴位置（流坐标）**——传了就把整包**居中放在鼠标那儿**（用户在哪儿粘
+ *   就出现在哪儿），只在其附近做小步避让；没传才退回原来那套"从左上扫空白位置"。
+ * * 整包的相对布局保持不变，只做整体平移；
+ * * 落位时**普通卡片允许压在角色/武器域上**（贴进域里就是要归它），只有域与域之间
+ *   仍不许互相压（那条硬规则靠 roleBoxCollisions 守）；
+ * * 粘贴出来的卡片会被选中、原来的选中态清掉 —— 这样紧接着还能再拖再贴；
  * * 域容器上的 `cards_hidden` 会被清掉：粘出来的一包应该是**看得见**的。
  */
 export function pasteClipboard(
@@ -763,6 +767,7 @@ export function pasteClipboard(
   nodes: CardNode[],
   takenIds: readonly string[],
   sizeOf: SizeOf = estimateSize,
+  anchor?: [number, number] | null,
 ): { nodes: CardNode[]; links: GraphLinkJSON[]; created: string[] } {
   if (!payload.nodes.length) return { nodes, links: [], created: [] };
   const taken = new Set(takenIds);
@@ -782,7 +787,9 @@ export function pasteClipboard(
   const y0 = Math.min(...payload.nodes.map((n) => n.pos[1]));
   const bw = Math.max(...payload.nodes.map((n) => n.pos[0] + w(n))) - x0;
   const bh = Math.max(...payload.nodes.map((n) => n.pos[1] + h(n))) - y0;
-  const [dx, dy] = freeSlotFor(nodes, bw, bh, sizeOf);
+  const [dx, dy] = anchor
+    ? placeNear(nodes, [anchor[0] - bw / 2, anchor[1] - bh / 2], bw, bh, sizeOf)
+    : freeSlotFor(nodes, bw, bh, sizeOf);
 
   const pasted = payload.nodes.map((n) => ({
     ...n,
@@ -818,7 +825,7 @@ export function pasteClipboard(
   };
 }
 
-/** 给一整块（宽 bw × 高 bh）找一块不重叠的空白位置。 */
+/** 给一整块（宽 bw × 高 bh）找一块不重叠的空白位置（旧路径：从左上扫）。 */
 function freeSlotFor(
   nodes: CardNode[],
   bw: number,
@@ -834,6 +841,56 @@ function freeSlotFor(
     if (areaFree(nodes, x, y, bw, bh, sizeOf)) return [x, y];
   }
   return [40, 60];
+}
+
+/**
+ * 在 `base` 附近找一块能放下 (bw × bh) 的位置（粘贴到鼠标处用）。
+ *
+ * 规则：
+ *  * 先试**正中心**（鼠标就是粘贴点），再按 30px 一圈圈往外试（右/下/左/上…），
+ *    所以就算原位被占，也只会挪一点点，不会跳到天边；
+ *  * **只看同层**：普通卡片允许压在角色/武器域上（贴进域里就是要归它），
+ *    但域不能压在另一个域上（那条硬规则）。
+ */
+export function placeNear(
+  nodes: CardNode[],
+  base: [number, number],
+  bw: number,
+  bh: number,
+  sizeOf: SizeOf = estimateSize,
+): [number, number] {
+  const free = (x: number, y: number) => {
+    const box = { x, y, w: bw, h: bh };
+    for (const n of nodes) {
+      const s = sizeOf(n);
+      const other = { x: n.pos[0], y: n.pos[1], w: s.w, h: s.h };
+      if (!boxesOverlap(box, other)) continue;
+      // 普通卡片之间的重叠要避；卡片压在域上不算冲突
+      if (isNamespaceNode(n)) continue;
+      return false;
+    }
+    return true;
+  };
+  if (free(base[0], base[1])) return base;
+  const step = 30;
+  for (let ring = 1; ring <= 12; ring += 1) {
+    const r = ring * step;
+    const candidates: [number, number][] = [
+      [base[0] + r, base[1]],
+      [base[0], base[1] + r],
+      [base[0] - r, base[1]],
+      [base[0], base[1] - r],
+      [base[0] + r, base[1] + r],
+      [base[0] - r, base[1] + r],
+      [base[0] + r, base[1] - r],
+      [base[0] - r, base[1] - r],
+    ];
+    for (const [x, y] of candidates) {
+      if (free(x, y)) return [x, y];
+    }
+  }
+  // 附近实在放不下：退回"从左上找空白"的老办法，至少不会叠在一起
+  return freeSlotFor(nodes, bw, bh, sizeOf);
 }
 
 /** 选中的卡片 / 域里有没有东西可复制。 */
