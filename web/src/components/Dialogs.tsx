@@ -44,17 +44,12 @@ export function ResultVarsDialog({
         onMouseDown={(e) => e.stopPropagation()}
       >
         <h2>设置结果变量</h2>
-        <p className="modal-hint">
-          把结果的三元组分别命名为变量，供所有输入框 / 计算卡 / 变量卡片引用；
-          留空表示不定义。同名时以结果卡片为准。
-        </p>
         {labels.map((f) => (
           <label className="modal-row" key={f.key}>
             <span>{f.label}</span>
             <input
               value={values[f.key] ?? ""}
               data-testid={`var-${f.key}`}
-              placeholder="例如 期望伤害"
               onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
             />
           </label>
@@ -79,7 +74,7 @@ export function ResultVarsDialog({
 export interface NameCardDialogProps {
   /** 卡片当前的名字（空串 = 未命名） */
   initial: string;
-  /** 卡片类型标题，仅用于提示文案 */
+  /** 卡片类型标题（保留给弹窗标题用；说明文字已按用户要求删除） */
   title: string;
   /** 该卡所属角色（空串 = 不属于任何角色） */
   role: string;
@@ -93,11 +88,11 @@ export interface NameCardDialogProps {
  * 名字只显示在标题栏（`增伤区 · 雷神增伤`），**不占卡片版面**；
  * 命名后可以像变量一样引用这张卡的输出：`卡片名` = 期望值，
  * `卡片名::暴击` / `卡片名::未暴击` 取另外两个分量。
+ *
+ * 弹窗里只留「输入框 + 按钮」：解释文字与占位示例按用户要求全部删掉（说明在 F1 教程里）。
  */
 export function NameCardDialog({
   initial,
-  title,
-  role,
   onSave,
   onClose,
 }: NameCardDialogProps) {
@@ -123,19 +118,11 @@ export function NameCardDialog({
         onMouseDown={(e) => e.stopPropagation()}
       >
         <h2>命名卡片</h2>
-        <p className="modal-hint">
-          给「{title}」起个名字（例如「雷神增伤」），名字显示在标题栏。
-          之后可以在任何输入框里引用这张卡的输出：<b>名字</b> 就是它的期望值，
-          <b> 名字::暴击 </b> / <b> 名字::未暴击 </b> 取另外两个分量。
-          {role ? ` 这张卡属于角色「${role}」。` : ""}
-          留空并确定 = 取消命名。
-        </p>
         <label className="modal-row">
           <span>卡片名</span>
           <input
             value={value}
             data-testid="card-name-input"
-            placeholder="例如 雷神增伤"
             autoFocus
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={(e) => {
@@ -472,7 +459,7 @@ export function RoleNameDialog({
 export interface NewProjectDialogProps {
   /** 当前工程名（预填，方便"另存为新项目"式的改名） */
   initialName: string;
-  /** 当前画布上有几张卡片（用来提示会被清空） */
+  /** 当前画布上有几张卡片（说明文字已删，保留这个字段供调用方按需使用） */
   cardCount: number;
   onCreate: (name: string) => void;
   onClose: () => void;
@@ -481,10 +468,11 @@ export interface NewProjectDialogProps {
 /**
  * 新建项目：**先问工程名，再完整重置**（画布 / 工程名 / 撤销历史 / 浏览器本地存档）。
  * 这是工具栏唯一的重置入口（原来的「清空画布」已并进来）。
+ *
+ * 弹窗里只留「输入框 + 按钮」：那句"会清空画布…"的说明按用户要求一起删了。
  */
 export function NewProjectDialog({
   initialName,
-  cardCount,
   onCreate,
   onClose,
 }: NewProjectDialogProps) {
@@ -508,16 +496,11 @@ export function NewProjectDialog({
         onMouseDown={(e) => e.stopPropagation()}
       >
         <h2>新建项目</h2>
-        <p className="modal-hint">
-          会清空当前画布并重置工程名、撤销历史与浏览器里的本地自动存档（文件不会被动到）。
-          {cardCount > 0 ? ` 当前画布上有 ${cardCount} 张卡片。` : ""}
-        </p>
         <label className="modal-row">
           <span>工程名</span>
           <input
             value={name}
             data-testid="new-project-name"
-            placeholder="例如 雷神直伤"
             autoFocus
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => {

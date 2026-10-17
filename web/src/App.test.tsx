@@ -1231,9 +1231,8 @@ describe("App 集成（假后端 + 真 schema）", () => {
 
     await user.click(screen.getByTestId("new-project"));
     const dialog = await screen.findByTestId("new-project-dialog");
-    // 预填当前工程名，并提示将有卡片被清空
+    // 预填当前工程名（说明文字已按用户要求删掉，这里只校验输入框）
     expect(within(dialog).getByTestId("new-project-name")).toHaveValue("旧工程");
-    expect(within(dialog).getByText(/当前画布上有 1 张卡片/)).toBeInTheDocument();
 
     fireEvent.change(within(dialog).getByTestId("new-project-name"), {
       target: { value: "雷神直伤" },
