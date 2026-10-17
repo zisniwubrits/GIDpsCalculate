@@ -778,22 +778,6 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
   );
 
   /** 缩放结束：把最终尺寸与左上角坐标写回模型（拖动缩放是界面行为，不进求值载荷）。 */
-  /** 「域对照表」按内容收高（用户要求：下方不要留空白）。宽度不动，只改高度。 */
-  const autoHeight = useCallback((id: string, height: number) => {
-    apply((s) => {
-      const target = s.nodes.find((n) => n.id === id);
-      if (!target || !target.size) return s;
-      const next = Math.max(120, Math.round(height));
-      if (Math.abs(target.size[1] - next) <= 4) return s;
-      return {
-        ...s,
-        nodes: s.nodes.map((n) =>
-          n.id === id ? { ...n, size: [n.size![0], next] as [number, number] } : n,
-        ),
-      };
-    });
-  }, [apply]);
-
   const onResize = useCallback(
     (id: string, size: [number, number], pos: [number, number]) => {
       // 角色区域不许互相压：缩放后压上了就退回原尺寸 / 原位置
@@ -1070,7 +1054,6 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
           onField,
           onDelete: removeNode,
           onResize,
-          onAutoHeight: autoHeight,
           onMenu: (id, kind, ev) => setMenu({ id, kind, x: ev.clientX, y: ev.clientY }),
           onCopy,
         };
@@ -1112,7 +1095,7 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
           dragHandle: CARD_DRAG_HANDLE,
         };
       }),
-    [orderedNodes, schema, results, roles, onField, removeNode, onCopy, onResize, autoHeight,
+    [orderedNodes, schema, results, roles, onField, removeNode, onCopy, onResize,
      evaluation.data, hiddenCards, revision],
   );
 

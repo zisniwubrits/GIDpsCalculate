@@ -322,6 +322,15 @@ describe("关键字高亮与页面图标", () => {
     expect(pop).toMatch(/background:\s*#fff/);
   });
 
+  it("域对照表：表格撑满卡片高度（卡片拉长时行高跟着长）", () => {
+    // 用户要求：不是把卡片收短，而是拉长之后表格要填充
+    expect(ruleBody(".mx-wrap")).toMatch(/flex:\s*1 1 auto/);
+    const table = ruleBody(".mx-table");
+    expect(table).toMatch(/height:\s*100%/);
+    // 表头只占一行：多余高度全给正文行
+    expect(ruleBody(".mx-table thead")).toMatch(/height:\s*1px/);
+  });
+
   it("页面用自己的图标，不用浏览器默认的那个", () => {
     const html = ["index.html", "web/index.html"]
       .map((p) => resolve(process.cwd(), p))

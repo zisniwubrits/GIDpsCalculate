@@ -693,18 +693,29 @@ textarea:focus {
   color: var(--accent);
 }
 
-/* 「域对照表」：卡片高度跟着内容走（下方不留空白），表格自己可横向滚动 */
+/* 「域对照表」：行 / 列 / 固定拐力都在表格里就地编辑 */
+/* 表格撑满卡片：卡片拉高时行高跟着长（用户要求"拉长就要填充"）；
+   卡片矮时表格自己滚动 */
 .mx-wrap {
-  align-self: flex-start;
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
   max-width: 100%;
-  overflow-x: auto;
+  overflow: auto;
 }
 
-/* 「域对照表」：行 / 列 / 固定拐力都在表格里就地编辑 */
 .mx-table {
+  width: 100%;
+  height: 100%;
   border-collapse: collapse;
   font-size: 12px;
   max-width: 100%;
+}
+
+/* 表头只占自己那一行的高度：卡片拉高时，多出来的高度全给正文行
+   （否则表头也跟着被拉得很高，看起来怪） */
+.mx-table thead {
+  height: 1px;
 }
 
 .mx-table th,
@@ -1454,11 +1465,4 @@ textarea:focus {
 .boot-dim {
   color: var(--muted);
   font-size: 12px;
-}
-
-/* 「域对照表」左上角的固定拐力入口：压在表格左上角（表头第一格旁边的边缘） */
-.matrix-buff-in {
-  top: 12px !important;
-  left: -6px !important;
-  right: auto !important;
 }
