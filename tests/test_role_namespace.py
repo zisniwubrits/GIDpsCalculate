@@ -914,6 +914,40 @@ class TestExternalDomain(unittest.TestCase):
         self.assertEqual(out["nodes"]["c1"]["values"]["noncrit"], 0)
         self.assertEqual(sorted(out["nodes"]["x1"]["extDomains"]), ["胡桃", "雷神"])
 
+    def test_relative_path_tries_parent_and_subdirs(self):
+        """相对路径会试「工程目录 / 它的上一级 / 子目录唯一命中」，怎么填都能找到。"""
+        sub = self.dir / "data"
+        sub.mkdir()
+        def build(g):
+            g.add(GraphNode("ra", "role", fields={"role_name": "胡桃",
+                                                  "panel": "out::atk_pct = 40"}))
+        self.write_project("data/幻灭.json", build)
+
+        cases = [
+            (str(sub), "幻灭"),                    # 工程就在 data/ 里
+            (str(sub), "data/幻灭"),               # 多写了一层（靠上一级兜）
+            (str(self.dir), "data/幻灭.json"),     # 工程在上层，路径写全
+            (str(self.dir), "幻灭"),               # 只写文件名（靠子目录唯一命中）
+        ]
+        for base, filled in cases:
+            g = self.build_consumer(filled)
+            g.base_dir = base
+            g.add(GraphNode("c1", "calc", fields={"expr": "in::atk_pct"}, role="火神"))
+            self.assertEqual(g.evaluate()["nodes"]["c1"]["values"]["noncrit"], 40,
+                             "%s / %s" % (base, filled))
+
+    def test_extra_bases_from_server(self):
+        """服务端补的「上次打开/保存的目录」也会被试（工程目录不对时兜底）。"""
+        def build(g):
+            g.add(GraphNode("ra", "role", fields={"role_name": "胡桃",
+                                                  "panel": "out::atk_pct = 40"}))
+        self.write_project("幻灭.json", build)
+        g = self.build_consumer("幻灭")            # 只写文件名
+        g.base_dir = str(self.dir / "别处")         # 工程目录里没有
+        g.extra_bases = [str(self.dir)]            # 记住的目录里才有
+        g.add(GraphNode("c1", "calc", fields={"expr": "in::atk_pct"}, role="火神"))
+        self.assertEqual(g.evaluate()["nodes"]["c1"]["values"]["noncrit"], 40)
+
     def test_missing_file_and_unknown_role_give_zero(self):
         path = self.write_project("donor.json", lambda g: g.add(
             GraphNode("ra", "role", fields={"role_name": "胡桃",

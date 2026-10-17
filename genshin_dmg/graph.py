@@ -294,6 +294,8 @@ class Graph:
         self.variables: dict = {}
         # 当前工程所在目录：解析「外部域」卡片的相对路径用（前端在载荷的 dir 里给）
         self.base_dir: str = ""
+        # 额外要试的基准目录（服务端塞进来的"上次打开/保存的目录"等）
+        self.extra_bases: list = []
         # 命名卡片的惰性取值表（每次求值重建）与环路栈
         self._cardvars: dict | None = None
         self._card_stack: set = set()
@@ -425,12 +427,14 @@ class Graph:
                 str(node.fields.get("ext_file") or ""),
                 str(node.fields.get("ext_role") or ""),
                 self.base_dir,
+                self.extra_bases,
             )
         return cache[node.id]
 
     def _external_domains(self, node) -> list:
         """外部域卡指向的那个工程文件里有哪些域（前端据此藏「里面的域」那一栏）。"""
-        return _external.domains(str(node.fields.get("ext_file") or ""), self.base_dir)
+        return _external.domains(str(node.fields.get("ext_file") or ""),
+                                 self.base_dir, self.extra_bases)
 
     @staticmethod
     def _out_names(base_vars: dict, role: str) -> list:

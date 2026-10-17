@@ -114,6 +114,21 @@ def create_app() -> FastAPI:
     def get_help():
         return dict(text=tutorial.HELP_TEXT, sections=tutorial.SECTIONS)
 
+    def _attach_bases(graph) -> None:
+        """给图补上「外部域」相对路径的基准目录。
+
+        前端会在载荷的 ``dir`` 里带当前工程目录；这里再补上后端记住的目录
+        （打开/保存过哪个工程就记哪个），这样 ``dds.json`` / ``dds`` 这种写法
+        在两种情况下都能解析到。
+        """
+        try:
+            remembered = str(storage.current_dir())
+        except Exception:                                   # 读不到记忆目录也不影响求值
+            remembered = ""
+        if not getattr(graph, "base_dir", ""):
+            graph.base_dir = remembered
+        graph.extra_bases = [b for b in (remembered,) if b]
+
     @app.post("/api/evaluate")
     async def evaluate(request: Request):
         """传入整张图（与工程 JSON 同格式），返回变量表、每个节点输出与最终结果。"""
@@ -127,6 +142,9 @@ def create_app() -> FastAPI:
                                 content=dict(ok=False, error="请求体必须是工程对象"))
         try:
             graph = Graph.from_dict(data.get("graph") if "graph" in data else data)
+            # 「外部域」卡片的相对路径：前端给的工程目录优先，再试后端记住的目录
+            # （从哪读/存就往哪找），让 dds.json / dds 这种写法真的能用
+            _attach_bases(graph)
             out = graph.evaluate()
         except GraphError as e:
             return JSONResponse(status_code=400, content=dict(ok=False, error=str(e)))

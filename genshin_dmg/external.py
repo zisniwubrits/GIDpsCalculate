@@ -42,11 +42,38 @@ def clear_cache() -> None:
     _CACHE.clear()
 
 
-def resolve(path: str, base_dir: str | None = None) -> str:
+def _bases(base_dir: str | None = None, extra_bases=()) -> list:
+    """解析相对路径时要试的基准目录（按优先级，去重）。"""
+    out: list = []
+
+    def push(value) -> None:
+        if value is None:
+            return
+        value = str(value).strip()
+        if not value:
+            return
+        full = os.path.abspath(os.path.expanduser(value))
+        if full not in out:
+            out.append(full)
+
+    for base in (base_dir, *extra_bases):
+        push(base)
+    # 工程目录的**上一级**也试一下：工程在 xxx/data/ 里、卡片填 "data/xxx.json"
+    # 或反过来（工程在 xxx/、文件在 xxx/data/xxx.json）时都能命中
+    for base in list(out):
+        parent = os.path.dirname(base)
+        if parent and parent != base:
+            push(parent)
+    push("")                            # "" = 进程工作目录（仓库根）
+    return out
+
+
+def resolve(path: str, base_dir: str | None = None, extra_bases=()) -> str:
     """把用户填的路径解析成绝对路径；找不到就返回空串。
 
-    相对路径优先按 ``base_dir``（当前工程所在目录）解析，其次按进程工作目录；
-    不带扩展名时自动补 ``.json``。
+    顺序：绝对路径优先；否则在 :func:`_bases` 那几个目录里挨个试（自动补 ``.json``）；
+    最后再在「工程目录下一层的子目录」里找同名文件 —— **只有一个命中**才用，
+    免得悄悄读错人的工程。
     """
     raw = str(path or "").strip()
     if not raw:
@@ -55,24 +82,43 @@ def resolve(path: str, base_dir: str | None = None) -> str:
     names = [expanded]
     if not expanded.lower().endswith(".json"):
         names.append(expanded + ".json")
-    roots = [""]
-    if base_dir:
-        roots.insert(0, str(base_dir))
-    for name in names:
-        if os.path.isabs(name):
+
+    if os.path.isabs(expanded):
+        for name in names:
             if os.path.isfile(name):
                 return os.path.abspath(name)
-            continue
-        for root in roots:
-            full = os.path.abspath(os.path.join(root, name) if root else name)
+        return ""
+
+    dirs = _bases(base_dir, extra_bases)
+    for name in names:
+        for base in dirs:
+            full = os.path.abspath(os.path.join(base, name) if base else name)
             if os.path.isfile(full):
                 return full
+    # 再往下一层子目录找：填 "幻灭米提亚" 就能命中 <工程目录>/data/幻灭米提亚.json
+    for name in names:
+        if os.path.dirname(name):        # 自己带目录了就不再下去猜
+            continue
+        hits = []
+        for base in dirs:
+            if not base:
+                continue
+            try:
+                entries = os.listdir(base)
+            except OSError:
+                continue
+            for entry in entries:
+                sub = os.path.join(base, entry, name)
+                if os.path.isfile(sub):
+                    hits.append(os.path.abspath(sub))
+        if len(hits) == 1:
+            return hits[0]
     return ""
 
 
-def load(path: str, base_dir: str | None = None) -> tuple:
+def load(path: str, base_dir: str | None = None, extra_bases=()) -> tuple:
     """读并求值一个工程文件：``(域名字列表, {域: {out::名字: 值}})``。读不到就是空。"""
-    full = resolve(path, base_dir)
+    full = resolve(path, base_dir, extra_bases)
     if not full:
         return ([], {})
     try:
@@ -87,19 +133,20 @@ def load(path: str, base_dir: str | None = None) -> tuple:
     return hit
 
 
-def domains(path: str, base_dir: str | None = None) -> list:
+def domains(path: str, base_dir: str | None = None, extra_bases=()) -> list:
     """那个文件里有哪些域（角色 / 武器名）。"""
-    return list(load(path, base_dir)[0])
+    return list(load(path, base_dir, extra_bases)[0])
 
 
-def out_values(path: str, role: str = "", base_dir: str | None = None) -> dict:
+def out_values(path: str, role: str = "", base_dir: str | None = None,
+               extra_bases=()) -> dict:
     """读 ``path`` 这个工程文件里 ``role`` 声明过的 ``out::``，返回 ``{名字: 值}``。
 
     ``role`` 留空且文件里只有一个域时，自动用那个域（用户要求：唯一就不用手填）。
     读不到（文件不存在 / 不是合法工程 / 域不存在 / 有环）一律返回空字典 ——
     调用方按"给了 0"处理，不会让整个求值失败。
     """
-    names, per_role = load(path, base_dir)
+    names, per_role = load(path, base_dir, extra_bases)
     wanted = str(role or "").strip()
     if not wanted:
         if len(names) != 1:
