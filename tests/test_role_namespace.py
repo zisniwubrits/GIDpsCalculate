@@ -807,6 +807,67 @@ class TestOutDeclarations(unittest.TestCase):
         self.assertEqual(out["nodes"]["c2"]["values"]["noncrit"], 40)     # 对外
         self.assertEqual(out["nodes"]["c3"]["values"]["noncrit"], 40)     # 收进来的就是 out
 
+    def test_out_can_reference_own(self):
+        """`out::x = 50 + own::x * 0.2` 这种写法也要把拐力发出去。
+
+        以前这条 out:: 会等到"拐力之后补算"才算出来，而拐力取的是拐力前的快照 →
+        这条 out:: 一个都发不出去（用户报的"角色无法正常提供拐力"）。
+        修法：定义阶段就让 own:: 可见（它就是自身值，本来就不含 in::，不会造成传递）。
+        """
+        g = Graph()
+        g.add(GraphNode("ra", "role", fields={
+            "role_name": "辅助",
+            "panel": "em = 100\nout::em = 50 + (own::em) * 0.2\nout::dmg = 5.71428 + 7.14285",
+        }))
+        g.add(GraphNode("rb", "role", fields={"role_name": "火神"}))
+        g.links.append(Link("ra", "rb", 0))
+        g.add(GraphNode("c1", "calc", fields={"expr": "in::em"}, role="火神"))
+        g.add(GraphNode("c2", "calc", fields={"expr": "in::dmg"}, role="火神"))
+        out = g.evaluate()
+        # 自身 em = 100 → 50 + 100*0.2 = 70
+        self.assertEqual(out["nodes"]["c1"]["values"]["noncrit"], 70)
+        self.assertEqual(out["nodes"]["c2"]["values"]["noncrit"], 12.85713)
+        stats = {r["macro"]: r["value"] for r in out["buffStats"]["辅助"]["out"]}
+        self.assertEqual(stats, {"em": 70, "dmg": 12.85713})
+
+    def test_out_referencing_own_in_var_card(self):
+        """同样的写法放在域内「变量」卡片里也要生效。"""
+        g = Graph()
+        g.add(GraphNode("ra", "role", fields={"role_name": "辅助"}))
+        g.add(var_card("va", "em = 100\nout::em = 50 + own::em * 0.2", role="辅助"))
+        g.add(GraphNode("rb", "role", fields={"role_name": "火神"}))
+        g.links.append(Link("ra", "rb", 0))
+        g.add(GraphNode("c1", "calc", fields={"expr": "in::em"}, role="火神"))
+        self.assertEqual(g.evaluate()["nodes"]["c1"]["values"]["noncrit"], 70)
+
+    def test_out_referencing_own_without_plain_definition(self):
+        """没写 `em = ...` 时 own::em 就是 0，给出去的就是 50（不报错）。"""
+        g = Graph()
+        g.add(GraphNode("ra", "role", fields={
+            "role_name": "辅助", "panel": "out::em = 50 + own::em * 0.2"}))
+        g.add(GraphNode("rb", "role", fields={"role_name": "火神"}))
+        g.links.append(Link("ra", "rb", 0))
+        g.add(GraphNode("c1", "calc", fields={"expr": "in::em"}, role="火神"))
+        self.assertEqual(g.evaluate()["nodes"]["c1"]["values"]["noncrit"], 50)
+
+    def test_own_still_excludes_incoming_buff(self):
+        """回归：out:: 能引用 own:: 之后，own:: 也**不能**把收到的拐算进去（不传递）。"""
+        g = Graph()
+        g.add(GraphNode("r0", "role", fields={"role_name": "甲",
+                                              "panel": "out::em = 30"}))
+        g.add(GraphNode("ra", "role", fields={
+            "role_name": "乙", "panel": "em = 10\nout::em = own::em + in::em"}))
+        g.add(GraphNode("rb", "role", fields={"role_name": "丙"}))
+        g.links.append(Link("r0", "ra", 0))
+        g.links.append(Link("ra", "rb", 0))
+        g.add(GraphNode("c1", "calc", fields={"expr": "in::em"}, role="丙"))
+        g.add(GraphNode("co", "calc", fields={"expr": "own::em"}, role="乙"))
+        g.add(GraphNode("ci", "calc", fields={"expr": "in::em"}, role="乙"))
+        out = g.evaluate()
+        # 自身的定义是 10、收到的拐是 30 —— 两个名字各归各的，own:: 不含 in::
+        self.assertEqual(out["nodes"]["co"]["values"]["noncrit"], 10)
+        self.assertEqual(out["nodes"]["ci"]["values"]["noncrit"], 30)
+
     def test_in_declaration_is_ignored(self):
         """in:: 是"收进来的"，由拐力派生；用户写它不生效。"""
         g = self.build()

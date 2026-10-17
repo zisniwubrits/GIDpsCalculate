@@ -760,9 +760,19 @@ class Graph:
             # 这里不要碰它（原来把合成值写进去，会盖住 own:: 的语义）。
             # out:: 例外：同名多行要**累加**（见 _accumulate_out），不能直接覆盖。
             if item.get("out"):
-                value = self._accumulate_out(
-                    env, item["key"], item.get("owner") or ("d" + str(item["nid"])), value
+                role_item = item.get("role") or ""
+                name_item = item.get("name")
+                plain_key = (env_key(qualify(name_item, role_item))
+                             if role_item and name_item else "")
+                value = self._record_out(
+                    env, item["key"], plain_key,
+                    item.get("owner") or ("d" + str(item["nid"])), value,
                 )
+                # 关键：补算成功的 out:: 也要算"用户显式声明过"，
+                # 否则 _apply_sub_namespaces 里 `out_key in self._user_sub_ns` 不成立，
+                # 对外值会被当成 0 —— 表现就是 `out::em = 50 + own::em * 0.2`
+                # 这类"引用了 own:: 的 out::"给不出拐力。
+                self._user_sub_ns.add(item["key"])
             else:
                 env[item["key"]] = value
             # 定义拖到补算才成功时（如面板写 `X = in::X`），在这里补记"自身值"
@@ -963,6 +973,21 @@ class Graph:
                 key = prefix + macro
                 if key in self.variables and macro not in out:
                     out[macro] = self.variables[key]
+            # `own::名字` 在**拐力生效之前**就有值（它就是"自身值"），所以面板 / 变量卡里
+            # 写 `out::x = 50 + own::y * 0.2` 时不必等补算：否则这条 out:: 会被推迟到
+            # 拐力之后才算出来，而拐力取的是拐力前的快照 → 这条 out:: 一个都发不出去。
+            # （own:: 本来就不含 in::，所以让 out:: 引用 own:: 不会造成"拐力传递"。）
+            for key, val in self._own_values.items():
+                if not key.startswith(prefix):
+                    continue
+                rest = demangle(key)[len(prefix):]
+                if not rest or "::" in rest:
+                    continue
+                out.setdefault(SUB_OWN + NS_JOIN + rest, val)
+            # 没写过定义的名字，`own::名字` 就是 0（而不是"未定义变量"报错）：
+            # `out::em = 50 + own::em * 0.2` 在没写 `em = ...` 时也该发 50 出去。
+            for macro in _nodes.PANEL_MACRO_KEYS:
+                out.setdefault(SUB_OWN + NS_JOIN + macro, 0.0)
         for key, getter in self._card_vars().items():
             out.setdefault(key, getter)
         return out
