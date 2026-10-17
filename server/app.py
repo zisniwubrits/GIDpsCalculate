@@ -243,8 +243,9 @@ def create_app() -> FastAPI:
             return JSONResponse(status_code=400,
                                 content=dict(ok=False, error="请求体必须是工程对象"))
         try:
-            path = storage.project_file(data.get("name"))
+            path = storage.save_target(data.get("name"))
             storage.write_json(path, data)
+            storage.remember_path(path)   # 记下这个文件，下次还写回它
         except OSError as e:
             return JSONResponse(status_code=400,
                                 content=dict(ok=False, error="写入失败：%s" % e))

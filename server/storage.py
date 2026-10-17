@@ -83,15 +83,54 @@ def current_dir() -> Path:
 
 
 def remember_path(path) -> Path:
-    """记住「这个文件（或目录）所在的地方」，后续保存就写到这里。"""
+    """记住「这个文件（或目录）所在的地方」，后续保存就写到这里。
+
+    传的是**文件**时连文件本身一起记住（`file`），这样"从哪读就往哪存"才是真的
+    写回同一个文件 —— 否则工程名和文件名不一致时，保存会悄悄写到另一个文件里
+    （用户报的"加了 ★结果 卡片、保存后矩阵还是读不到"就是这么来的）。
+    """
     p = Path(path).expanduser()
     directory = p if p.is_dir() else p.parent
     directory = directory.resolve()
     data = _load_config()
     data["dir"] = str(directory)
+    if not p.is_dir():
+        try:
+            data["file"] = str(p.resolve())
+        except OSError:
+            data.pop("file", None)
     data["updated"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     _store_config(data)
     return directory
+
+
+def remembered_file() -> Path | None:
+    """上次打开 / 保存过的**文件**（没有就是 None）。"""
+    raw = _load_config().get("file")
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+    try:
+        return Path(raw).expanduser().resolve()
+    except OSError:
+        return None
+
+
+def save_target(project_name) -> Path:
+    """一键保存该写到哪个文件。
+
+    * 记住的那个文件里的工程名与当前工程名**一致** → 写回它（保留原文件名）；
+    * 否则按工程名在记忆目录里生成 ``<工程名>.json``（改名 / 新工程的行为）。
+    """
+    remembered = remembered_file()
+    if remembered is not None:
+        try:
+            with open(remembered, encoding="utf-8") as f:
+                old_name = json.load(f).get("name")
+        except (OSError, ValueError, AttributeError):
+            old_name = None
+        if isinstance(old_name, str) and old_name == str(project_name or ""):
+            return remembered
+    return project_file(project_name)
 
 
 def info() -> dict:
