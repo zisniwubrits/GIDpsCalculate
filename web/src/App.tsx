@@ -193,6 +193,8 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
   const lastSignature = useRef<string | null>(null);
   /** 正在拖框选：此时忽略「角色容器」的选中变化（见 model.ignoredByBoxSelect） */
   const boxSelecting = useRef(false);
+  /** 框选时是否也选角色/武器域（工具栏「框选域」开关，默认关；见 ignoredByBoxSelect） */
+  const [boxSelectDomains, setBoxSelectDomains] = useState(false);
   /** 拖动角色区域被"重叠"规则挡回时，记下要写回 React Flow 的位置（apply 之后处理） */
   const revertTo = useRef<{ id: string; pos: [number, number]; blockedBy: CardNodeModel[] } | null>(
     null,
@@ -474,7 +476,7 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
           } else if (ch.type === "select") {
             next = next.map((n) =>
               n.id === ch.id &&
-              !(ch.selected && boxSelecting.current && ignoredByBoxSelect(n))
+              !(ch.selected && boxSelecting.current && ignoredByBoxSelect(n, boxSelectDomains))
                 ? { ...n, selected: ch.selected }
                 : n,
             );
@@ -534,7 +536,7 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
         );
       }
     },
-    [apply, rf],
+    [apply, rf, boxSelectDomains],
   );
 
   const onEdgesChange = useCallback(
@@ -1133,6 +1135,17 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
         onZoomOut={() => rf.zoomOut({ duration: 120 })}
         onZoomReset={() => rf.zoomTo(1, { duration: 120 })}
         onFit={() => rf.fitView({ padding: 0.15, duration: 200 })}
+        boxSelectDomains={boxSelectDomains}
+        onToggleBoxSelectDomains={() =>
+          setBoxSelectDomains((v) => {
+            setToast(
+              v
+                ? "框选不再包含角色 / 武器域"
+                : "框选会连角色 / 武器域一起选中（Delete 会连域一起删）",
+            );
+            return !v;
+          })
+        }
         status={status}
       />
 

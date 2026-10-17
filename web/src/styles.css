@@ -240,6 +240,14 @@ textarea:focus {
   margin: 0 3px;
 }
 
+/* 切换类按钮（例如「框选域」）：开着时高亮，一眼看出当前状态 */
+.tb-toggle.on {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: rgba(47, 111, 167, 0.12);
+  font-weight: 700;
+}
+
 .tb-status {
   font-size: 12px;
   max-width: 420px;

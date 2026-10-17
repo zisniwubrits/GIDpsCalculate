@@ -23,6 +23,9 @@ export interface ToolbarProps {
   onZoomOut: () => void;
   onZoomReset: () => void;
   onFit: () => void;
+  /** 框选时是否把**角色 / 武器域**也一起选中（默认关：域是大面板，开了很容易整块被框进来） */
+  boxSelectDomains: boolean;
+  onToggleBoxSelectDomains: () => void;
   status: { kind: "ok" | "warn" | "error" | "busy"; text: string };
 }
 
@@ -87,6 +90,23 @@ export default function Toolbar(props: ToolbarProps) {
         </button>
         <button type="button" onClick={props.onFit} title="缩放到适合画布内容">
           适应
+        </button>
+        <span className="tb-sep" />
+        {/* 框选开关：默认关 —— 关时框选只选普通卡片，角色/武器域要单独点标题栏。
+            开了之后框选会把域一起选进来（注意：此时 Delete 会连域一起删）。 */}
+        <button
+          type="button"
+          className={`tb-toggle${props.boxSelectDomains ? " on" : ""}`}
+          data-testid="box-select-domains"
+          aria-pressed={props.boxSelectDomains}
+          onClick={props.onToggleBoxSelectDomains}
+          title={
+            props.boxSelectDomains
+              ? "框选会连角色 / 武器域一起选中（此时 Delete 会连域一起删）。再点一次关掉"
+              : "框选时是否也选角色 / 武器域：现在关着，框选只选普通卡片（想选域请点它的标题栏）"
+          }
+        >
+          框选域
         </button>
       </div>
 

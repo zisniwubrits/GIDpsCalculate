@@ -1072,7 +1072,10 @@ describe("App 集成（假后端 + 真 schema）", () => {
     // 右键域 →「复制角色域」（等价于选中域后 Ctrl+C）
     fireEvent.contextMenu(within(roleCard).getByText("火神"));
     await user.click(await screen.findByText(/复制角色域/));
-    await waitFor(() => expect(screen.getByText(/已复制/)).toBeInTheDocument());
+    // 复制是静默的（成功不弹提示），这里直接断言**系统剪贴板**里写进了 JSON 卡片包
+    await waitFor(async () => {
+      expect(await navigator.clipboard.readText()).toContain("GenshinDamageCalc:cards");
+    });
 
     // Ctrl+V：粘出「火神_2」+ 域内两张卡
     fireEvent.keyDown(window, { key: "v", ctrlKey: true });
@@ -1086,6 +1089,25 @@ describe("App 集成（假后端 + 真 schema）", () => {
     // 内部那条线按新 id 接回来（总连线数 1 → 2）
     expect(lastBody?.links).toHaveLength(2);
     expect(new Set((lastBody?.nodes ?? []).map((n) => n.id)).size).toBe(7);
+  });
+
+  it("工具栏「框选域」开关：默认关，点一下变开（aria-pressed 跟着变）", async () => {
+    const user = userEvent.setup();
+    await renderApp();
+    const btn = screen.getByTestId("box-select-domains");
+    // 默认关：框选只选普通卡片（角色/武器域要单独点标题栏）
+    expect(btn).toHaveAttribute("aria-pressed", "false");
+    expect(btn).not.toHaveClass("on");
+
+    await user.click(btn);
+    expect(btn).toHaveAttribute("aria-pressed", "true");
+    expect(btn).toHaveClass("on");
+    expect(await screen.findByText(/框选会连角色 \/ 武器域一起选中/)).toBeInTheDocument();
+
+    // 再点一次关回去
+    await user.click(btn);
+    expect(btn).toHaveAttribute("aria-pressed", "false");
+    expect(btn).not.toHaveClass("on");
   });
 
   it("右键角色标签 →「角色面板…」：宏表可编辑、并显示拐力统计（OUT/IN）", async () => {    const user = userEvent.setup();

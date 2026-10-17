@@ -299,12 +299,16 @@ function reparkRole(nodes: CardNode[], id: string, sizeOf: SizeOf): [number, num
 
 /**
  * 框选时要不要**忽略**这张卡片的选中。
+ *
  * 角色容器是一大块面板，任意框选矩形几乎总会与它相交 —— 而 React Flow 的
  * `getNodesInside` 不看 `selectable`，所以框选一定把它一起选中（随后 Delete 会连
  * 面板一起删掉）。这条规则让「框选」不选中面板：想选它请点它的标题栏。
+ *
+ * `includeDomains=true` 时**放行**角色/武器域（工具栏的「框选域」开关，默认关）；
+ * 开了之后框选会把域一起选进来 —— 这是用户明确要的能力，代价是 Delete 会连域一起删。
  */
-export function ignoredByBoxSelect(node: CardNode): boolean {
-  return isNamespaceNode(node);
+export function ignoredByBoxSelect(node: CardNode, includeDomains = false): boolean {
+  return includeDomains ? false : isNamespaceNode(node);
 }
 
 // ------------------------------------------------- 一键隐藏区域内的卡片
