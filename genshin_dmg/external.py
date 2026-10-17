@@ -14,8 +14,9 @@
 
 路径怎么写（用户要求）：
 * 绝对路径：直接用；
-* **相对路径按"当前工程文件所在目录"解析**（`dir`），例如同目录下填
-  ``dds.json``、甚至只写 ``dds``（自动补 ``.json``）；
+* 相对路径按「当前工程文件所在目录」等几个基准解析（见 :func:`_bases`），例如同目录下
+  填 ``dds.json``、甚至只写 ``dds``（自动补 ``.json``）；子目录里的文件要把目录写出来
+  （``data\\幻灭米提亚``）—— 不去子目录里猜同名文件，避免歧义；
 * 找不到再退回后端进程的工作目录（就是仓库根），并支持 ``~/``；
 * 域名字留空且那个文件里**只有一个域**时，直接用那个域（前端会把这一栏藏起来）。
 """
@@ -71,9 +72,9 @@ def _bases(base_dir: str | None = None, extra_bases=()) -> list:
 def resolve(path: str, base_dir: str | None = None, extra_bases=()) -> str:
     """把用户填的路径解析成绝对路径；找不到就返回空串。
 
-    顺序：绝对路径优先；否则在 :func:`_bases` 那几个目录里挨个试（自动补 ``.json``）；
-    最后再在「工程目录下一层的子目录」里找同名文件 —— **只有一个命中**才用，
-    免得悄悄读错人的工程。
+    顺序：绝对路径优先；否则在 :func:`_bases` 那几个目录里挨个试（自动补 ``.json``）。
+    **不在子目录里搜同名文件** —— 那会出现歧义（两个子目录都有同名文件时该读哪个？），
+    用户口径：要读子目录里的文件就把目录写出来，例如 ``data\\幻灭米提亚``。
     """
     raw = str(path or "").strip()
     if not raw:
@@ -89,30 +90,11 @@ def resolve(path: str, base_dir: str | None = None, extra_bases=()) -> str:
                 return os.path.abspath(name)
         return ""
 
-    dirs = _bases(base_dir, extra_bases)
     for name in names:
-        for base in dirs:
+        for base in _bases(base_dir, extra_bases):
             full = os.path.abspath(os.path.join(base, name) if base else name)
             if os.path.isfile(full):
                 return full
-    # 再往下一层子目录找：填 "幻灭米提亚" 就能命中 <工程目录>/data/幻灭米提亚.json
-    for name in names:
-        if os.path.dirname(name):        # 自己带目录了就不再下去猜
-            continue
-        hits = []
-        for base in dirs:
-            if not base:
-                continue
-            try:
-                entries = os.listdir(base)
-            except OSError:
-                continue
-            for entry in entries:
-                sub = os.path.join(base, entry, name)
-                if os.path.isfile(sub):
-                    hits.append(os.path.abspath(sub))
-        if len(hits) == 1:
-            return hits[0]
     return ""
 
 

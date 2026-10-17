@@ -914,26 +914,28 @@ class TestExternalDomain(unittest.TestCase):
         self.assertEqual(out["nodes"]["c1"]["values"]["noncrit"], 0)
         self.assertEqual(sorted(out["nodes"]["x1"]["extDomains"]), ["胡桃", "雷神"])
 
-    def test_relative_path_tries_parent_and_subdirs(self):
-        """相对路径会试「工程目录 / 它的上一级 / 子目录唯一命中」，怎么填都能找到。"""
+    def test_relative_path_tries_parent(self):
+        """相对路径会试「工程目录 / 它的上一级」；**子目录不猜**（用户口径：有歧义）。"""
         sub = self.dir / "data"
         sub.mkdir()
+
         def build(g):
             g.add(GraphNode("ra", "role", fields={"role_name": "胡桃",
                                                   "panel": "out::atk_pct = 40"}))
+
         self.write_project("data/幻灭.json", build)
 
         cases = [
-            (str(sub), "幻灭"),                    # 工程就在 data/ 里
-            (str(sub), "data/幻灭"),               # 多写了一层（靠上一级兜）
-            (str(self.dir), "data/幻灭.json"),     # 工程在上层，路径写全
-            (str(self.dir), "幻灭"),               # 只写文件名（靠子目录唯一命中）
+            (str(sub), "幻灭", 40),                # 工程就在 data/ 里，直接命中
+            (str(sub), "data/幻灭", 40),           # 多写了一层 → 靠上一级兜
+            (str(self.dir), "data/幻灭.json", 40), # 工程在上层，路径写全
+            (str(self.dir), "幻灭", 0),            # 只写文件名：不替你去 data/ 里猜
         ]
-        for base, filled in cases:
+        for base, filled, want in cases:
             g = self.build_consumer(filled)
             g.base_dir = base
             g.add(GraphNode("c1", "calc", fields={"expr": "in::atk_pct"}, role="火神"))
-            self.assertEqual(g.evaluate()["nodes"]["c1"]["values"]["noncrit"], 40,
+            self.assertEqual(g.evaluate()["nodes"]["c1"]["values"]["noncrit"], want,
                              "%s / %s" % (base, filled))
 
     def test_extra_bases_from_server(self):
