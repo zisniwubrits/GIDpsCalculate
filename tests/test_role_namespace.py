@@ -1141,11 +1141,32 @@ class TestRoleNameValidation(unittest.TestCase):
             self.assertEqual(node.role, "", bad)
             self.assertEqual(node.fields["defs"], "攻击力 = 1")
 
-    def test_role_is_not_persisted_in_project_json(self):
-        """工程 JSON 不存归属（位置能重算）；但求值回传里带着，便于前端显示。"""
+    def test_role_is_persisted_and_inferred_for_old_files(self):
+        """归属写进工程 JSON；老文件没这个键时按几何位置补（跨文件读拐力要靠它）。
+
+        以前不存 role（前端每次按位置重算），导致后端单独读一个工程文件时不知道
+        域内卡片归谁 —— 域内变量卡写的 out:: 会落到全局，跨文件就什么都读不到。
+        """
         g = Graph()
         g.add(GraphNode("v1", "var", fields={"defs": "攻击力 = 1"}, role="雷神"))
-        self.assertNotIn("role", g.to_dict()["nodes"][0])
+        self.assertEqual(g.to_dict()["nodes"][0]["role"], "雷神")
+
+        # 老文件：没有 role 键 → 按"卡片中心落在域框内、小区域优先"补
+        old = {
+            "version": 1, "app": "GenshinDamageCalc", "zoom": 1, "name": "旧",
+            "nodes": [
+                {"id": "w1", "type": "weapon", "pos": [0, 0], "size": [400, 300],
+                 "fields": {"role_name": "dds"}, "inputs": 0},
+                {"id": "v1", "type": "var", "pos": [20, 20], "size": [200, 120],
+                 "fields": {"defs": "out::atk = 5"}, "inputs": 0},
+                {"id": "v2", "type": "var", "pos": [2000, 2000], "size": [200, 120],
+                 "fields": {"defs": "x = 1"}, "inputs": 0},
+            ],
+            "links": [],
+        }
+        restored = Graph.from_dict(old)
+        self.assertEqual(restored.nodes["v1"].role, "dds")
+        self.assertEqual(restored.nodes["v2"].role, "")      # 域外的不瞎认
 
 
 class TestBackwardCompat(unittest.TestCase):

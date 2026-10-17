@@ -252,8 +252,8 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
 
   // -- 序列化（脏标记 / 本地自动保存 / 导出）-------------------------------
   const graphJSON = useMemo(
-    () => graphToJSON(nodes, links, savedZoom, name),
-    [nodes, links, savedZoom, name],
+    () => graphToJSON(nodes, links, savedZoom, name, roles),
+    [nodes, links, savedZoom, name, roles],
   );
   const serialized = useMemo(() => JSON.stringify(graphJSON), [graphJSON]);
 

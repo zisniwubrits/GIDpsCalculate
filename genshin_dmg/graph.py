@@ -44,7 +44,48 @@ from genshin_dmg.nodes import (
     node_schema,
 )
 
-__all__ = ["GraphNode", "Link", "Graph"]
+__all__ = ["GraphNode", "Link", "Graph", "infer_roles"]
+
+# 卡片/域的默认尺寸（与前端 web/src/model.ts 的 EST_W/EST_H、ROLE_W/ROLE_H 对齐）
+EST_W, EST_H = 300.0, 210.0
+ROLE_W, ROLE_H = 560.0, 380.0
+
+
+def infer_roles(nodes) -> dict:
+    """按**几何位置**推断每张卡属于哪个域：``{节点 id: 角色名}``。
+
+    为什么要它：工程 JSON 里原来不存 ``role``（前端每次按"卡片中心落在哪个域里、
+    小区域优先"现算），所以后端单独读一个工程文件时（跨文件的「外部域」就是这样）
+    根本不知道哪张卡属于谁 —— 域内变量卡里写的 ``out::x`` 会落到全局去，读不到。
+    这里用同一套规则补上：卡片中心落在域框内，多个域命中时取面积最小的那个。
+    """
+    boxes = []
+    for node in nodes:
+        fields = getattr(node, "fields", {}) or {}
+        if "role_name" not in fields:
+            continue                     # 不是域容器
+        name = str(fields.get("role_name") or "").strip()
+        if not name:
+            continue
+        w, h = (node.size[0], node.size[1]) if getattr(node, "size", None) else (ROLE_W, ROLE_H)
+        x, y = node.pos
+        boxes.append((node.id, x, y, float(w), float(h), name))
+    out: dict = {}
+    for node in nodes:
+        if "role_name" in (getattr(node, "fields", {}) or {}):
+            continue                     # 容器自身不属于任何域
+        w, h = (node.size[0], node.size[1]) if getattr(node, "size", None) else (EST_W, EST_H)
+        cx = node.pos[0] + float(w) / 2
+        cy = node.pos[1] + float(h) / 2
+        best = None
+        for bid, bx, by, bw, bh, name in boxes:
+            if cx < bx or cx > bx + bw or cy < by or cy > by + bh:
+                continue
+            if best is None or bw * bh < best[0]:
+                best = (bw * bh, name)
+        if best:
+            out[node.id] = best[1]
+    return out
 
 
 def _valid_role(role) -> str:
@@ -208,6 +249,10 @@ class GraphNode:
             inputs=int(self.inputs),
             fields=dict(self.fields),
             collapsed=bool(self.collapsed),
+            # 属于哪个域：前端本来就按几何位置算好并随求值载荷发过来，存进文件后
+            # 后端单独读这个工程（跨文件的「外部域」）也能知道域内卡片归谁。
+            # 老文件没有这个键 → 读的时候按几何位置补（见 infer_roles）。
+            role=self.role or "",
         )
 
 
@@ -1324,6 +1369,13 @@ class Graph:
             g.add(node)
             if old is not None:
                 idmap[str(old)] = nid
+        # 老工程文件没存 role：按几何位置补一遍（域内卡片才知道自己归谁，
+        # 否则域里变量卡写的 out:: 会落到全局，跨文件读拐力就什么都读不到）
+        if any(not (n.role or "") for n in g.nodes.values()):
+            for nid, role in infer_roles(list(g.nodes.values())).items():
+                node = g.nodes.get(nid)
+                if node is not None and not (node.role or ""):
+                    node.role = role
         for l in data.get("links") or []:
             if not isinstance(l, dict):
                 continue

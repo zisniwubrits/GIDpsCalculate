@@ -1224,6 +1224,8 @@ export function graphToJSON(
   links: GraphLinkJSON[],
   zoom: number,
   name: string,
+  /** 每张卡属于哪个域（前端按几何位置算）：存进文件，后端单独读时才认得出 */
+  roles: Record<string, string> = {},
 ): GraphJSON {
   return {
     version: 1,
@@ -1239,6 +1241,8 @@ export function graphToJSON(
       inputs: n.inputs,
       fields: { ...n.fields },
       collapsed: Boolean(n.collapsed),
+      // 属于哪个域（容器自身为 ""）：存进文件，后端单独读这个工程时才认得出域内卡片
+      role: roles[n.id] ?? "",
     })),
     links: links.map((l) => ({ src: l.src, dst: l.dst, port: l.port })),
   };

@@ -430,12 +430,16 @@ describe("角色容器（抽象角色命名空间）", () => {
     });
   });
 
-  it("归属不进工程 JSON（位置能重算，不进求值载荷以外的持久化）", () => {
+  it("归属写进工程 JSON（后端单独读这个文件时才知道域内卡片归谁）", () => {
     const role = node("r1", "role", [0, 0], { size: [600, 400] });
-    const inside = node("n1", "dmg", [200, 200], { role: "角色1" });
-    const json = graphToJSON([role, inside], [], 1, "测试");
+    const inside = node("n1", "dmg", [200, 200]);
+    const json = graphToJSON([role, inside], [], 1, "测试", { n1: "角色1" });
 
-    expect(json.nodes.every((n) => !("role" in n))).toBe(true);
+    // 容器自己是空串，域内卡片带上域名（跨文件读拐力要靠它认出域内变量卡）
+    expect(json.nodes.find((n) => n.id === "n1")?.role).toBe("角色1");
+    expect(json.nodes.find((n) => n.id === "r1")?.role).toBe("");
+    // 不传 roles 也不会崩
+    expect(graphToJSON([inside], [], 1, "x").nodes[0].role).toBe("");
   });
 
   it("框选默认忽略角色容器（它是一大块面板，否则框选必把它卷进来）", () => {
