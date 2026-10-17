@@ -1091,7 +1091,7 @@ describe("App 集成（假后端 + 真 schema）", () => {
     expect(new Set((lastBody?.nodes ?? []).map((n) => n.id)).size).toBe(7);
   });
 
-  it("工具栏「框选域」开关：默认关，点一下变开（aria-pressed 跟着变）", async () => {
+  it("工具栏「框选域」开关：默认关，点一下变开（aria-pressed 跟着变、下方不弹提示）", async () => {
     const user = userEvent.setup();
     await renderApp();
     const btn = screen.getByTestId("box-select-domains");
@@ -1102,12 +1102,14 @@ describe("App 集成（假后端 + 真 schema）", () => {
     await user.click(btn);
     expect(btn).toHaveAttribute("aria-pressed", "true");
     expect(btn).toHaveClass("on");
-    expect(await screen.findByText(/框选会连角色 \/ 武器域一起选中/)).toBeInTheDocument();
+    // 用户要求：切换时不要在界面下方出提示（开关自己的高亮就是状态）
+    expect(screen.queryByTestId("toast")).toBeNull();
 
     // 再点一次关回去
     await user.click(btn);
     expect(btn).toHaveAttribute("aria-pressed", "false");
     expect(btn).not.toHaveClass("on");
+    expect(screen.queryByTestId("toast")).toBeNull();
   });
 
   it("右键武器域 →「设置武器名…」：弹窗标题与标签都是「武器名」", async () => {

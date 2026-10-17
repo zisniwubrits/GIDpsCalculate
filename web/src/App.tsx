@@ -1148,16 +1148,8 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
         onZoomReset={() => rf.zoomTo(1, { duration: 120 })}
         onFit={() => rf.fitView({ padding: 0.15, duration: 200 })}
         boxSelectDomains={boxSelectDomains}
-        onToggleBoxSelectDomains={() =>
-          setBoxSelectDomains((v) => {
-            setToast(
-              v
-                ? "框选不再包含角色 / 武器域"
-                : "框选会连角色 / 武器域一起选中（Delete 会连域一起删）",
-            );
-            return !v;
-          })
-        }
+        // 切换时不弹 toast（用户要求：开关自己高亮就够，别再在下方出提示）
+        onToggleBoxSelectDomains={() => setBoxSelectDomains((v) => !v)}
         status={status}
       />
 
