@@ -824,6 +824,14 @@ describe("拐力箭头判定", () => {
     expect(isBuffPair(nodes, "r2", "x1")).toBe(false);  // 外部域不收拐
   });
 
+  it("外部域的拐力箭头能存下来再读回来（回归：保存后箭头消失）", () => {
+    const nodes = [external("x1"), role("r2", "火神")];
+    const json = graphToJSON(nodes, [{ src: "x1", dst: "r2", port: 0 }], 1, "测试");
+    const back = jsonToGraph(json, schema);
+    // 以前这里只认"命名空间 → 命名空间"，外部域那条会当成伤害链、因目标 inputs=0 被丢掉
+    expect(back.links).toEqual([{ src: "x1", dst: "r2", port: 0 }]);
+  });
+
   it("「外部域」只有一个域时自动用它（输入框藏掉），多个就不猜", () => {
     const spec = { external_domain: true };
     expect(autoExternalDomain(spec, { extDomains: ["胡桃"] })).toBe("胡桃");

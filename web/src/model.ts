@@ -1303,10 +1303,10 @@ export function jsonToGraph(
     const dst = String((l as { dst?: unknown })?.dst ?? "");
     if (!ids.has(src) || !ids.has(dst) || src === dst) continue;
     const target = byId.get(dst);
-    const srcNode = byId.get(src);
-    const isBuff = Boolean(
-      target && srcNode && isNamespaceNode(target) && isNamespaceNode(srcNode),
-    );
+    // 拐力箭头：用与运行时**同一套**判定（源可以是角色/武器域，也可以是跨文件的
+    // 「外部域」；目标是角色）。以前这里只认"命名空间 → 命名空间"，外部域的箭头
+    // 会落到下面的伤害链分支、因目标 inputs=0 被当成越界丢掉 —— 存一次就没了。
+    const isBuff = isBuffPair(nodes, src, dst);
     if (isBuff) {
       // 「拐力箭头」：目标除了角色卡不是别的，且**入度只有一个点** ——
       // 旧工程里可能写着 port 1 / 2（那时每个来源一个端口），一律归到 0，
