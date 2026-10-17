@@ -655,29 +655,38 @@ textarea:focus {
   width: 100%;
 }
 
-/* 补全候选：排在输入框下面一行，点一下就填（不用浏览器原生 datalist ——
-   候选是异步到的，原生下拉不会刷新已弹出的列表） */
-.ext-hints {
+/* 补全候选：挂到 body 上的小弹窗（跟着输入框定位，不会被卡片裁掉） */
+.src-pop {
+  position: fixed;
+  z-index: 60;
   display: flex;
-  flex-wrap: wrap;
-  gap: 3px;
-  margin: 2px 0 4px;
-}
-
-.ext-hint {
-  font: inherit;
-  padding: 1px 6px;
+  flex-direction: column;
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 3px;
   border: 1px solid var(--line);
-  border-radius: 4px;
-  background: #f4f8fc;
-  color: var(--accent);
-  cursor: pointer;
-  max-width: 100%;
-  overflow-wrap: anywhere;
+  border-radius: 5px;
+  background: #fff;
+  box-shadow: 0 6px 18px rgba(23, 43, 77, 0.18);
 }
 
-.ext-hint:hover {
-  border-color: var(--accent);
+.src-pop-item {
+  font: inherit;
+  text-align: left;
+  padding: 2px 6px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.src-pop-item:hover {
+  background: #eaf2fb;
+  color: var(--accent);
 }
 
 /* 「域对照表」：行 / 列 / 固定拐力都在表格里就地编辑 */

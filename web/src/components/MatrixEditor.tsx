@@ -1,8 +1,8 @@
 /**
  * 「域对照表」的表格编辑器。
  *
- * 用户要求：行 / 列 / 固定拐力**不要**放在卡片底部当普通字段，直接在表格里选。
- * 所以这张表自己就是编辑器：
+ * 用户要求：行 / 列 / 固定拐力**不要**放在卡片底部当普通字段，直接在表格里选；
+ * 补全用小弹窗（SourceInput）。
  *
  *   ┌─────────────┬──────────┬──────────┐
  *   │ 固定拐力列表 │  列1输入 │  列2输入 │   ← 表头行：左上角是固定拐力（可多选）
@@ -22,6 +22,7 @@ import {
   sourceLines,
 } from "../model";
 import ExternalSources from "./ExternalSources";
+import SourceInput from "./SourceInput";
 
 export interface MatrixEditorProps {
   id: string;
@@ -82,31 +83,25 @@ export default function MatrixEditor({
     const value = axis === "row" ? rows : cols;
     const onChange = axis === "row" ? onRows : onCols;
     return (
-      <input
+      <SourceInput
         key={index}
-        ref={(el) => {
-          boxes[axis].current[index] = el;
-        }}
-        className="f-input mx-input"
-        data-testid={`mx-${axis}-${id}-${index}`}
         value={lines[index] ?? ""}
         disabled={disabled}
-        spellCheck={false}
-        title={header[index + 1] ?? undefined}
-        onChange={(e) => onChange(setSourceLine(value, index, e.target.value))}
-        onKeyDown={(e) => {
-          if (e.nativeEvent.isComposing) return;
-          if (e.key === "Enter") {
-            e.preventDefault();
-            onChange(insertSourceLine(value, index));
-            setFocusAt({ axis, index: index + 1 });   // 光标跟到新加的那条
-            return;
-          }
-          if (e.key === "Backspace" && (lines[index] ?? "") === "" && lines.length > 1) {
-            e.preventDefault();
-            onChange(removeSourceLine(value, index));
-            setFocusAt({ axis, index: Math.max(0, index - 1) });
-          }
+        baseDir={baseDir}
+        className="mx-input"
+        testId={`mx-${axis}-${id}-${index}`}
+        inputRef={(el) => {
+          boxes[axis].current[index] = el;
+        }}
+        onChange={(next) => onChange(setSourceLine(value, index, next))}
+        onEnter={() => {
+          onChange(insertSourceLine(value, index));
+          setFocusAt({ axis, index: index + 1 });   // 光标跟到新加的那条
+        }}
+        onEmptyBackspace={() => {
+          if (lines.length <= 1) return;
+          onChange(removeSourceLine(value, index));
+          setFocusAt({ axis, index: Math.max(0, index - 1) });
         }}
       />
     );
@@ -127,7 +122,7 @@ export default function MatrixEditor({
             />
           </th>
           {colLines.map((_line, index) => (
-            <th key={index} className="mx-col">
+            <th key={index} className="mx-col" title={header[index + 1] ?? undefined}>
               {renderInput("col", index)}
             </th>
           ))}

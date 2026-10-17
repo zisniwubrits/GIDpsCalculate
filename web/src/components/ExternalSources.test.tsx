@@ -94,41 +94,37 @@ it("在中间行打字，光标不会被抢到别的行（回归）", () => {
     expect(document.activeElement?.tagName ?? "BODY").not.toBe("INPUT");
   });
 
-  it("输入时给出补全候选（自己画的候选条，不用 datalist）", async () => {
+  it("输入时弹出补全小弹窗（候选由 SourceInput 负责）", async () => {
     const onChange = vi.fn();
     render(<ExternalSources id="x4" value="" onChange={onChange} />);
     fireEvent.change(screen.getByTestId("ext-source-x4-0"), {
       target: { value: "da" },
     });
-    // 防抖之后才请求
-    await new Promise((r) => setTimeout(r, 250));
-    const bar = screen.getByTestId("ext-hints-x4-0");
-    expect(bar.querySelectorAll("button").length).toBeGreaterThan(0);
-    expect(screen.getByText("data/")).toBeInTheDocument();
+    // 防抖之后才请求；弹窗挂在 body 上
+    const pop = await screen.findByTestId("ext-source-x4-0-hints");
+    expect(pop.querySelectorAll(".src-pop-item").length).toBeGreaterThan(0);
   });
 
   it("点候选：路径替换 `::` 之前那段，`::` 之后保持不动", async () => {
     const onChange = vi.fn();
     render(<ExternalSources id="x5" value="da::dds" onChange={onChange} />);
-    fireEvent.change(screen.getByTestId("ext-source-x5-0"), {
-      target: { value: "da" },
-    });
-    await new Promise((r) => setTimeout(r, 250));
-    // 先在 :: 前面输入 → 候选是路径
-    fireEvent.mouseDown(screen.getByTestId("ext-hint-x5-0-data/"));
+    const el = screen.getByTestId("ext-source-x5-0");
+    fireEvent.change(el, { target: { value: "da" } });
+    await screen.findByTestId("ext-source-x5-0-hints");
+    fireEvent.mouseDown(screen.getByTestId("ext-source-x5-0-hint-data/"));
     // 值来自 props（"da::dds"）：换掉 :: 之前那段，保留 ::dds
     expect(onChange).toHaveBeenCalledWith("data/::dds");
   });
-it("焦点离开后候选按钮自动消失", async () => {
+
+  it("焦点离开后补全弹窗自动消失", async () => {
     const onChange = vi.fn();
     render(<ExternalSources id="x6" value="" onChange={onChange} />);
     const input = screen.getByTestId("ext-source-x6-0");
     fireEvent.focus(input);
     fireEvent.change(input, { target: { value: "da" } });
-    await new Promise((r) => setTimeout(r, 250));
-    expect(screen.getByTestId("ext-hints-x6-0")).toBeInTheDocument();
+    await screen.findByTestId("ext-source-x6-0-hints");
 
     fireEvent.blur(input);
-    expect(screen.queryByTestId("ext-hints-x6-0")).toBeNull();
+    expect(screen.queryByTestId("ext-source-x6-0-hints")).toBeNull();
   });
 });
