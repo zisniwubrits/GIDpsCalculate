@@ -25,6 +25,8 @@ import {
   needsPanelPreset,
   fillPresetForDropped,
   isNamespaceNode,
+  isExternalNode,
+  isBuffPair,
   isPanelNode,
   buildRoleMap,
   roleBoxes,
@@ -787,6 +789,34 @@ describe("角色命名空间的两条硬规则", () => {
     // 已经规规矩矩的工程：原样返回
     const clean = resolveRoleOverlaps([mk("r1", "火神", [0, 0], [560, 380])]);
     expect(clean.moved).toEqual([]);
+  });
+});
+
+describe("拐力箭头判定", () => {
+  const role = (id: string, name: string) => {
+    const n = node(id, "role", [0, 0]);
+    n.fields = { ...n.fields, role_name: name };
+    return n;
+  };
+  const external = (id: string) => {
+    const n = node(id, "external", [0, 0]);
+    n.fields = { ...n.fields, ext_file: "D:/x.json", ext_role: "胡桃" };
+    return n;
+  };
+
+  it("角色/武器 → 角色是拐力箭头；普通卡不是", () => {
+    const nodes = [role("r1", "辅助"), role("r2", "火神"), node("n1", "dmg", [0, 0])];
+    expect(isBuffPair(nodes, "r1", "r2")).toBe(true);
+    expect(isBuffPair(nodes, "n1", "r2")).toBe(false);
+    expect(isBuffPair(nodes, "r2", "n1")).toBe(false);
+  });
+
+  it("「外部域」也是拐力来源（跨文件），但它本身不是命名空间容器", () => {
+    const nodes = [external("x1"), role("r2", "火神")];
+    expect(isExternalNode(nodes[0])).toBe(true);
+    expect(isNamespaceNode(nodes[0])).toBe(false);      // 不该被当成域（不吃重名/碰撞规则）
+    expect(isBuffPair(nodes, "x1", "r2")).toBe(true);
+    expect(isBuffPair(nodes, "r2", "x1")).toBe(false);  // 外部域不收拐
   });
 });
 

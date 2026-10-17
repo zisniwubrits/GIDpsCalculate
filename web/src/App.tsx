@@ -69,6 +69,7 @@ import {
   roleBoxCollisions,
   roleNameError,
   resolveRoleOverlaps,
+  isBuffPair,
   isNamespaceNode,
   isPanelNode,
   parsePanelShow,
@@ -554,12 +555,8 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
   );
 
   /** 两个节点之间是不是「拐力箭头」（角色卡 → 角色卡） */
-  const isBuffPair = useCallback(
-    (source: string, target: string) => {
-      const a = nodes.find((n) => n.id === source);
-      const b = nodes.find((n) => n.id === target);
-      return Boolean(a && b && isNamespaceNode(a) && isNamespaceNode(b));
-    },
+  const isBuffPairCb = useCallback(
+    (source: string, target: string) => isBuffPair(nodes, source, target),
     [nodes],
   );
 
@@ -569,7 +566,7 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
       const target = conn.target;
       if (!source || !target) return;
       const port = parsePort(conn.targetHandle);
-      const buff = isBuffPair(source, target);
+      const buff = isBuffPairCb(source, target);
       apply((s) => {
         const targetNode = s.nodes.find((n) => n.id === target);
         if (!targetNode) return s;
@@ -582,19 +579,19 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
       });
       setSelectedEdge(null);
     },
-    [apply, isBuffPair],
+    [apply, isBuffPairCb],
   );
 
   const isValidConnection = useCallback(
     (conn: Connection | CardRFEdge) => {
       const { source, target } = conn;
       if (!source || !target || source === target) return false;
-      if (isBuffPair(source, target)) return true;      // 角色标签之间：随便连（含双向）
+      if (isBuffPairCb(source, target)) return true;      // 角色标签之间：随便连（含双向）
       if (wouldCycle(links, source, target)) return false;
       const targetNode = nodes.find((n) => n.id === target);
       return Boolean(targetNode && parsePort(conn.targetHandle) < targetNode.inputs);
     },
-    [links, nodes, isBuffPair],
+    [links, nodes, isBuffPairCb],
   );
 
   // -- 文件操作（走后端写文件：一键保存、记忆目录）-------------------------
@@ -1082,10 +1079,10 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
         .filter((l) => !hiddenCards.has(l.src) && !hiddenCards.has(l.dst))
         // 「显示域间箭头」开关关掉时，拐力箭头不渲染（只影响显示：连线仍在工程里，
         // 拐力照旧参与求值）
-        .filter((l) => showDomainArrows || !isBuffPair(l.src, l.dst))
+        .filter((l) => showDomainArrows || !isBuffPairCb(l.src, l.dst))
         .map((l) => {
           const id = edgeId(l.src, l.dst, l.port);
-          const buff = isBuffPair(l.src, l.dst);
+          const buff = isBuffPairCb(l.src, l.dst);
           return {
             id,
             type: "card" as const,
@@ -1112,7 +1109,7 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
             },
           };
         }),
-    [links, selectedEdge, hoverId, removeLink, isBuffPair, hiddenCards, showDomainArrows],
+    [links, selectedEdge, hoverId, removeLink, isBuffPairCb, hiddenCards, showDomainArrows],
   );
 
   const selectedCount = nodes.filter((n) => n.selected).length;

@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import re
 
+from genshin_dmg import external as _external
 from genshin_dmg import nodes as _nodes
 from genshin_dmg.expr import (
     NS_JOIN,
@@ -325,6 +326,11 @@ class Graph:
         规则（用户确认）：多来源**相加**；**不传递**（源角色只拿它**自己声明过的
         ``out::``**，不把它收到的拐力再传下去）；**只有 ``out::`` 才给出去** ——
         面板里的普通项与卡片字段本身都不发拐力。
+
+        源的两种形态：
+        * 角色 / 武器卡：读它本工程的 ``out::`` 声明；
+        * 「外部域」卡：读**另一个工程文件**里那个域声明过的 ``out::``（见
+          :mod:`genshin_dmg.external`，只读、有环检测与 mtime 缓存）。
         """
         out: dict = {}
         for link in self.links:
@@ -332,11 +338,22 @@ class Graph:
             dst = self.nodes.get(link.dst)
             if src is None or dst is None:
                 continue
-            if not self._is_ns(src) or not (self._is_ns(dst) and not self._is_weapon(dst)):
-                continue                        # 源＝角色/武器，目标＝角色
-            role_from = _valid_role(src.fields.get("role_name"))
+            if not (self._is_ns(dst) and not self._is_weapon(dst)):
+                continue                        # 目标只能是角色（武器不收拐）
             role_to = _valid_role(dst.fields.get("role_name"))
-            if not role_from or not role_to or role_from == role_to:
+            if not role_to:
+                continue
+            if self._is_external(src):
+                # 跨文件：名字与值都来自那个文件，不需要 role_from
+                grants = out.setdefault(role_to, {})
+                for macro, val in self._external_grants(src).items():
+                    if val:
+                        grants[macro] = grants.get(macro, 0.0) + float(val)
+                continue
+            if not self._is_ns(src):
+                continue                        # 源＝角色 / 武器 / 外部域
+            role_from = _valid_role(src.fields.get("role_name"))
+            if not role_from or role_from == role_to:
                 continue
             grants = out.setdefault(role_to, {})
             for macro in self._out_names(base_vars, role_from):
@@ -344,6 +361,24 @@ class Graph:
                 if val:
                     grants[macro] = grants.get(macro, 0.0) + val
         return out
+
+    # -- 外部域（跨文件读拐力）------------------------------------------------
+    @staticmethod
+    def _is_external(node) -> bool:
+        """这张卡是不是「外部域」（按 schema 标记，别在求值里硬编码类型名）。"""
+        return bool(NODE_TYPES.get(node.type, {}).get("external_domain"))
+
+    def _external_grants(self, node) -> dict:
+        """外部域卡读到的 ``{名字: 值}``（同一次求值里只读一次盘）。"""
+        cache = getattr(self, "_ext_grants", None)
+        if cache is None:
+            cache = self._ext_grants = {}
+        if node.id not in cache:
+            cache[node.id] = _external.out_values(
+                str(node.fields.get("ext_file") or ""),
+                str(node.fields.get("ext_role") or ""),
+            )
+        return cache[node.id]
 
     @staticmethod
     def _out_names(base_vars: dict, role: str) -> list:
@@ -673,18 +708,27 @@ class Graph:
             b = self.nodes.get(link.dst)
             if a is None or b is None:
                 continue
-            if not self._is_ns(a) or not (self._is_ns(b) and not self._is_weapon(b)):
+            if not (self._is_ns(b) and not self._is_weapon(b)):
                 continue
-            ra = _valid_role(a.fields.get("role_name"))
             rb = _valid_role(b.fields.get("role_name"))
-            if not ra or not rb or ra == rb:
+            if not rb:
                 continue
-            names = self._out_names(base_vars, ra)
-            for macro in names:
-                val = self.role_out_value(base_vars, ra, macro)
+            if self._is_external(a):
+                # 外部域：来源角色名就用它在那个文件里的域名字（统计里能看到是谁给的）
+                ra = str(a.fields.get("ext_role") or "").strip() or "外部域"
+                grants = list(self._external_grants(a).items())
+            elif self._is_ns(a):
+                ra = _valid_role(a.fields.get("role_name"))
+                if not ra or ra == rb:
+                    continue
+                grants = [(macro, self.role_out_value(base_vars, ra, macro))
+                          for macro in self._out_names(base_vars, ra)]
+            else:
+                continue
+            for macro, val in grants:
                 if not val:
                     continue
-                row = dict(macro=macro, label=labels.get(macro, macro), value=val)
+                row = dict(macro=macro, label=labels.get(macro, macro), value=float(val))
                 out.setdefault(ra, {"out": [], "in": []})["out"].append(dict(row, role=rb))
                 out.setdefault(rb, {"out": [], "in": []})["in"].append(dict(row, role=ra))
         return out

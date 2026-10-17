@@ -10,7 +10,11 @@
 运行：``python -m pytest test_role_namespace.py -q``
 """
 
+import json
+import os
+import tempfile
 import unittest
+from pathlib import Path
 
 from genshin_dmg import damage as dmg
 from genshin_dmg import nodes as nd
@@ -809,6 +813,112 @@ class TestOutDeclarations(unittest.TestCase):
         g.add(var_card("vx", "in::atk_pct = 999", role="a"))
         g.add(GraphNode("c1", "calc", fields={"expr": "in::atk_pct"}, role="a"))
         self.assertEqual(g.evaluate()["nodes"]["c1"]["values"]["noncrit"], 40)
+
+class TestExternalDomain(unittest.TestCase):
+    """「外部域」卡片：跨文件读取另一个工程里某个域声明过的 out::（当拐力来源）。"""
+
+    def setUp(self):
+        from genshin_dmg import external as ext
+
+        self.ext = ext
+        ext.clear_cache()                    # 每个用例从干净的缓存开始
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.dir = Path(tmp.name)
+
+    def write_project(self, name, build):
+        """把 build() 造出的图存成一个工程文件，返回路径。"""
+        g = Graph()
+        build(g)
+        path = self.dir / name
+        path.write_text(json.dumps(g.to_dict(), ensure_ascii=False), encoding="utf-8")
+        return path
+
+    def build_consumer(self, file_path, ext_role="胡桃", source_id="x1"):
+        g = Graph()
+        g.add(GraphNode(source_id, "external",
+                        fields={"ext_file": str(file_path), "ext_role": ext_role}))
+        g.add(GraphNode("rb", "role", fields={"role_name": "火神"}))
+        g.links.append(Link(source_id, "rb", 0))
+        return g
+
+    def test_reads_out_from_another_file(self):
+        def build(g):
+            g.add(GraphNode("ra", "role", fields={"role_name": "胡桃",
+                                                  "panel": "out::atk_pct = 40"}))
+            # 变量卡里也能声明（显式带角色前缀，这样不依赖"卡片落在区域里"的几何判定）
+            g.add(var_card("va", "胡桃::out::dmg = 30"))
+
+        path = self.write_project("donor.json", build)
+        g = self.build_consumer(path)
+        g.add(GraphNode("c1", "calc", fields={"expr": "in::atk_pct"}, role="火神"))
+        g.add(GraphNode("c2", "calc", fields={"expr": "in::dmg"}, role="火神"))
+        out = g.evaluate()["nodes"]
+        self.assertEqual(out["c1"]["values"]["noncrit"], 40)
+        self.assertEqual(out["c2"]["values"]["noncrit"], 30)
+
+    def test_card_output_is_the_sum(self):
+        def build(g):
+            g.add(GraphNode("ra", "role", fields={"role_name": "胡桃",
+                                                  "panel": "out::atk_pct = 40"}))
+            g.add(var_card("va", "胡桃::out::dmg = 30"))
+
+        path = self.write_project("donor.json", build)
+        g = self.build_consumer(path)
+        g.add(GraphNode("cx", "external",
+                        fields={"ext_file": str(path), "ext_role": "胡桃"}))
+        out = g.evaluate()["nodes"]
+        self.assertEqual(out["x1"]["values"]["noncrit"], 70)     # 40 + 30，一眼看出读到没
+
+    def test_missing_file_and_unknown_role_give_zero(self):
+        path = self.write_project("donor.json", lambda g: g.add(
+            GraphNode("ra", "role", fields={"role_name": "胡桃",
+                                            "panel": "out::atk_pct = 40"})))
+        for target, role in ((self.dir / "没有这个文件.json", "胡桃"), (path, "不存在")):
+            g = self.build_consumer(target, ext_role=role)
+            g.add(GraphNode("c1", "calc", fields={"expr": "in::atk_pct"}, role="火神"))
+            self.assertEqual(g.evaluate()["nodes"]["c1"]["values"]["noncrit"], 0)
+
+    def test_plain_panel_items_are_not_granted(self):
+        """只有 out:: 才给出去，普通面板项读不到（和文件内规则一致）。"""
+        path = self.write_project("donor.json", lambda g: g.add(
+            GraphNode("ra", "role", fields={"role_name": "胡桃", "panel": "atk_pct = 40"})))
+        g = self.build_consumer(path)
+        g.add(GraphNode("c1", "calc", fields={"expr": "in::atk_pct"}, role="火神"))
+        self.assertEqual(g.evaluate()["nodes"]["c1"]["values"]["noncrit"], 0)
+
+    def test_cycle_does_not_hang(self):
+        """A 引用 B、B 又引用 A：不卡死，值当 0。"""
+        a_path = self.dir / "a.json"
+        b_path = self.dir / "b.json"
+        ga = self.build_consumer(b_path, ext_role="胡桃")
+        ga.add(GraphNode("c1", "calc", fields={"expr": "in::atk_pct"}, role="火神"))
+        a_path.write_text(json.dumps(ga.to_dict(), ensure_ascii=False), encoding="utf-8")
+        gb = self.build_consumer(a_path, ext_role="火神")
+        b_path.write_text(json.dumps(gb.to_dict(), ensure_ascii=False), encoding="utf-8")
+        out = self.build_consumer(b_path, ext_role="胡桃")
+        out.add(GraphNode("c1", "calc", fields={"expr": "in::atk_pct"}, role="火神"))
+        # 能算完就是胜利（没递归爆栈）
+        self.assertIsNotNone(out.evaluate()["nodes"]["c1"]["values"])
+
+    def test_cache_follows_file_changes(self):
+        """改了被引用的文件要能读到新值（按 mtime 失效，不是永久缓存）。"""
+        path = self.dir / "donor.json"
+        path.write_text(json.dumps(Graph().to_dict()), encoding="utf-8")
+        g = Graph()
+        g.add(GraphNode("ra", "role", fields={"role_name": "胡桃",
+                                              "panel": "out::atk_pct = 40"}))
+        path.write_text(json.dumps(g.to_dict(), ensure_ascii=False), encoding="utf-8")
+        self.assertEqual(self.ext.out_values(str(path), "胡桃"), {"atk_pct": 40.0})
+        # 改内容（并把 mtime 往后挪，避免同秒写入看起来没变）
+        g2 = Graph()
+        g2.add(GraphNode("ra", "role", fields={"role_name": "胡桃",
+                                               "panel": "out::atk_pct = 55"}))
+        path.write_text(json.dumps(g2.to_dict(), ensure_ascii=False), encoding="utf-8")
+        stamp = os.stat(path).st_mtime + 5
+        os.utime(path, (stamp, stamp))
+        self.assertEqual(self.ext.out_values(str(path), "胡桃"), {"atk_pct": 55.0})
+
 
 class TestOutSum(unittest.TestCase):
     """同一个域里同名 out:: 写多处要**求和**（用户口径）。

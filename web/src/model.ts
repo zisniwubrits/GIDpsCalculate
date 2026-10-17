@@ -82,6 +82,30 @@ export function isNamespaceNode(node: CardNode): boolean {
 }
 
 /**
+ * 是不是「外部域」卡片（读**另一个工程文件**里某个域的 out:: 当拐力来源）。
+ *
+ * 判据用字段名（和后端 schema 的 `ext_role` 对应），和 `isNamespaceNode` 一样是
+ * "看字段"而不是"看类型名"，这样后端加/改卡片类型时前端不用跟着改。
+ * 注意它**不是**命名空间容器：没有虚线区域、不参与重名与碰撞规则。
+ */
+export function isExternalNode(node: CardNode): boolean {
+  return Object.prototype.hasOwnProperty.call(node.fields ?? {}, "ext_role");
+}
+
+/**
+ * 这两个节点之间的连线是不是**拐力箭头**（角色/武器/外部域 → 角色）。
+ *
+ * 拐力箭头的端口规则与伤害链不同：固定用端口 0、允许成环（拐力不传递，环没关系）。
+ */
+export function isBuffPair(nodes: CardNode[], source: string, target: string): boolean {
+  const a = nodes.find((n) => n.id === source);
+  const b = nodes.find((n) => n.id === target);
+  if (!a || !b) return false;
+  // 源：角色 / 武器域，或跨文件的「外部域」；目标：角色（武器不收拐）
+  return (isNamespaceNode(a) || isExternalNode(a)) && isNamespaceNode(b);
+}
+
+/**
  * 是不是**带面板**的命名空间容器（角色）：武器没有面板。
  * 判据用 `panel_show`（控制面板显示哪些项的字段）—— 武器的字段里没有它。
  */

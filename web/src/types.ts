@@ -38,6 +38,8 @@ export interface NodeTypeSpec {
   role_card: boolean;
   /** 武器：继承角色类的命名空间容器，只输出拐力、无面板、不支持 in:: */
   weapon_card: boolean;
+  /** 「外部域」：读另一个工程文件里某个域的 out:: 当拐力来源（不是命名空间容器） */
+  external_domain: boolean;
   ctx_menu: boolean;
   has_factor: boolean;
   /** 纯汇点卡片（有输入端口、没有输出端口，如「赋值变量」）：不参与结果链 */
