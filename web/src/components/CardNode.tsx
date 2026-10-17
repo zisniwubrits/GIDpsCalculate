@@ -8,7 +8,6 @@ import { Handle, NodeResizer, Position, type Node, type NodeProps } from "@xyflo
 import { memo, useCallback, type CSSProperties } from "react";
 import type { BuffStatRow, CardNode, FieldSpec, FieldValue, NodeResult, NodeTypeSpec } from "../types";
 import CodeField from "./CodeField";
-import CodeInput from "./CodeInput";
 import DataTable from "./DataTable";
 import ExternalSources from "./ExternalSources";
 
@@ -73,15 +72,12 @@ function FieldControl({
   value,
   onChange,
   bare = false,
-  macros = [],
 }: {
   field: FieldSpec;
   value: FieldValue;
   onChange: (v: FieldValue) => void;
   /** 便签式卡片：不画标签、控件不带边框（由 schema 的 bare 字段决定） */
   bare?: boolean;
-  /** 面板宏名：数值 / 文本输入框里一起高亮（来自 schema） */
-  macros?: readonly string[];
 }) {
   const label = bare ? null : <span className="f-label">{field.label}</span>;
   switch (field.kind) {
@@ -136,11 +132,11 @@ function FieldControl({
         <>
           <span className="f-label">{field.label}</span>
           <span className="f-wrap">
-            <CodeInput
-              value={value}
-              macros={macros}
-              onChange={onChange}
-              testId={`field-${field.key}`}
+            <input
+              className="f-input"
+              value={String(value ?? "")}
+              spellCheck={false}
+              onChange={(e) => onChange(e.target.value)}
             />
             <span className="f-suffix">%</span>
           </span>
@@ -150,11 +146,11 @@ function FieldControl({
       return (
         <>
           <span className="f-label">{field.label}</span>
-          <CodeInput
-            value={value}
-            macros={macros}
-            onChange={onChange}
-            testId={`field-${field.key}`}
+          <input
+            className="f-input"
+            value={String(value ?? "")}
+            spellCheck={false}
+            onChange={(e) => onChange(e.target.value)}
           />
         </>
       );
@@ -249,7 +245,6 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
               value={node.fields[f.key]}
               onChange={(v) => onField(f.key, v)}
               bare={spec.bare}
-              macros={data.macros}
             />
           </div>
         ),

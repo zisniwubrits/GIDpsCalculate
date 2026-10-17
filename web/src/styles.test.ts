@@ -309,10 +309,6 @@ describe("关键字高亮与页面图标", () => {
     expect(ruleBody(".code-hl")).toMatch(/position:\s*absolute/);
     expect(ruleBody(".code-input")).toMatch(/color:\s*transparent/);
     expect(ruleBody(".code-input")).toMatch(/caret-color:/);   // 光标要看得见
-    // 单行版本（卡片里的数值/文本输入框）用同一套叠层
-    expect(ruleBody(".code-line")).toMatch(/position:\s*relative/);
-    expect(ruleBody(".code-hl-line")).toMatch(/white-space:\s*pre/);
-    expect(ruleBody(".code-line > .code-input")).toMatch(/color:\s*transparent/);
   });
 
   it("页面用自己的图标，不用浏览器默认的那个", () => {

@@ -771,38 +771,6 @@ textarea:focus {
   color: #2f6fa7;
 }
 
-/* 单行版本（卡片里那些数值 / 文本输入框）：input 透明叠在副本上，不换行 */
-.code-line {
-  position: relative;
-  display: flex;
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.code-hl-line {
-  position: absolute;
-  inset: 0;
-  padding: 2px 6px;
-  overflow: hidden;
-  white-space: pre;
-  pointer-events: none;
-  line-height: inherit;
-  font: inherit;
-}
-
-.code-line > .code-input {
-  position: relative;
-  flex: 1 1 auto;
-  min-width: 0;
-  color: transparent;
-  caret-color: var(--text);
-}
-
-.code-line > .code-input::placeholder {
-  color: var(--muted);
-  opacity: 1;
-}
-
 .f-label {
   color: var(--muted);
   padding-top: 2px;
