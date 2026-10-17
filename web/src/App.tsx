@@ -195,6 +195,8 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
   const boxSelecting = useRef(false);
   /** 框选时是否也选角色/武器域（工具栏「框选域」开关，默认关；见 ignoredByBoxSelect） */
   const [boxSelectDomains, setBoxSelectDomains] = useState(false);
+  /** 是否显示域间箭头（角色/武器之间的拐力箭头；默认显示，纯显示开关，不影响求值） */
+  const [showDomainArrows, setShowDomainArrows] = useState(true);
   /** 鼠标在画布上的**屏幕坐标**（粘贴时换算成流坐标，把卡片放到鼠标附近） */
   const pointer = useRef<{ x: number; y: number } | null>(null);
   /** 拖动角色区域被"重叠"规则挡回时，记下要写回 React Flow 的位置（apply 之后处理） */
@@ -1078,6 +1080,9 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
       links
         // 端点在「隐藏区域内卡片」里的连线一起藏起来（否则箭头悬在半空）
         .filter((l) => !hiddenCards.has(l.src) && !hiddenCards.has(l.dst))
+        // 「显示域间箭头」开关关掉时，拐力箭头不渲染（只影响显示：连线仍在工程里，
+        // 拐力照旧参与求值）
+        .filter((l) => showDomainArrows || !isBuffPair(l.src, l.dst))
         .map((l) => {
           const id = edgeId(l.src, l.dst, l.port);
           const buff = isBuffPair(l.src, l.dst);
@@ -1107,7 +1112,7 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
             },
           };
         }),
-    [links, selectedEdge, hoverId, removeLink, isBuffPair, hiddenCards],
+    [links, selectedEdge, hoverId, removeLink, isBuffPair, hiddenCards, showDomainArrows],
   );
 
   const selectedCount = nodes.filter((n) => n.selected).length;
@@ -1150,6 +1155,8 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
         boxSelectDomains={boxSelectDomains}
         // 切换时不弹 toast（用户要求：开关自己高亮就够，别再在下方出提示）
         onToggleBoxSelectDomains={() => setBoxSelectDomains((v) => !v)}
+        showDomainArrows={showDomainArrows}
+        onToggleShowDomainArrows={() => setShowDomainArrows((v) => !v)}
         status={status}
       />
 

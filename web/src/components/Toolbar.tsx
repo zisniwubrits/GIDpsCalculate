@@ -28,6 +28,9 @@ export interface ToolbarProps {
   /** 框选时是否把**角色 / 武器域**也一起选中（默认关：域是大面板，开了很容易整块被框进来） */
   boxSelectDomains: boolean;
   onToggleBoxSelectDomains: () => void;
+  /** 是否显示域间箭头（角色 / 武器之间的拐力箭头，默认显示；只影响显示，不影响求值） */
+  showDomainArrows: boolean;
+  onToggleShowDomainArrows: () => void;
   status: { kind: "ok" | "warn" | "error" | "busy"; text: string };
 }
 
@@ -113,6 +116,21 @@ export default function Toolbar(props: ToolbarProps) {
           }
         >
           框选域
+        </button>
+        {/* 显示开关：关掉只藏箭头，连线仍在工程里、拐力照旧生效 */}
+        <button
+          type="button"
+          className={`tb-toggle${props.showDomainArrows ? " on" : ""}`}
+          data-testid="show-domain-arrows"
+          aria-pressed={props.showDomainArrows}
+          onClick={props.onToggleShowDomainArrows}
+          title={
+            props.showDomainArrows
+              ? "正在显示域间箭头（角色 / 武器之间的拐力箭头）。点一下隐藏，方便看清卡片"
+              : "域间箭头已隐藏（拐力照样生效）。点一下显示"
+          }
+        >
+          域间箭头
         </button>
       </div>
 
