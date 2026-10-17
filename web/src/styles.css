@@ -693,6 +693,13 @@ textarea:focus {
   color: var(--accent);
 }
 
+/* 「域对照表」：卡片高度跟着内容走（下方不留空白），表格自己可横向滚动 */
+.mx-wrap {
+  align-self: flex-start;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
 /* 「域对照表」：行 / 列 / 固定拐力都在表格里就地编辑 */
 .mx-table {
   border-collapse: collapse;
@@ -1447,4 +1454,11 @@ textarea:focus {
 .boot-dim {
   color: var(--muted);
   font-size: 12px;
+}
+
+/* 「域对照表」左上角的固定拐力入口：压在表格左上角（表头第一格旁边的边缘） */
+.matrix-buff-in {
+  top: 12px !important;
+  left: -6px !important;
+  right: auto !important;
 }

@@ -5,7 +5,7 @@
  * 结果文案（本卡系数 ｜ 输出）直接用后端返回的 `display`，保证与 Python 侧完全一致。
  */
 import { Handle, NodeResizer, Position, type Node, type NodeProps } from "@xyflow/react";
-import { memo, useCallback, type CSSProperties } from "react";
+import { memo, useCallback, useEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import type { BuffStatRow, CardNode, FieldSpec, FieldValue, NodeResult, NodeTypeSpec } from "../types";
 import CodeField from "./CodeField";
 import DataTable from "./DataTable";
@@ -33,6 +33,8 @@ export interface CardData extends Record<string, unknown> {
   onDelete: (id: string) => void;
   /** 拖动缩放手柄结束后把最终尺寸（含左上角坐标变化）写回模型 */
   onResize: (id: string, size: [number, number], pos: [number, number]) => void;
+  /** 「域对照表」这类内容驱动的卡片：按内容量出来的高度回报给上层（用户要求下方不要留空白） */
+  onAutoHeight?: (id: string, height: number) => void;
   onMenu: (id: string, kind: MenuKind, ev: { clientX: number; clientY: number }) => void;
   onCopy: (id: string) => void;
 }
@@ -218,6 +220,7 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
       ) : null}
       {spec.table === "matrix" ? (
         // 「域对照表」：行 / 列 / 固定拐力都在表格里就地编辑，不再画在卡片底部
+        <AutoHeight id={id} onAutoHeight={data.onAutoHeight}>
         <MatrixEditor
           id={id}
           rows={node.fields.row_files}
@@ -230,6 +233,7 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
           onCols={(v) => onField("col_files", v)}
           onFixed={(v) => onField("fixed_file", v)}
         />
+        </AutoHeight>
       ) : null}
       {spec.fields.map((f) =>
         // 「域对照表」的三个来源字段由表格自己渲染，别再当普通字段画一遍
@@ -514,3 +518,43 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
 }
 
 export default memo(CardNodeView);
+
+
+/**
+ * 「域对照表」的高度跟随内容：卡片下方不要留一大片空白（用户要求）。
+ *
+ * 做法：测量**内容**（表格）的高度，再按"当前卡高 - 卡身高度 + 内容高度"换算出
+ * 合适的卡高回报给上层。只在差值明显（> 4px）时才回报，避免来回抖动。
+ * 宽度不动：横向仍可自己拖。
+ */
+function AutoHeight({
+  id,
+  onAutoHeight,
+  children,
+}: {
+  id: string;
+  onAutoHeight?: (id: string, height: number) => void;
+  children: ReactNode;
+}) {
+  const wrap = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!onAutoHeight) return;
+    const el = wrap.current;
+    if (!el) return;
+    const fit = () => {
+      const node = el.closest(".react-flow__node") as HTMLElement | null;
+      const body = el.closest(".card-body") as HTMLElement | null;
+      if (!node || !body) return;
+      const nodeH = node.getBoundingClientRect().height;
+      const bodyH = body.getBoundingClientRect().height;
+      const contentH = el.scrollHeight;
+      const want = Math.round(nodeH - bodyH + contentH + 4);
+      if (Math.abs(want - nodeH) > 4) onAutoHeight(id, want);
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [id, onAutoHeight, children]);
+  return <div className="mx-wrap" ref={wrap}>{children}</div>;
+}
