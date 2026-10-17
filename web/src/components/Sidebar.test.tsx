@@ -67,7 +67,7 @@ describe("工具栏开关", () => {
       onFit: vi.fn(),
       boxSelectDomains: false,
       onToggleBoxSelectDomains: vi.fn(),
-      showDomainArrows: true,
+      showDomainArrows: false,
       onToggleShowDomainArrows: vi.fn(),
       status: { kind: "ok" as const, text: "就绪" },
       ...overrides,
@@ -76,24 +76,24 @@ describe("工具栏开关", () => {
     return props;
   };
 
-  it("两个开关都是 tb-toggle 按钮：框选域默认关、域间箭头默认开", () => {
+  it("两个开关都是 tb-toggle 按钮，默认都不显示（框选域关、域间箭头关）", () => {
     const props = renderToolbar();
     const box = screen.getByTestId("box-select-domains");
     const arrows = screen.getByTestId("show-domain-arrows");
     expect(box).toHaveClass("tb-toggle");
     expect(box).toHaveAttribute("aria-pressed", "false");
-    // 域间箭头默认显示（与原来的行为一致），所以默认就是按下状态
+    // 域间箭头默认不显示（用户要求），所以默认是未按下状态
     expect(arrows).toHaveClass("tb-toggle");
-    expect(arrows).toHaveAttribute("aria-pressed", "true");
-    expect(arrows).toHaveClass("on");
+    expect(arrows).toHaveAttribute("aria-pressed", "false");
+    expect(arrows).not.toHaveClass("on");
     screen.getByTestId("show-domain-arrows").click();
     expect(props.onToggleShowDomainArrows).toHaveBeenCalledTimes(1);
   });
 
-  it("关掉域间箭头后按钮不高亮", () => {
-    renderToolbar({ showDomainArrows: false });
+  it("打开域间箭头后按钮高亮", () => {
+    renderToolbar({ showDomainArrows: true });
     const arrows = screen.getByTestId("show-domain-arrows");
-    expect(arrows).toHaveAttribute("aria-pressed", "false");
-    expect(arrows).not.toHaveClass("on");
+    expect(arrows).toHaveAttribute("aria-pressed", "true");
+    expect(arrows).toHaveClass("on");
   });
 });

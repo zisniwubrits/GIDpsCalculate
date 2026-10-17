@@ -90,6 +90,36 @@
       ]
     },
     {
+      "name": "域",
+      "items": [
+        {
+          "type": "role",
+          "label": "角色"
+        },
+        {
+          "type": "weapon",
+          "label": "武器"
+        }
+      ]
+    },
+    {
+      "name": "变量",
+      "items": [
+        {
+          "type": "var",
+          "label": "变量"
+        },
+        {
+          "type": "vartable",
+          "label": "变量表"
+        },
+        {
+          "type": "setvar",
+          "label": "赋值变量"
+        }
+      ]
+    },
+    {
       "name": "工具",
       "items": [
         {
@@ -101,28 +131,8 @@
           "label": "文本"
         },
         {
-          "type": "var",
-          "label": "变量"
-        },
-        {
           "type": "const",
           "label": "理想圣遗物"
-        },
-        {
-          "type": "vartable",
-          "label": "变量表"
-        },
-        {
-          "type": "setvar",
-          "label": "赋值变量"
-        },
-        {
-          "type": "weapon",
-          "label": "武器"
-        },
-        {
-          "type": "role",
-          "label": "角色"
         },
         {
           "type": "result",
@@ -1051,7 +1061,7 @@
       "type": "var",
       "title": "变量",
       "label": "变量",
-      "group": "工具",
+      "group": "变量",
       "inputs": 0,
       "fields": [
         {
@@ -1119,7 +1129,7 @@
       "type": "vartable",
       "title": "变量表",
       "label": "变量表",
-      "group": "工具",
+      "group": "变量",
       "inputs": 0,
       "fields": [],
       "defaults": {
@@ -1148,7 +1158,7 @@
       "type": "setvar",
       "title": "赋值变量",
       "label": "赋值变量",
-      "group": "工具",
+      "group": "变量",
       "inputs": 1,
       "fields": [
         {
@@ -1197,7 +1207,7 @@
       "type": "weapon",
       "title": "武器",
       "label": "武器",
-      "group": "工具",
+      "group": "域",
       "inputs": 0,
       "fields": [],
       "defaults": {
@@ -1230,7 +1240,7 @@
       "type": "role",
       "title": "角色",
       "label": "角色",
-      "group": "工具",
+      "group": "域",
       "inputs": 0,
       "fields": [],
       "defaults": {

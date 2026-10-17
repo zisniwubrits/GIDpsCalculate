@@ -195,8 +195,8 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
   const boxSelecting = useRef(false);
   /** 框选时是否也选角色/武器域（工具栏「框选域」开关，默认关；见 ignoredByBoxSelect） */
   const [boxSelectDomains, setBoxSelectDomains] = useState(false);
-  /** 是否显示域间箭头（角色/武器之间的拐力箭头；默认显示，纯显示开关，不影响求值） */
-  const [showDomainArrows, setShowDomainArrows] = useState(true);
+  /** 是否显示域间箭头（角色/武器之间的拐力箭头；默认隐藏，纯显示开关，不影响求值） */
+  const [showDomainArrows, setShowDomainArrows] = useState(false);
   /** 鼠标在画布上的**屏幕坐标**（粘贴时换算成流坐标，把卡片放到鼠标附近） */
   const pointer = useRef<{ x: number; y: number } | null>(null);
   /** 拖动角色区域被"重叠"规则挡回时，记下要写回 React Flow 的位置（apply 之后处理） */

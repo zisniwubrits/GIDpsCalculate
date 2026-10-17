@@ -611,7 +611,7 @@ NODE_TYPES: dict = {
     # 变量卡片：定义全局变量，供所有数值框/表达式引用（如 攻击力*2）
     # bare=True：卡片内就是一大块多行文本框（不画「定义」标签、无内层边框、随卡片铺满），
     #            与「文本」卡同样的便签式处理，见 web/src/styles.css 的 .f-bare
-    "var": dict(title="变量", label="变量", group="工具", inputs=0, compute=_t_text,
+    "var": dict(title="变量", label="变量", group="变量", inputs=0, compute=_t_text,
                 isolated=True, vars_card=True, resizable=True, wide_fields=True,
                 bare=True, fields=[
         # 默认**空白**：新建一张变量卡就是一张白纸（写什么由用户决定；
@@ -628,12 +628,12 @@ NODE_TYPES: dict = {
     "const": dict(title="理想圣遗物词条", label="理想圣遗物", group="工具", inputs=0,
                   compute=_t_text, isolated=True, no_output=True, resizable=True,
                   table="relic", fields=[]),
-    "vartable": dict(title="变量表", label="变量表", group="工具", inputs=0,
+    "vartable": dict(title="变量表", label="变量表", group="变量", inputs=0,
                      compute=_t_text, isolated=True, no_output=True, resizable=True,
                      table="vars", fields=[]),
     # 赋值变量卡片：把上游输出（按「取值」挑一个分量）赋给一个变量。
     # sink=True → 有输入端口、没有输出端口：不参与结果链，只登记变量。
-    "setvar": dict(title="赋值变量", label="赋值变量", group="工具", inputs=1,
+    "setvar": dict(title="赋值变量", label="赋值变量", group="变量", inputs=1,
                    compute=_t_setvar, sink=True, fields=[
         _F("var_name", "变量名", "", "text"),
         _F("pick", "取值", "期望", "combo", list(SETVAR_PICKS)),
@@ -647,13 +647,13 @@ NODE_TYPES: dict = {
     # 武器：**继承角色类**（同样是一块命名空间标记、同样能对外拐力），但
     #   * 没有面板（不给 panel / panel_show 字段，标记上也不显示面板）
     #   * **不支持 in::**（它只负责输出拐力，不接受别人拐它）
-    "weapon": dict(title="武器", label="武器", group="工具", inputs=0,
+    "weapon": dict(title="武器", label="武器", group="域", inputs=0,
                    compute=_t_text, isolated=True, no_output=True, resizable=True,
                    role_card=True, weapon_card=True, fields=[], hidden_fields=[
         _F("role_name", "武器名", "", "text"),
         _F("panel", "面板", "", "textbox"),          # 保留键以便旧工程往返，但界面不用
     ]),
-    "role": dict(title="角色", label="角色", group="工具", inputs=0,
+    "role": dict(title="角色", label="角色", group="域", inputs=0,
                  compute=_t_text, isolated=True, no_output=True, resizable=True,
                  role_card=True, fields=[], hidden_fields=[
         # 角色名：改成右键标题栏「设置角色名…」里改（卡面上不再放输入框）
@@ -673,13 +673,26 @@ NODE_TYPES: dict = {
 }
 
 
-# 左侧菜单分组（按注册顺序去重，组内顺序即注册顺序）
+# 左侧菜单分组。
+#
+# 顺序写成常量，而不是靠 NODE_TYPES 的注册顺序：**把卡片加在文件哪一处不该改变菜单的样子**
+# （用户要求：域相关、变量相关各自单独成组，排在乘区/反应/星月之后、「工具」之前）。
+GROUP_ORDER = ["直伤乘区", "反应源", "星月部件", "域", "变量", "工具"]
+
+# 组内想排在前面的卡片（不写就按注册顺序）。域组先「角色」再「武器」，变量组按
+# 定义 → 查看 → 赋值 的顺用顺序，符合"常用在前"的直觉。
+MENU_FIRST = ["role", "weapon", "var", "vartable", "setvar"]
+
 GROUPS = []
-for _key, _spec in NODE_TYPES.items():
-    if _spec["group"] not in [g["name"] for g in GROUPS]:
-        GROUPS.append(dict(name=_spec["group"], items=[]))
-    next(g for g in GROUPS if g["name"] == _spec["group"])["items"].append(
-        dict(type=_key, label=_spec["label"]))
+for _name in list(GROUP_ORDER) + sorted(
+    {s["group"] for s in NODE_TYPES.values()} - set(GROUP_ORDER)
+):
+    _items = [dict(type=k, label=s["label"]) for k, s in NODE_TYPES.items()
+              if s["group"] == _name]
+    _items.sort(key=lambda it: MENU_FIRST.index(it["type"])
+                if it["type"] in MENU_FIRST else len(MENU_FIRST))
+    if _items:                      # 空组不显示
+        GROUPS.append(dict(name=_name, items=_items))
 
 
 # 一键预设：用拆分开的乘区部件搭好星/月等链条（**不含结果卡片**）
