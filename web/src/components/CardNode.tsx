@@ -218,7 +218,7 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
         // 「外部域」的来源：一行一个单行输入框（回车加一行、空行退格删一行），
         // 不画字段标签、不写任何提示文字（用户要求）
         spec.external_domain && f.key === "ext_sources" ? (
-          <div className="f-row" key={f.key}>
+          <div className="f-row f-row-wide" key={f.key}>
             <ExternalSources
               id={id}
               value={node.fields[f.key]}
@@ -235,6 +235,19 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
               macros={data.macros}
               disabled={collapsed}
               testId={`defs-${id}`}
+              onChange={(v) => onField(f.key, v)}
+            />
+          </div>
+        ) : spec.table === "matrix" && (f.key === "row_files" || f.key === "col_files") ? (
+          // 「域对照表」的行 / 列：**一行一个单行输入框**，增删逻辑与「外部域」完全一致
+          // （回车在下面加一行、空行退格删一行、永远留一个）
+          <div className="f-row" key={f.key}>
+            <span className="f-label">{f.label}</span>
+            <ExternalSources
+              id={`${id}-${f.key}`}
+              value={node.fields[f.key]}
+              disabled={collapsed}
+              baseDir={data.baseDir}
               onChange={(v) => onField(f.key, v)}
             />
           </div>

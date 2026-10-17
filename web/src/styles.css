@@ -632,13 +632,18 @@ textarea:focus {
   gap: 5px;
 }
 
-/* 「外部域」的多行来源：一行一个单行输入框（回车加一行、空行退格删一行）。
-   这一栏没有标签列，输入框占满整行。 */
+/* 「外部域」/「域对照表」的多行来源：一行一个单行输入框
+   （回车加一行、空行退格删一行）。 */
 .ext-sources {
   display: flex;
   flex-direction: column;
   gap: 3px;
-  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+/* 没有标签列的行（「外部域」的来源列表）：整行都给输入框 */
+.f-row-wide {
+  grid-template-columns: 1fr;
 }
 
 .ext-source-line {

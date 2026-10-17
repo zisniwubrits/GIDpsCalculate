@@ -1156,6 +1156,34 @@ describe("App 集成（假后端 + 真 schema）", () => {
     ).toBeInTheDocument();
   });
 
+it("域对照表的行 / 列是单行输入框列表：回车加一行、空行退格删一行", async () => {
+    const user = userEvent.setup();
+    await renderApp();
+    await addCard(user, "matrix");
+    const card = await screen.findByTestId("card-n1");
+
+    // 行、列各一个列表；每个列表至少一行输入框
+    const rowsBox = within(card).getByTestId("ext-sources-n1-row_files");
+    const colsBox = within(card).getByTestId("ext-sources-n1-col_files");
+    expect(rowsBox).toBeInTheDocument();
+    expect(colsBox).toBeInTheDocument();
+    expect(within(card).getByTestId("ext-source-n1-row_files-0")).toBeInTheDocument();
+
+    // 回车 → 下面多一行
+    fireEvent.keyDown(within(card).getByTestId("ext-source-n1-row_files-0"), { key: "Enter" });
+    await waitFor(() =>
+      expect(within(card).getByTestId("ext-source-n1-row_files-1")).toBeInTheDocument(),
+    );
+
+    // 空行按退格 → 这一行消失
+    fireEvent.keyDown(within(card).getByTestId("ext-source-n1-row_files-1"), {
+      key: "Backspace",
+    });
+    await waitFor(() =>
+      expect(within(card).queryByTestId("ext-source-n1-row_files-1")).toBeNull(),
+    );
+  });
+
   it("右键角色标签 →「角色面板…」：宏表可编辑、并显示拐力统计（OUT/IN）", async () => {    const user = userEvent.setup();
     await renderApp();
     await addCard(user, "role");
