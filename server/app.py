@@ -114,6 +114,34 @@ def create_app() -> FastAPI:
     def get_help():
         return dict(text=tutorial.HELP_TEXT, sections=tutorial.SECTIONS)
 
+    @app.get("/api/external/suggest")
+    def external_suggest(q: str = "", dir: str = "", file: str = ""):
+        """「外部域」输入框的自动补全。
+
+        传 ``q``（正在输入的那一行）时按规则拆开：
+        * ``q`` 里还没有 ``::`` → 补路径（目录 / .json 文件）；
+        * 有 ``::`` → 补 ``::`` 后面的域名（读那个文件里有哪些域）。
+        也支持直给 ``dir`` / ``file``（前端不需要，留给调试）。
+        """
+        try:
+            remembered = str(storage.current_dir())
+        except Exception:
+            remembered = ""
+        base = dir or remembered
+        bases = [b for b in (remembered,) if b and b != base]
+        text = q or ""
+        if "::" in text:
+            # 同时给两套候选：前端按**光标在 :: 前还是后**决定显示哪一套
+            # （在改路径时补路径，在写域名时补域名）
+            file_part = text.split("::", 1)[0]
+            return dict(
+                ok=True,
+                paths=external.suggest_paths(file_part, base, bases),
+                domains=external.suggest_domains(file_part, base, bases),
+            )
+        return dict(ok=True, paths=external.suggest_paths(text, base or file, bases),
+                    domains=[])
+
     def _attach_bases(graph) -> None:
         """给图补上「外部域」相对路径的基准目录。
 

@@ -1017,6 +1017,33 @@ class TestExternalDomain(unittest.TestCase):
         self.assertEqual(self.ext.source_label("D:/x/幻灭米提亚.json", "dds"), "幻灭米提亚.dds")
         self.assertEqual(self.ext.source_label("D:/x/a.json", ""), "a")
 
+    def test_suggest_paths_and_domains(self):
+        """补全：路径给目录（带 /）与 .json 文件；域名给那个文件里的域。"""
+        sub = self.dir / "data"
+        sub.mkdir()
+
+        def make(g):
+            g.add(GraphNode("r1", "role", fields={"role_name": "胡桃",
+                                                 "panel": "out::atk_pct = 40"}))
+
+        self.write_project("data/幻灭.json", make)
+        (sub / "说明.txt").write_text("x", encoding="utf-8")
+
+        paths = self.ext.suggest_paths("", str(self.dir))
+        self.assertIn("data/", paths)                    # 目录补成 名字/
+        self.assertNotIn("说明.txt", paths)              # 非 .json 文件不补
+        self.assertEqual(self.ext.suggest_paths("da", str(self.dir)), ["data/"])
+        self.assertIn("data/幻灭.json", self.ext.suggest_paths("data/", str(self.dir)))
+        self.assertEqual(self.ext.suggest_paths("data/幻", str(self.dir)),
+                         ["data/幻灭.json"])
+        self.assertEqual(self.ext.suggest_paths("没有这个目录/", str(self.dir)), [])
+
+        full = str(sub / "幻灭.json")
+        self.assertEqual(self.ext.suggest_domains(full, str(self.dir)), ["胡桃"])
+        # 相对路径同样能读（补全用相对路径也顺手）
+        self.assertEqual(self.ext.suggest_domains("data/幻灭.json", str(self.dir)),
+                         ["胡桃"])
+
     def test_missing_file_and_unknown_role_give_zero(self):
         path = self.write_project("donor.json", lambda g: g.add(
             GraphNode("ra", "role", fields={"role_name": "胡桃",

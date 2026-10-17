@@ -30,7 +30,7 @@ import os
 from contextvars import ContextVar
 
 __all__ = ["out_values", "domains", "resolve", "clear_cache", "begin", "take_cycles",
-           "parse_sources", "source_label"]
+           "parse_sources", "source_label", "suggest_paths", "suggest_domains"]
 
 
 def parse_sources(text, legacy_file="", legacy_role="") -> list:
@@ -66,6 +66,62 @@ def source_label(path: str, role: str = "") -> str:
     base = os.path.splitext(os.path.basename(str(path or "")))[0] or str(path or "")
     role = str(role or "").strip()
     return "%s.%s" % (base, role) if role else base
+
+
+def _split_partial(partial: str) -> tuple:
+    """把正在输入的一段路径拆成 ``(目录部分含分隔符, 名字前缀)``。"""
+    raw = str(partial or "")
+    cut = max(raw.rfind("/"), raw.rfind("\\"))
+    if cut < 0:
+        return ("", raw)
+    return (raw[:cut + 1], raw[cut + 1:])
+
+
+def suggest_paths(partial: str, base_dir: str | None = None, extra_bases=(),
+                  limit: int = 200) -> list:
+    """给「外部域」输入框用的路径补全：列出候选的目录 / .json 文件。
+
+    * 已输入部分按「目录 + 名字前缀」拆开，目录优先按 ``base_dir`` 等基准找；
+    * 目录补成 ``名字/``（可以继续往里输入），文件补全名；
+    * 前缀大小写不敏感；目录排前面；最多 ``limit`` 条。
+    """
+    dir_part, prefix = _split_partial(partial)
+    want_dir = dir_part.strip().rstrip("/\\") or "."
+    target = ""
+    for base in _bases(base_dir, extra_bases):
+        cand = os.path.abspath(os.path.join(base, want_dir) if base else want_dir)
+        if os.path.isdir(cand):
+            target = cand
+            break
+    if not target:
+        return []                               # 目录不存在：没有候选，别乱猜
+    low = prefix.lower()
+    found_dirs: list = []
+    found_files: list = []
+    try:
+        entries = sorted(os.listdir(target))
+    except OSError:
+        return []
+    for name in entries:
+        if name.startswith("."):
+            continue
+        if low and not name.lower().startswith(low):
+            continue
+        full = os.path.join(target, name)
+        shown = dir_part + name
+        if os.path.isdir(full):
+            found_dirs.append(shown + "/")
+        elif name.lower().endswith(".json"):
+            found_files.append(shown)
+        if len(found_dirs) + len(found_files) >= limit:
+            break
+    return found_dirs + found_files
+
+
+def suggest_domains(file_part: str, base_dir: str | None = None,
+                    extra_bases=()) -> list:
+    """给 ``文件::`` 后面那半截用的域名补全：那个文件里有哪些域。"""
+    return domains(file_part, base_dir, extra_bases)
 
 # 正在解析的文件栈（防环）。用 ContextVar 而不是模块级 set：
 # 后端是并发的，两个请求同时求值不能互相干扰。

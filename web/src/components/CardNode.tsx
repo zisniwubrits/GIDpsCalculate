@@ -7,7 +7,10 @@
 import { Handle, NodeResizer, Position, type Node, type NodeProps } from "@xyflow/react";
 import { memo, useCallback, type CSSProperties } from "react";
 import type { BuffStatRow, CardNode, FieldSpec, FieldValue, NodeResult, NodeTypeSpec } from "../types";
+import CodeField from "./CodeField";
+import CodeInput from "./CodeInput";
 import DataTable from "./DataTable";
+import ExternalSources from "./ExternalSources";
 
 export interface CardData extends Record<string, unknown> {
   node: CardNode;
@@ -18,6 +21,10 @@ export interface CardData extends Record<string, unknown> {
   table: { header: string[]; rows: string[][] } | null;
   /** 这张卡片属于哪个「角色」命名空间（由画布上的容器面板按位置推导，空 = 不属于任何角色） */
   role: string;
+  /** 当前工程目录：「外部域」输入框的补全用它作相对路径基准 */
+  baseDir?: string;
+  /** 面板宏名（来自 schema）：变量卡编辑器里把它们一起高亮 */
+  macros?: string[];
   /** 只对角色卡有意义：这个命名空间**给出去的拐**（OUT）与**收到的拐**（IN） */
   roleBuffs?: { out: BuffStatRow[]; in: BuffStatRow[] };
   /** 只对角色卡有意义：画布上面板要显示的行（宏名 / 中文名 / 生效值 / 收到的拐） */
@@ -66,12 +73,15 @@ function FieldControl({
   value,
   onChange,
   bare = false,
+  macros = [],
 }: {
   field: FieldSpec;
   value: FieldValue;
   onChange: (v: FieldValue) => void;
   /** 便签式卡片：不画标签、控件不带边框（由 schema 的 bare 字段决定） */
   bare?: boolean;
+  /** 面板宏名：数值 / 文本输入框里一起高亮（来自 schema） */
+  macros?: readonly string[];
 }) {
   const label = bare ? null : <span className="f-label">{field.label}</span>;
   switch (field.kind) {
@@ -126,11 +136,11 @@ function FieldControl({
         <>
           <span className="f-label">{field.label}</span>
           <span className="f-wrap">
-            <input
-              className="f-input"
-              value={String(value ?? "")}
-              spellCheck={false}
-              onChange={(e) => onChange(e.target.value)}
+            <CodeInput
+              value={value}
+              macros={macros}
+              onChange={onChange}
+              testId={`field-${field.key}`}
             />
             <span className="f-suffix">%</span>
           </span>
@@ -140,11 +150,11 @@ function FieldControl({
       return (
         <>
           <span className="f-label">{field.label}</span>
-          <input
-            className="f-input"
-            value={String(value ?? "")}
-            spellCheck={false}
-            onChange={(e) => onChange(e.target.value)}
+          <CodeInput
+            value={value}
+            macros={macros}
+            onChange={onChange}
+            testId={`field-${field.key}`}
           />
         </>
       );
@@ -208,16 +218,42 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
           testId={`table-${spec.table}-${id}`}
         />
       ) : null}
-      {spec.fields.map((f) => (
-        <div className={`f-row${spec.bare ? " f-row-bare" : ""}`} key={f.key}>
-          <FieldControl
-            field={f}
-            value={node.fields[f.key]}
-            onChange={(v) => onField(f.key, v)}
-            bare={spec.bare}
-          />
-        </div>
-      ))}
+      {spec.fields.map((f) =>
+        // 「外部域」的来源：一行一个单行输入框（回车加一行、空行退格删一行），
+        // 不画字段标签、不写任何提示文字（用户要求）
+        spec.external_domain && f.key === "ext_sources" ? (
+          <div className="f-row" key={f.key}>
+            <ExternalSources
+              id={id}
+              value={node.fields[f.key]}
+              disabled={collapsed}
+              baseDir={data.baseDir}
+              onChange={(v) => onField(f.key, v)}
+            />
+          </div>
+        ) : spec.vars_card && f.key === "defs" ? (
+          // 变量卡的定义区：关键字（own/out/in）与面板宏名深蓝高亮
+          <div className="f-row f-row-bare" key={f.key}>
+            <CodeField
+              value={node.fields[f.key]}
+              macros={data.macros}
+              disabled={collapsed}
+              testId={`defs-${id}`}
+              onChange={(v) => onField(f.key, v)}
+            />
+          </div>
+        ) : (
+          <div className={`f-row${spec.bare ? " f-row-bare" : ""}`} key={f.key}>
+            <FieldControl
+              field={f}
+              value={node.fields[f.key]}
+              onChange={(v) => onField(f.key, v)}
+              bare={spec.bare}
+              macros={data.macros}
+            />
+          </div>
+        ),
+      )}
     </div>
   );
 

@@ -1042,6 +1042,10 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
           fontSize: n.font_size ?? 0,
           table: tableFor(n, schema, results),
           role: roles[n.id] ?? "",
+          // 「外部域」补全要用同一个基准目录（与求值解析相对路径一致）
+          baseDir: saveDir,
+          // 变量卡编辑器里一起高亮的词（面板宏名，来自 schema）
+          macros: schema.panelMacros.map((m) => m.key),
           // 角色卡：左上角标签上方显示"出入度"（给出去/收进来的拐）
           roleBuffs: isNamespaceNode(n) ? roleBuffRows(n) : undefined,
           rolePanel: isPanelNode(n) ? rolePanelRows(n) : undefined,

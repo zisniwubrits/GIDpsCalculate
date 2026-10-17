@@ -599,6 +599,46 @@ export function parsePanelShow(text: string): string[] {
     .filter(Boolean);
 }
 
+// ------------------------------------------- 「外部域」的多行来源（每行一个输入框）
+//
+// 存储仍然是**一个字符串**（`ext_sources`，行间用 \n 分隔）——后端按行解析，
+// 存盘 / 读盘 / 复制粘贴都不用特殊处理；界面上则拆成一个个单行输入框：
+// 回车在下面加一行、空行按退格删掉（用户要求）。
+
+/** 把存下来的文本拆成若干行（**至少一行**，界面上永远有一个输入框）。
+ *
+ * 注意：**不要吞掉末尾的空行** —— 回车新加的就是末尾那个空行，吞掉就表现为
+ * "按回车没反应"（真机踩过）。所以 "a\n" 就是两行：["a", ""]。
+ */
+export function sourceLines(text: unknown): string[] {
+  const lines = String(text ?? "").split("\n");
+  return lines.length ? lines : [""];
+}
+
+/** 改第 index 行（越界忽略），返回新的多行文本。 */
+export function setSourceLine(text: unknown, index: number, value: string): string {
+  const lines = sourceLines(text);
+  if (index < 0 || index >= lines.length) return lines.join("\n");
+  lines[index] = value;
+  return lines.join("\n");
+}
+
+/** 在第 index 行**下面**插一个空行（回车），返回新文本。 */
+export function insertSourceLine(text: unknown, index: number): string {
+  const lines = sourceLines(text);
+  const at = Math.max(0, Math.min(lines.length, index + 1));
+  lines.splice(at, 0, "");
+  return lines.join("\n");
+}
+
+/** 删掉第 index 行（空行按退格）；只剩一行时保留一个空行，返回新文本。 */
+export function removeSourceLine(text: unknown, index: number): string {
+  const lines = sourceLines(text);
+  if (index < 0 || index >= lines.length) return lines.join("\n");
+  lines.splice(index, 1);
+  return (lines.length ? lines : [""]).join("\n");
+}
+
 /**
  * 「面板变量卡」的**预设代码**（拖进角色区域时由程序填进变量卡片的 `defs`）。
  *
@@ -672,7 +712,47 @@ export function displayWidthCh(text: string): number {
   return w;
 }
 
-/** 生成不重复的节点 id：n1、n2… */export function nextNodeId(nodes: CardNode[]): string {
+// ------------------------------------------- 变量卡片里的关键字高亮（编辑器用）
+/** 高亮片段：`kw` = 子命名空间关键字（own/out/in），`macro` = 面板宏名，`plain` = 其它。 */
+export interface HighlightToken {
+  kind: "kw" | "macro" | "plain";
+  text: string;
+}
+
+/**
+ * 把变量卡的定义文本切成高亮片段。
+ *
+ * 关键字（`own` / `out` / `in`，含 `own::x` 这种写法）用**深蓝**；
+ * 面板宏名（atk / crit_rate …）用同一色系稍浅一档，免得和关键字抢眼。
+ * 宏名清单由调用方从 schema 给（不在 TS 里硬编码卡片词表）。
+ */
+export function highlightTokens(
+  text: unknown,
+  macros: readonly string[] = [],
+): HighlightToken[] {
+  const src = String(text ?? "");
+  if (!src) return [];
+  const words = ["own", "out", "in"]
+    .concat([...macros].sort((a, b) => b.length - a.length))  // 长名字优先（atk_pct 先于 atk）
+    .map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  // 前后不能紧贴标识符字符，避免把 atk_pct 里的 atk 单独切出来
+  const re = new RegExp(`(?<![A-Za-z0-9_])(${words.join("|")})(?![A-Za-z0-9_])`, "g");
+  const tokens: HighlightToken[] = [];
+  let last = 0;
+  for (const m of src.matchAll(re)) {
+    const at = m.index ?? 0;
+    if (at > last) tokens.push({ kind: "plain", text: src.slice(last, at) });
+    const word = m[1];
+    const isKw = word === "own" || word === "out" || word === "in";
+    tokens.push({ kind: isKw ? "kw" : "macro", text: word });
+    last = at + word.length;
+  }
+  if (last < src.length) tokens.push({ kind: "plain", text: src.slice(last) });
+  return tokens;
+}
+
+/** 生成不重复的节点 id：n1、n2… */
+export function nextNodeId(nodes: CardNode[]): string {
   let max = 0;
   for (const n of nodes) {
     const m = /^n(\d+)$/.exec(n.id);

@@ -296,6 +296,40 @@ describe("工具栏状态区", () => {
   });
 });
 
+describe("关键字高亮与页面图标", () => {
+  it("关键字是深蓝：own/out/in 加粗，宏名同色系稍浅", () => {
+    const kw = ruleBody(".tok-kw");
+    expect(kw).toMatch(/color:\s*#123a6b/i);
+    expect(kw).toMatch(/font-weight:\s*700/);
+    expect(ruleBody(".tok-macro")).toMatch(/color:\s*var\(--accent\)|color:\s*#2f6fa7/i);
+  });
+
+  it("高亮副本与输入框叠在同一位置（否则文字会错位）", () => {
+    expect(ruleBody(".code-wrap")).toMatch(/position:\s*relative/);
+    expect(ruleBody(".code-hl")).toMatch(/position:\s*absolute/);
+    expect(ruleBody(".code-input")).toMatch(/color:\s*transparent/);
+    expect(ruleBody(".code-input")).toMatch(/caret-color:/);   // 光标要看得见
+    // 单行版本（卡片里的数值/文本输入框）用同一套叠层
+    expect(ruleBody(".code-line")).toMatch(/position:\s*relative/);
+    expect(ruleBody(".code-hl-line")).toMatch(/white-space:\s*pre/);
+    expect(ruleBody(".code-line > .code-input")).toMatch(/color:\s*transparent/);
+  });
+
+  it("页面用自己的图标，不用浏览器默认的那个", () => {
+    const html = ["index.html", "web/index.html"]
+      .map((p) => resolve(process.cwd(), p))
+      .map((p) => {
+        try {
+          return readFileSync(p, "utf8");
+        } catch {
+          return "";
+        }
+      })
+      .find(Boolean);
+    expect(html ?? "").toMatch(/<link[^>]+rel="icon"[^>]+href="\/favicon\.svg"/);
+  });
+});
+
 describe("工具栏状态区", () => {
   it("工程名与保存目录都完整显示：目录允许换行，不再用省略号截断", () => {
     const dir = ruleBody(".tb-dir");

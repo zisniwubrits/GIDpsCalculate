@@ -85,8 +85,24 @@ export function saveReport(
   return postJSON<SaveResult & { text: string }>("/api/report", { ...graph, ...opts }, signal);
 }
 
-export interface OpenResult {
+/** 「外部域」输入框的补全候选：`q` 没有 `::` 时给路径，有 `::` 时给域名。 */
+export interface ExternalSuggest {
   ok: boolean;
+  paths: string[];
+  domains: string[];
+}
+
+export function suggestExternal(
+  q: string,
+  dir?: string,
+  signal?: AbortSignal,
+): Promise<ExternalSuggest> {
+  const params = new URLSearchParams({ q });
+  if (dir) params.set("dir", dir);
+  return getJSON<ExternalSuggest>(`/api/external/suggest?${params.toString()}`, signal);
+}
+
+export interface OpenResult {  ok: boolean;
   /** 用户取消（或没有图形环境）时为 true */
   cancelled?: boolean;
   path?: string;

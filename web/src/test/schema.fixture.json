@@ -1274,9 +1274,9 @@
       "fields": [
         {
           "key": "ext_sources",
-          "label": "外部域（每行 文件::域）",
+          "label": "外部域",
           "default": "",
-          "kind": "textbox"
+          "kind": "text"
         }
       ],
       "defaults": {

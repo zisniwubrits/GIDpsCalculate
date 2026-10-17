@@ -36,6 +36,10 @@ import {
   validCustomOut,
   nextCustomOutName,
   parseRolePanel,
+  removeSourceLine,
+  insertSourceLine,
+  setSourceLine,
+  sourceLines,
   formatRolePanel,
   cardsBlockingHide,
   cardsHidden,
@@ -831,6 +835,25 @@ describe("拐力箭头判定", () => {
     expect(back.links).toEqual([{ src: "x1", dst: "r2", port: 0 }]);
   });
 
+});
+
+describe("外部域来源的多行文本", () => {
+  it("拆行：至少一行；末尾空行要留着（回车新加的就是它）", () => {
+    expect(sourceLines("")).toEqual([""]);
+    expect(sourceLines("a")).toEqual(["a"]);
+    expect(sourceLines("a\nb")).toEqual(["a", "b"]);
+    expect(sourceLines("a\nb\n")).toEqual(["a", "b", ""]);
+  });
+
+  it("改一行 / 下面加一行 / 删一行", () => {
+    expect(setSourceLine("a\nb", 1, "B")).toBe("a\nB");
+    expect(setSourceLine("a", 9, "X")).toBe("a");            // 越界忽略
+    expect(insertSourceLine("a\nb", 0)).toBe("a\n\nb");   // 在第 0 行下面插
+    expect(insertSourceLine("a", 0)).toBe("a\n");
+    expect(insertSourceLine("", 0)).toBe("\n");
+    expect(removeSourceLine("a\n\nb", 1)).toBe("a\nb");
+    expect(removeSourceLine("a", 0)).toBe("");               // 删光也留一个空行
+  });
 });
 
 describe("工具栏文字宽度", () => {
