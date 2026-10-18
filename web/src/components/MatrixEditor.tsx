@@ -14,7 +14,7 @@
  * 永远留一条）；两边共用 model 里的 sourceLines / setSourceLine / insertSourceLine /
  * removeSourceLine，行为不会出现两套。
  */
-import { Handle, Position } from "@xyflow/react";
+import { Handle, Position, useUpdateNodeInternals } from "@xyflow/react";
 import { useEffect, useRef, useState } from "react";
 import {
   MATRIX_PORT_ALL,
@@ -88,6 +88,13 @@ export default function MatrixEditor({
     col: useRef<Array<HTMLInputElement | null>>([]),
   };
   const [focusAt, setFocusAt] = useState<{ axis: Axis; index: number } | null>(null);
+  const updateNodeInternals = useUpdateNodeInternals();
+
+  // 行 / 列数量变了，接入点的位置也变了：必须让 React Flow 重新测量，
+  // 否则「增删行之后输入点还在老位置」——连线会指到错误的地方（用户报的 bug）
+  useEffect(() => {
+    updateNodeInternals(id);
+  }, [id, rowLines.length, colLines.length, updateNodeInternals]);
 
   // 光标只搬一次，而且**等新那条渲染出来**再搬（等不到就留着，下次渲染再来）
   useEffect(() => {
