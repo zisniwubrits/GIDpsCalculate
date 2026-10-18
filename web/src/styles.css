@@ -813,7 +813,7 @@ textarea:focus {
   display: block;
   height: 6px;
   border-radius: 3px;
-  background: #e3e9f1;
+  background: #eef2f7;
   overflow: hidden;
 }
 
@@ -821,8 +821,8 @@ textarea:focus {
   display: block;
   height: 100%;
   border-radius: 3px;
-  /* 深一点的蓝色，浅色条在浅底表格里几乎看不出来 */
-  background: linear-gradient(90deg, #2f6fa7, #16324f);
+  /* 回到第一版的浅蓝渐变（用户要求）；数字仍在条下方 */
+  background: linear-gradient(90deg, #9fc3e8, #4f8cc9);
 }
 
 .mx-pct-text {

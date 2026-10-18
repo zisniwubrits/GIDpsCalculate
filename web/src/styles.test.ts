@@ -349,10 +349,9 @@ describe("关键字高亮与页面图标", () => {
     expect(ruleBody(".mx-wrap")).toMatch(/padding:/);
   });
 
-  it("百分比：条是深蓝色，数字排在条下面", () => {
-    // 条太浅会在浅色表格里看不见 → 用深蓝渐变
+  it("百分比：条用第一版浅蓝渐变，数字排在条下面", () => {
     const bar = ruleBody(".mx-bar");
-    expect(bar).toMatch(/background:\s*linear-gradient\(90deg, #2f6fa7/);
+    expect(bar).toMatch(/background:\s*linear-gradient\(90deg, #9fc3e8/);
     // 数字放在条下方（不再压在条里），所以不要底色、要上边距
     const text = ruleBody(".mx-pct-text");
     expect(text).toMatch(/margin-top:/);
