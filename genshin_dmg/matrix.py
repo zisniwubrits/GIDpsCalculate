@@ -62,8 +62,22 @@ def _expected(full: str, role: str, grants: dict) -> float | None:
         out = graph.evaluate()
     except Exception:                                    # 行文件坏了就当一个空格子
         return None
-    result = out.get("result") or {}
-    values = result.get("values")
+    # **要取指定域的那张 ★结果**：一个文件里可能有多个域（各有自己的结果卡），
+    # out["result"] 只代表"第一张连上的结果卡"，拿它会把别的域的伤害算进来
+    # （用户报的 `data/米c0::factor7` 算出 factor9 的数就是这么来的）。
+    nodes_out = out.get("nodes") or {}
+    picked = None
+    if role:
+        for nid, info in nodes_out.items():
+            if info.get("type") != "result":
+                continue
+            node = graph.nodes.get(nid)
+            if node is not None and node.role == role:
+                picked = info
+                break
+    if picked is None:
+        picked = out.get("result") or {}
+    values = picked.get("values")
     if not values:
         return None                                      # 没有 ★结果（或没接到链上）
     try:

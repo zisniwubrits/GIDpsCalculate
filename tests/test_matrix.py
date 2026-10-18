@@ -162,6 +162,37 @@ class TestMatrix(unittest.TestCase):
         # 行2 列2：1000 + 1 + 4 = 1005
         self.assertEqual(table[2][2], "1005.00")
 
+    def test_multi_domain_file_uses_the_requested_domains_result(self):
+        """一个文件里有多个域时，单元格要取**指定域**的那张 ★结果。
+
+        用户报：`data/米c0::factor7` 算出来的数不对 —— 原来取的是 out["result"]
+        （第一张连上的结果卡，往往属于另一个域）。
+        """
+        g = Graph()
+        for role, atk in (("甲", 1000), ("乙", 3000)):
+            g.add(GraphNode("r_%s" % role, "role", fields={"role_name": role, "panel": ""}))
+            g.add(GraphNode("b_%s" % role, "base", fields={
+                "stat_base": "atk", "stat_big": "atk_pct", "stat_flat": "0",
+                "multiplier": "100"}, role=role))
+            g.add(GraphNode("s_%s" % role, "result", fields={}, inputs=1, role=role))
+            g.add(GraphNode("v_%s" % role, "var", fields={
+                "defs": "atk = %d\natk_pct = in::atk_pct" % atk}, role=role))
+        g.links.append(Link("b_甲", "s_甲", 0))
+        g.links.append(Link("b_乙", "s_乙", 0))
+        path = self.dir / "双域.json"
+        path.write_text(json.dumps(g.to_dict(), ensure_ascii=False), encoding="utf-8")
+
+        table = matrix.build("%s::甲\n%s::乙" % (path, path), "", "", str(self.dir))
+        self.assertEqual(table[1][0], "双域.甲")
+        self.assertEqual(table[2][0], "双域.乙")
+        # 甲的自身 atk=1000 → 1000；乙的 3000（两者不能串）
+        self.assertEqual(table[1][1:], [])            # 没有列：只有行标签
+        self.assertEqual(matrix._expected(str(path), "甲", {}), 1000.0)
+        self.assertEqual(matrix._expected(str(path), "乙", {}), 3000.0)
+        # 拐力只作用到指定的那个域
+        self.assertEqual(matrix._expected(str(path), "甲", {"atk_pct": 100}), 2000.0)
+        self.assertEqual(matrix._expected(str(path), "乙", {"atk_pct": 100}), 6000.0)
+
     def test_parse_spec_reuses_external_syntax(self):
         self.assertEqual(matrix.parse_spec("a.json::dds\nb.json"), [
             ("a.json", "dds"), ("b.json", ""),
