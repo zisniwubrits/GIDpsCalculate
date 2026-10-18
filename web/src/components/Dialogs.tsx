@@ -8,6 +8,7 @@ import {
   SUB_OUT,
   validCustomOut,
 } from "../model";
+import { BuffRows, PanelMacroGrid } from "./PanelParts";
 
 export interface ResultVarsDialogProps {
   initial: Record<string, string>;
@@ -225,23 +226,6 @@ export function RolePanelDialog({
     setCustom((list) => [...list, nextCustomOutName(list)]);
   };
 
-  const rows = (list: { macro: string; label: string; value: number; role: string }[]) =>
-    list.length ? (
-      <ul className="buff-list" data-testid="buff-list">
-        {list.map((r, i) => (
-          <li key={`${r.macro}-${r.role}-${i}`}>
-            <b>{r.label}</b>
-            <span className="buff-val">{r.value}</span>
-            <span className="dim">{r.role}</span>
-          </li>
-        ))}
-      </ul>
-    ) : (
-      <p className="modal-hint" data-testid="buff-empty">
-        （无）
-      </p>
-    );
-
   return (
     <div className="modal-mask" onMouseDown={onClose}>
       <div
@@ -253,41 +237,15 @@ export function RolePanelDialog({
       >
         <h2>角色面板 · {title}</h2>
         {/* 用户要求：删掉弹窗里的全部提示性文字（说明都搬到 F1 教程里） */}
-        <div className="panel-macro-grid">
-          <div className="panel-macro-head">
-            <span className="pm-key">宏</span>
-            <span className="pm-label">属性</span>
-            <span>值（可写算式/变量）</span>
-            <span className="pm-feed">喂给哪张卡</span>
-            <span className="pm-show-head" title="勾选后显示在画布的角色面板上">显示</span>
-          </div>
-          {macros.map((m) => (
-            <label className="panel-macro-row" key={m.key}>
-              <span className="pm-key">{m.key}</span>
-              <span className="pm-label">{m.label}</span>
-              <input
-                value={values[m.key] ?? ""}
-                data-testid={`panel-${m.key}`}
-                placeholder="留空 = 不启用"
-                onChange={(e) => setValues((v) => ({ ...v, [m.key]: e.target.value }))}
-              />
-              <span className="pm-feed" title={m.feed}>
-                {m.feed}
-              </span>
-              <input
-                type="checkbox"
-                className="pm-show"
-                data-testid={`panel-show-${m.key}`}
-                title="在画布的角色面板上显示这一项"
-                checked={show.includes(m.key)}
-                onChange={(e) =>
-                  setShow((s) =>
-                    e.target.checked ? [...s, m.key] : s.filter((k) => k !== m.key),
-                  )
-                }
-              />
-            </label>
-          ))}
+        <PanelMacroGrid
+          macros={macros}
+          values={values}
+          show={show}
+          onChangeValue={(key, next) => setValues((v) => ({ ...v, [key]: next }))}
+          onToggleShow={(key, on) =>
+            setShow((list) => (on ? [...list, key] : list.filter((k) => k !== key)))
+          }
+        >
           {custom.length ? (
             <div className="panel-custom-block">
               <div className="panel-custom-title">
@@ -347,15 +305,15 @@ export function RolePanelDialog({
               ＋ 添加自定义对外项
             </button>
           </div>
-        </div>
+        </PanelMacroGrid>
         <div className="buff-stats">
           <div>
             <h3>给出去的拐（OUT）</h3>
-            {rows(stats?.out ?? [])}
+            <BuffRows list={stats?.out ?? []} />
           </div>
           <div>
             <h3>收到的拐（IN）</h3>
-            {rows(stats?.in ?? [])}
+            <BuffRows list={stats?.in ?? []} />
           </div>
         </div>
         <div className="modal-actions">

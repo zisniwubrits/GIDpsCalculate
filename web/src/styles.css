@@ -1551,28 +1551,20 @@ textarea:focus {
   font-size: 12px;
 }
 
-/* 「域对照表」右键单元格弹出的角色面板（只读） */
-.panel-table {
-  border-collapse: collapse;
-  width: 100%;
-  font-size: 12px;
-  margin: 6px 0;
-}
-
-.panel-table th,
-.panel-table td {
-  border-bottom: 1px solid var(--line);
-  padding: 3px 6px;
-  text-align: left;
-}
-
-.panel-table td.num {
-  text-align: right;
+/* 只读宏表（「域对照表」右键面板）：值显示文字，多一列"收到" */
+.pm-value {
   font-family: var(--font-mono);
+  padding: 2px 6px;
+  color: var(--text);
 }
 
-.panel-out {
-  font-size: 12px;
-  color: var(--muted);
-  margin: 4px 0 0;
+.pm-in {
+  text-align: right;
+  color: var(--accent);
+}
+
+/* 只读宏表（「域对照表」右键面板）：多一列"收到"，没有"显示"列 */
+.panel-macro-readonly .panel-macro-row,
+.panel-macro-readonly .panel-macro-head {
+  grid-template-columns: 108px 84px minmax(120px, 1fr) 64px;
 }
