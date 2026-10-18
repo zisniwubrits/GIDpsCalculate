@@ -1207,6 +1207,41 @@ it("域对照表：行列直接写在表格里（不再有底部字段），回�
     expect(document.activeElement).toBe(within(card).getByTestId("mx-row-n1-0"));
   });
 
+  it("域对照表的行头能装下长文件名（输入框按内容给宽度，不截断）", async () => {
+    const longName = "data/米提亚零命专武精五银钢风套三百精通满词条.json";
+    window.localStorage.setItem(
+      "genshin-dmg-calc:project:v1",
+      JSON.stringify({
+        graph: {
+          version: 1,
+          app: "GenshinDamageCalc",
+          zoom: 1,
+          name: "长路径",
+          nodes: [
+            {
+              id: "m1",
+              type: "matrix",
+              pos: [40, 40],
+              size: [900, 320],
+              font_size: null,
+              inputs: 0,
+              fields: { row_files: longName, col_files: "", fixed_file: "" },
+            },
+          ],
+          links: [],
+        },
+        savedAt: new Date().toISOString(),
+      }),
+    );
+    await renderApp();
+    const card = await screen.findByTestId("card-m1");
+    const input = within(card).getByTestId("mx-row-m1-0") as HTMLInputElement;
+    // size 至少跟文件名长度同量级（否则会被截断）
+    expect(Number(input.getAttribute("size"))).toBeGreaterThan(20);
+    // 悬停还能看到完整路径
+    expect(input.getAttribute("title")).toBe(longName);
+  });
+
   it("右键角色标签 →「角色面板…」：宏表可编辑、并显示拐力统计（OUT/IN）", async () => {    const user = userEvent.setup();
     await renderApp();
     await addCard(user, "role");

@@ -25,6 +25,8 @@ export interface SourceInputProps {
   className?: string;
   testId?: string;
   placeholder?: string;
+  /** 输入框的固有宽度（字符数）：长文件名时让列宽跟着内容走，别把路径截断 */
+  size?: number;
   /** 调用方想自己管焦点时传进来（「外部域」插入一行后要把光标搬过去） */
   inputRef?: (el: HTMLInputElement | null) => void;
 }
@@ -41,6 +43,7 @@ export default function SourceInput({
   className = "",
   testId,
   placeholder,
+  size,
   inputRef,
 }: SourceInputProps) {
   const input = useRef<HTMLInputElement | null>(null);
@@ -119,6 +122,8 @@ export default function SourceInput({
         className={`f-input${className ? " " + className : ""}`}
         data-testid={testId}
         value={value}
+        size={size}
+        title={value || undefined}
         disabled={disabled}
         spellCheck={false}
         placeholder={placeholder}

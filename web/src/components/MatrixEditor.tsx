@@ -18,6 +18,7 @@ import { Handle, Position } from "@xyflow/react";
 import { useEffect, useRef, useState } from "react";
 import {
   MATRIX_PORT_ALL,
+  displayWidthCh,
   insertSourceLine,
   matrixColPort,
   matrixRowPort,
@@ -86,14 +87,19 @@ export default function MatrixEditor({
     const lines = axis === "row" ? rowLines : colLines;
     const value = axis === "row" ? rows : cols;
     const onChange = axis === "row" ? onRows : onCols;
+    const text = lines[index] ?? "";
+    // 文件名可能很长：让输入框按内容给出固有宽度（size 以"字符"计），
+    // 列宽就会跟着内容变，不会把路径截断（用户要求：行头要能显示全）
+    const widthCh = Math.max(10, Math.min(48, Math.round(displayWidthCh(text)) + 2));
     return (
       <SourceInput
         key={index}
-        value={lines[index] ?? ""}
+        value={text}
         disabled={disabled}
         baseDir={baseDir}
         className="mx-input"
         testId={`mx-${axis}-${id}-${index}`}
+        size={widthCh}
         inputRef={(el) => {
           boxes[axis].current[index] = el;
         }}
