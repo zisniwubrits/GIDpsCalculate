@@ -153,5 +153,66 @@ class TestSubstats(unittest.TestCase):
         self.assertGreater(boss["crit_rate"], domain["crit_rate"])
 
 
+class TestMainCombos(unittest.TestCase):
+    def test_candidate_counts(self):
+        """沙 5 / 杯 12（8 类属性伤害 + 攻击/生命/防御/精通）/ 冠 7 → 组合 420。"""
+        self.assertEqual(len(relic.MAIN_STAT_PROB[relic.SLOT_SANDS]), 5)
+        self.assertEqual(len(relic.MAIN_STAT_PROB[relic.SLOT_GOBLET]), 12)
+        self.assertEqual(len(relic.MAIN_STAT_PROB[relic.SLOT_CIRCLET]), 7)
+        self.assertEqual(len(relic.main_combos()), 1 * 1 * 5 * 12 * 7)
+
+    def test_each_combo_covers_all_slots(self):
+        """每个组合都给出 5 个槽位，且主词条在该槽位的候选表里。"""
+        for combo in relic.main_combos():
+            self.assertEqual(set(combo), set(relic.SLOTS))
+            for slot, main in combo.items():
+                self.assertIn(main, relic.MAIN_STAT_PROB[slot], slot)
+
+    def test_combo_cost_sums_slots_and_off_piece_is_cheaper(self):
+        """总成本 = 各槽相加；把某槽当散件 → 总成本少掉那个槽的一半。"""
+        combo = {
+            relic.SLOT_FLOWER: "hp_flat",
+            relic.SLOT_PLUME: "atk_flat",
+            relic.SLOT_SANDS: "atk_pct",
+            relic.SLOT_GOBLET: "atk_pct",
+            relic.SLOT_CIRCLET: "crit_rate",
+        }
+        target = relic.combo_cost(combo)
+        manual = sum(relic.resin_cost(slot, main) for slot, main in combo.items())
+        self.assertAlmostEqual(target, manual, places=6)
+
+        off = relic.combo_cost(combo, off_piece_slot=relic.SLOT_GOBLET)
+        goblet = relic.resin_cost(relic.SLOT_GOBLET, "atk_pct")
+        self.assertAlmostEqual(off, target - goblet / 2, places=6)
+
+    def test_budget_filters_combos(self):
+        """预算太低 → 一套都买不起；预算足够 → 全部组合都可行。"""
+        self.assertEqual(relic.feasible_combos(300), [])          # 最低成本 ≈ 484
+        every = relic.feasible_combos(100000)
+        self.assertEqual(len(every), len(relic.main_combos()) * len(relic.SLOTS))
+        for item in every:
+            self.assertIn(item["offPiece"], relic.SLOTS)
+            self.assertLessEqual(item["cost"], 100000)
+
+    def test_feasible_combos_sorted_and_within_budget(self):
+        """返回结果按成本从低到高、都不超预算。"""
+        got = relic.feasible_combos(1500)
+        self.assertTrue(got)
+        costs = [item["cost"] for item in got]
+        self.assertEqual(costs, sorted(costs))
+        self.assertLessEqual(max(costs), 1500)
+        # 每一条的"哪个槽当散件"只会是 5 个部位之一
+        self.assertTrue({item["offPiece"] for item in got} <= set(relic.SLOTS))
+
+    def test_can_pin_the_off_piece_slot(self):
+        """指定散件槽（比如固定让杯当散件）时，只按那一个槽折算。"""
+        got = relic.feasible_combos(100000, off_piece_slot=relic.SLOT_GOBLET)
+        self.assertEqual(len(got), len(relic.main_combos()))
+        self.assertTrue(all(item["offPiece"] == relic.SLOT_GOBLET for item in got))
+
+    def test_limit(self):
+        self.assertEqual(len(relic.feasible_combos(100000, limit=7)), 7)
+
+
 if __name__ == "__main__":                                  # pragma: no cover
     unittest.main()

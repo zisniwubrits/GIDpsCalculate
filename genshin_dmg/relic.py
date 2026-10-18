@@ -50,6 +50,9 @@ __all__ = [
     "substat_pool",
     "expected_substat_rolls",
     "expected_substats",
+    "combo_cost",
+    "main_combos",
+    "feasible_combos",
 ]
 
 # ---- 刷取侧常量 ----------------------------------------------------------
@@ -254,3 +257,68 @@ def expected_substats(main: str, q4: float = FOUR_SUB_RATE) -> dict:
         key: rolls * SUBSTAT_AVG[key]
         for key, rolls in expected_substat_rolls(main, q4).items()
     }
+
+
+# ---- 主词条组合（背包）---------------------------------------------------
+def main_combos() -> list:
+    """所有**主词条组合**（花/羽 固定，沙/杯/冠 各自枚举）。
+
+    返回 ``[{"flower": ..., "plume": ..., "sands": ..., "goblet": ..., "circlet": ...}, …]``，
+    条数 = 1 × 1 × 5 × 12 × 7 = **420**（杯有 12 种候选：8 类属性伤害 + 攻击/生命/防御/精通）。
+    """
+    out: list = []
+    for flower in MAIN_STAT_PROB[SLOT_FLOWER]:
+        for plume in MAIN_STAT_PROB[SLOT_PLUME]:
+            for sands in MAIN_STAT_PROB[SLOT_SANDS]:
+                for goblet in MAIN_STAT_PROB[SLOT_GOBLET]:
+                    for circlet in MAIN_STAT_PROB[SLOT_CIRCLET]:
+                        out.append({
+                            SLOT_FLOWER: flower,
+                            SLOT_PLUME: plume,
+                            SLOT_SANDS: sands,
+                            SLOT_GOBLET: goblet,
+                            SLOT_CIRCLET: circlet,
+                        })
+    return out
+
+
+def combo_cost(mains: dict, off_piece_slot: str | None = None,
+               extra_rate: float = EXTRA_DROP_RATE,
+               set_share: float = SET_SHARE,
+               resin_per_run: float = RESIN_PER_RUN) -> float:
+    """一套主词条的**期望树脂成本**：``off_piece_slot`` 那个槽按散件算（便宜一半）。"""
+    total = 0.0
+    for slot in SLOTS:
+        main = mains.get(slot)
+        total += resin_cost(slot, main, off_piece=(slot == off_piece_slot),
+                            extra_rate=extra_rate, set_share=set_share,
+                            resin_per_run=resin_per_run)
+    return total
+
+
+def feasible_combos(budget: float,
+                    off_piece_slot: str | None = None,
+                    q4: float = FOUR_SUB_RATE,
+                    extra_rate: float = EXTRA_DROP_RATE,
+                    set_share: float = SET_SHARE,
+                    resin_per_run: float = RESIN_PER_RUN,
+                    limit: int | None = None) -> list:
+    """预算内**买得起**的主词条组合。
+
+    * 每个组合都要决定"哪 1 个槽当散件"（``off_piece_slot`` 为 None 时把 5 个槽都试一遍）；
+    * 只保留 ``成本 ≤ budget`` 的，按成本从低到高排（**伤害排序要等接上伤害链**）；
+    * ``q4`` 目前只影响副词条期望，不参与主词条成本（留着给下一步统一传参）。
+
+    返回 ``[{"mains": {...}, "offPiece": slot, "cost": float}, …]``。
+    """
+    budget = float(budget or 0)
+    slots_tried = [off_piece_slot] if off_piece_slot else list(SLOTS)
+    out: list = []
+    for mains in main_combos():
+        for slot in slots_tried:
+            cost = combo_cost(mains, off_piece_slot=slot, extra_rate=extra_rate,
+                              set_share=set_share, resin_per_run=resin_per_run)
+            if cost <= budget:
+                out.append(dict(mains=dict(mains), offPiece=slot, cost=cost))
+    out.sort(key=lambda item: item["cost"])
+    return out[:limit] if limit else out
