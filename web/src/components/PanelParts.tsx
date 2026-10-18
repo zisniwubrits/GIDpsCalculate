@@ -55,7 +55,7 @@ export function PanelMacroGrid({
         <span className="pm-label">属性</span>
         <span>值{readOnly ? "" : "（可写算式/变量）"}</span>
         {readOnly && incoming ? <span className="pm-in">收到</span> : null}
-        {readOnly ? null : <span className="pm-feed">喂给哪张卡</span>}
+        <span className="pm-feed">喂给哪张卡</span>
         {readOnly ? null : (
           <span className="pm-show-head" title="勾选后显示在画布的角色面板上">
             显示
@@ -83,11 +83,9 @@ export function PanelMacroGrid({
               {incoming[m.key] ? `+${incoming[m.key]}` : ""}
             </span>
           ) : null}
-          {readOnly ? null : (
-            <span className="pm-feed" title={m.feed}>
-              {m.feed ?? ""}
-            </span>
-          )}
+          <span className="pm-feed" title={m.feed}>
+            {m.feed ?? ""}
+          </span>
           {readOnly ? null : (
             <input
               type="checkbox"
@@ -111,7 +109,8 @@ export function BuffRows({
   list,
   emptyTestId = "buff-empty",
 }: {
-  list: { macro: string; label: string; value: number; role?: string }[];
+  /** value 可以是数字，也可以是后端格式化好的文本（如 "128.40"） */
+  list: { macro: string; label: string; value: number | string; role?: string }[];
   emptyTestId?: string;
 }) {
   if (!list.length) {

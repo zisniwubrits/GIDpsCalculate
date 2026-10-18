@@ -17,7 +17,7 @@ export default function MatrixPanelDialog({ data, onClose }: MatrixPanelDialogPr
   const rows = data.rows ?? [];
   const values = Object.fromEntries(rows.map((r) => [r.key, r.value]));
   const incoming = Object.fromEntries(rows.map((r) => [r.key, r.incoming]));
-  const macros = rows.map((r) => ({ key: r.key, label: r.label }));
+  const macros = rows.map((r) => ({ key: r.key, label: r.label, feed: r.feed ?? "" }));
 
   return (
     <div className="modal-mask" onMouseDown={onClose}>
@@ -43,7 +43,7 @@ export default function MatrixPanelDialog({ data, onClose }: MatrixPanelDialogPr
             list={(data.sources ?? []).map((s) => ({
               macro: s.macro,
               label: s.label,
-              value: s.value,
+              value: s.text ?? s.value,
               role: s.source,
             }))}
             emptyTestId="cell-panel-sources-empty"

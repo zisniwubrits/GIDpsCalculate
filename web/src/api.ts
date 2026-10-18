@@ -115,9 +115,11 @@ export interface CellPanel {
     self_terms?: { text: string; value: number | null }[];
     /** 拐力来源：哪张卡 / 哪个域给了多少 */
     grants?: { source: string; value: number }[];
+    /** 喂给哪张卡（与角色面板同一列） */
+    feed?: string;
   }[];
   /** 词条来源（拍平成一格一行：属性 / 数值 / 来源），与角色面板的拐力列表同形 */
-  sources?: { macro: string; label: string; value: number; source: string }[];
+  sources?: { macro: string; label: string; value: number; text?: string; source: string }[];
   out?: { macro: string; label: string; value: number }[];
   error?: string;
 }

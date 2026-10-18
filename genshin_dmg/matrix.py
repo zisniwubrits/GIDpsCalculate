@@ -318,20 +318,24 @@ def cell_panel(rows_text: str, cols_text: str, fixed_text: str,
         empty = raw is None or abs(float(raw)) < 1e-9
         if empty and not incoming:
             continue                     # 这一项既没有值也没收到拐：不占一行
+        feed = next((fd for k, _lb, fd in PANEL_MACROS if k == key), "")
         label = next((lb for k, lb, _f in PANEL_MACROS if k == key), key)
         rows_out.append(dict(
             key=key, label=label,
             value="" if raw is None else fmt_num(float(raw)),
             incoming=incoming,
+            feed=feed,
             self_terms=[dict(text=text, value=value) for text, value in own_terms.get(key, [])],
             grants=[dict(source=label2, value=value) for label2, value in contrib.get(key, [])],
         ))
         # 词条来源拍平：自身那部分单独一行，每条拐力各一行（与角色面板的拐力列表同形）
         own_part = (float(raw) - incoming) if raw is not None else 0.0
         if abs(own_part) > 1e-9:
-            sources_out.append(dict(macro=key, label=label, value=own_part, source="自身"))
+            sources_out.append(dict(macro=key, label=label, value=own_part,
+                                    text=fmt_num(own_part), source="自身"))
         for label2, value in contrib.get(key, []):
-            sources_out.append(dict(macro=key, label=label, value=float(value), source=label2))
+            sources_out.append(dict(macro=key, label=label, value=float(value),
+                                    text=fmt_num(float(value)), source=label2))
     outgoing = []
     for name in _out_names(graph, rrole):
         val = float(graph.role_out_value(values, rrole, name) or 0.0)

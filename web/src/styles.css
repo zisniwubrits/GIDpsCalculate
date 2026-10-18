@@ -1566,7 +1566,7 @@ textarea:focus {
 /* 只读宏表（「域对照表」右键面板）：多一列"收到"，没有"显示"列 */
 .panel-macro-readonly .panel-macro-row,
 .panel-macro-readonly .panel-macro-head {
-  grid-template-columns: 108px 84px minmax(120px, 1fr) 64px;
+  grid-template-columns: 108px 84px minmax(120px, 1fr) 64px minmax(170px, 1.05fr);
 }
 
 /* 「域对照表」面板里的词条来源统计（沿用角色面板的列表样式） */
