@@ -793,6 +793,34 @@ textarea:focus {
   cursor: default;
 }
 
+/* 手动计算那一行：只有一个「计算」按钮 + 待计算状态 */
+.mx-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 0 4px 0;
+}
+
+.mx-run {
+  font: inherit;
+  font-size: 12px;
+  padding: 2px 10px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #f4f8fc;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.mx-run:hover {
+  border-color: var(--accent);
+}
+
+.mx-status {
+  font-size: 12px;
+  color: var(--muted);
+}
+
 /* 百分比基准格：双击设成 100% 的那一格，描边标出来 */
 .mx-cell.mx-base {
   outline: 2px solid #d9a441;

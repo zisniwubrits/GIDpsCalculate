@@ -184,3 +184,51 @@ def ratio_table(values: list, base_cell: str) -> list:
             for v in line[1:]
         ])
     return out
+
+
+# 手动计算的结果缓存：{(输入, 拐力签名, run_id): (table, values)}
+# 用户点一次「计算」换一个 run_id → 重算一次；之后同一 run_id 的求值直接复用
+# （拖卡片、改别的字段都会触发整图求值，没必要每次都把矩阵重读一遍文件）。
+_RESULT_CACHE: dict = {}
+
+
+def _grants_key(grants) -> tuple:
+    """拐力结构 → 可哈希的签名（用于缓存键）。"""
+    data = grants or {}
+    if not isinstance(data, dict):
+        return ()
+    return (
+        tuple(sorted((str(k), float(v)) for k, v in (data.get("all") or {}).items())),
+        tuple(sorted(
+            (int(i), tuple(sorted((str(k), float(v)) for k, v in (g or {}).items())))
+            for i, g in (data.get("rows") or {}).items()
+        )),
+        tuple(sorted(
+            (int(i), tuple(sorted((str(k), float(v)) for k, v in (g or {}).items())))
+            for i, g in (data.get("cols") or {}).items()
+        )),
+    )
+
+
+def build_cached(rows_text: str, cols_text: str, fixed_text: str, run_id: str,
+                 base_dir=None, extra_bases=(), arrow_grants=None):
+    """按 ``run_id`` 缓存结果的手动计算：同一个 run_id 只算一次。"""
+    key = (
+        str(rows_text or ""), str(cols_text or ""), str(fixed_text or ""),
+        str(base_dir or ""), tuple(str(b) for b in (extra_bases or ())),
+        _grants_key(arrow_grants), str(run_id or ""),
+    )
+    hit = _RESULT_CACHE.get(key)
+    if hit is not None:
+        return hit
+    table, values = build(rows_text, cols_text, fixed_text, base_dir, extra_bases,
+                          arrow_grants=arrow_grants, with_values=True)
+    if len(_RESULT_CACHE) > 32:            # 只留最近的一批
+        _RESULT_CACHE.clear()
+    _RESULT_CACHE[key] = (table, values)
+    return table, values
+
+
+def clear_cache() -> None:
+    """清空结果缓存（测试用）。"""
+    _RESULT_CACHE.clear()

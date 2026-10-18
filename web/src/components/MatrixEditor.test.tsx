@@ -32,10 +32,12 @@ function setup(props: Partial<React.ComponentProps<typeof MatrixEditor>> = {}) {
           [200, 75],
         ]}
         baseCell="0,0"
+        runId="1"
         onRows={() => {}}
         onCols={() => {}}
         onFixed={() => {}}
         onBase={onBase}
+        onRun={() => {}}
         {...props}
       />
     </ReactFlowProvider>,
@@ -60,6 +62,15 @@ describe("MatrixEditor 百分比基准", () => {
     const cells = view.container.querySelectorAll(".mx-cell");
     fireEvent.doubleClick(cells[3]);
     expect(onBase).toHaveBeenCalledWith("1,1");
+  });
+
+  it("没有 run_id 时显示「待计算」，点「计算」把新的 run_id 传出去", () => {
+    const onRun = vi.fn();
+    const { view } = setup({ runId: "", onRun });
+    expect(view.getByTestId("mx-status-m1")).toHaveTextContent("待计算");
+    fireEvent.click(view.getByTestId("mx-run-m1"));
+    expect(onRun).toHaveBeenCalledTimes(1);
+    expect(String(onRun.mock.calls[0][0])).not.toBe("");
   });
 
   it("没设基准时只显示数值，不显示百分比条", () => {

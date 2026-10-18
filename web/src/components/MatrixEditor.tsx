@@ -43,6 +43,8 @@ export interface MatrixEditorProps {
   ratios?: (number | null)[][] | null;
   /** 基准单元格 "行,列"（行列都不含表头） */
   baseCell: unknown;
+  /** 手动计算标记：空 = 还没算过（卡片显示待计算） */
+  runId: unknown;
   disabled?: boolean;
   baseDir?: string;
   onRows: (next: string) => void;
@@ -50,6 +52,8 @@ export interface MatrixEditorProps {
   onFixed: (next: string) => void;
   /** 双击单元格 → 把它设成百分比基准 */
   onBase: (next: string) => void;
+  /** 点「计算」→ 换一个 run_id，后端据此重算整表 */
+  onRun: (next: string) => void;
 }
 
 type Axis = "row" | "col";
@@ -62,12 +66,14 @@ export default function MatrixEditor({
   table,
   ratios,
   baseCell,
+  runId,
   disabled,
   baseDir,
   onRows,
   onCols,
   onFixed,
   onBase,
+  onRun,
 }: MatrixEditorProps) {
   const rowLines = sourceLines(rows);
   const colLines = sourceLines(cols);
@@ -142,6 +148,23 @@ export default function MatrixEditor({
   };
 
   return (
+    <>
+      <div className="mx-tools">
+        <button
+          type="button"
+          className="mx-run"
+          data-testid={`mx-run-${id}`}
+          disabled={disabled}
+          onClick={() => onRun(String(Date.now()))}
+        >
+          计算
+        </button>
+        {String(runId ?? "").trim() ? null : (
+          <span className="mx-status" data-testid={`mx-status-${id}`}>
+            待计算
+          </span>
+        )}
+      </div>
     <table className="mx-table" data-testid={`matrix-${id}`}>
       <thead>
         <tr>
@@ -223,5 +246,6 @@ export default function MatrixEditor({
         ))}
       </tbody>
     </table>
+    </>
   );
 }

@@ -228,12 +228,14 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
           table={result?.rows ?? null}
           ratios={result?.ratios ?? null}
           baseCell={node.fields.base_cell}
+          runId={node.fields.run_id}
           disabled={collapsed}
           baseDir={data.baseDir}
           onRows={(v) => onField("row_files", v)}
           onCols={(v) => onField("col_files", v)}
           onFixed={(v) => onField("fixed_file", v)}
           onBase={(v) => onField("base_cell", v)}
+          onRun={(v) => onField("run_id", v)}
         />
         </div>
       ) : null}
