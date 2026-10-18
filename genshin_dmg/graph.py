@@ -1000,6 +1000,33 @@ class Graph:
         return dup
 
     # -- 求值 -------------------------------------------------------------
+    # 变量卡 / 面板里显式写过 `own::名字 = ...` 的名字（求值前扫一遍）：
+    # 这些名字**不能**在定义阶段先给 0，否则"引用它的 out::"会当场算成错的值、
+    # 再也不走延迟补算（用户报的 `out::em = 50 + own::em*0.2` 失效就是这么来的：
+    # own::em 定义在另一张排得更后的卡里）。
+    _OWN_DECL_RE = re.compile(
+        r"^[ \t]*own[ \t]*::[ \t]*([A-Za-z_\u4e00-\u9fff][\w\u4e00-\u9fff]*)", re.M)
+
+    def _declared_own_names(self) -> dict:
+        """``{角色: {own:: 名字}}``：扫所有变量卡的定义与角色面板。"""
+        found: dict = {}
+        for node in self.nodes.values():
+            role = ""
+            if self._is_ns(node):
+                role = _valid_role(node.fields.get("role_name"))
+            else:
+                role = _valid_role(getattr(node, "role", ""))
+            if not role:
+                continue
+            names = found.setdefault(role, set())
+            for key in ("defs", "panel"):
+                text = node.fields.get(key)
+                if not text:
+                    continue
+                for match in self._OWN_DECL_RE.finditer(str(text)):
+                    names.add(match.group(1))
+        return found
+
     def scoped_env(self, node, env=None, role=None) -> dict:
         """求值某节点的字段时用的变量表，优先级从高到低：
 
@@ -1040,9 +1067,14 @@ class Graph:
                 if not rest or "::" in rest:
                     continue
                 out.setdefault(SUB_OWN + NS_JOIN + rest, val)
-            # 没写过定义的名字，`own::名字` 就是 0（而不是"未定义变量"报错）：
-            # `out::em = 50 + own::em * 0.2` 在没写 `em = ...` 时也该发 50 出去。
+            # 全图里**没人声明过**的名字，`own::名字` 当 0（而不是报"未定义变量"）：
+            # `out::em = 50 + own::em * 0.2` 在根本没写 em 时也该发 50 出去。
+            # 但声明过的名字不能给 0 —— 那会把"引用它的定义"当场算错、跳过延迟补算
+            # （声明可能在另一张更靠后的卡里）。
+            declared = (getattr(self, "_own_declared", {}) or {}).get(role) or set()
             for macro in _nodes.PANEL_MACRO_KEYS:
+                if macro in declared:
+                    continue
                 out.setdefault(SUB_OWN + NS_JOIN + macro, 0.0)
         for key, getter in self._card_vars().items():
             out.setdefault(key, getter)
@@ -1147,7 +1179,13 @@ class Graph:
         # 变量表也要清：否则 scoped_env 会读到上一次求值残留的子命名空间值，
         # 让 "X = own::X + in::X" 这类定义在第一轮"假成功"（拿到过期值）而不再补算
         self.variables = {}
+        # 先扫一遍"哪些 own:: 名字是显式声明过的"：必须在解析任何变量卡之前，
+        # 否则引用它的定义会被当成"没声明"而补 0（用户报的 out::em 失效）。
+        self._own_declared = self._declared_own_names()
         try:
+            # 第 0 轮：先把 own:: 的声明算出来（自身值与拐力无关，先算好能让
+            # 引用它的 out:: 不再被推迟、错过拐力快照）
+            self._preparse_own_decls(env)
             # 第一轮：只解析「变量」卡片的定义
             self._parse_var_cards(env)
             # 第二轮：登记结果卡片三元组变量
@@ -1368,6 +1406,56 @@ class Graph:
             if display not in names:
                 names.append(display)
         return names
+
+    def _preparse_own_decls(self, env: dict) -> None:
+        """先把**变量卡 / 面板里写的 ``own::名字 = ...``** 算一遍。
+
+        为什么要有这一步：``own::`` 是"自身值"，跟拐力无关，谁先算都不影响语义。
+        但它在文件里可能写在**后面**的卡片里，而引用它的 ``out::`` 在前面的卡片：
+        那样 ``out::`` 会算不出来被推迟，而拐力用的是"拐力生效前"的快照 ——
+        推迟算出来的值进不了快照，这条拐力就发不出去
+        （用户报的 `out::em = 50 + (own::em) * 0.2` 失效就是这个原因）。
+
+        算不出来（表达式引用了还没定义的变量）就跳过，留给正常的解析流程。
+        """
+        for node in self.nodes.values():
+            if node.type == "var":
+                role_here_hint = node.role
+                text = node.fields.get("defs") or ""
+            elif self._is_ns(node):
+                role_here_hint = _valid_role(node.fields.get("role_name"))
+                text = node.fields.get("panel") or ""
+            else:
+                continue
+            if not text:
+                continue
+            token = _nodes.use_env(self.scoped_env(node, env, role=role_here_hint))
+            try:
+                for line in str(text).splitlines():
+                    parsed = split_var_line(line)
+                    if parsed is None:
+                        continue
+                    name = valid_var_name(parsed[0])
+                    if not name:
+                        continue
+                    kind, explicit_role, base = parse_sub_ns(name)
+                    if kind != SUB_OWN:
+                        continue
+                    role_here = explicit_role or role_here_hint
+                    if not role_here:
+                        continue
+                    try:
+                        value = _nodes.eval_field(parsed[1])
+                    except ValueError:
+                        continue                # 依赖别的变量：留给正常流程
+                    key = env_key(qualify(base, role_here))
+                    if key in env:
+                        continue                # 先写的为准
+                    env[key] = value
+                    self._own_values.setdefault(key, value)
+                    _nodes.use_env(self.scoped_env(node, env, role=role_here))
+            finally:
+                _nodes.reset_env(token)
 
     def _parse_var_cards(self, env: dict, locked=()) -> dict:
         """把「变量」卡片里的 ``名称 = 表达式`` 逐行解析进 env（就地更新并返回）。

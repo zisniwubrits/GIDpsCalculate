@@ -868,6 +868,43 @@ class TestOutDeclarations(unittest.TestCase):
         self.assertEqual(out["nodes"]["co"]["values"]["noncrit"], 10)
         self.assertEqual(out["nodes"]["ci"]["values"]["noncrit"], 30)
 
+    def test_out_may_be_written_before_the_own_declaration(self):
+        """`out::em = 50 + own::em*0.2` 可以写在 `own::em = ...` **前面**。
+
+        用户报的"还是失效"就是这种排法：out:: 在靠前的卡片里，own::em 在靠后的卡片里。
+        以前 out:: 会被推迟到拐力之后补算，而拐力取的是拐力前的快照 → 发不出去。
+        现在 own:: 的声明会先预解析（自身值与拐力无关）。
+        """
+        for order in ("own-first", "out-first"):
+            g = Graph()
+            g.add(GraphNode("r1", "role", fields={"role_name": "sucrose", "panel": ""}))
+            cards = [
+                ("v_own", "own::em = 221 + 19.815 * 6 + 187 * 3"),
+                ("v_out", "out::em = 50 + (own::em) * 0.2"),
+            ]
+            if order == "out-first":
+                cards.reverse()
+            for cid, defs in cards:
+                g.add(var_card(cid, defs, role="sucrose"))
+            g.add(GraphNode("t1", "role", fields={"role_name": "target"}))
+            g.links.append(Link("r1", "t1", 0))
+            out = g.evaluate()
+            stats = {r["macro"]: r["value"] for r in out["buffStats"]["sucrose"]["out"]}
+            # 自身 em = 221 + 118.89 + 561 = 900.89 → 50 + 900.89*0.2 = 230.178
+            self.assertAlmostEqual(stats["em"], 230.178, places=3, msg=order)
+
+    def test_own_declaration_in_panel_is_preparsed_too(self):
+        """面板里写的 own:: 也一样：先算好，别处引用不会失效。"""
+        g = Graph()
+        g.add(GraphNode("r1", "role", fields={
+            "role_name": "sucrose",
+            "panel": "own::em = 900\nout::em = 50 + own::em * 0.2",
+        }))
+        g.add(GraphNode("t1", "role", fields={"role_name": "target"}))
+        g.links.append(Link("r1", "t1", 0))
+        stats = {r["macro"]: r["value"] for r in g.evaluate()["buffStats"]["sucrose"]["out"]}
+        self.assertAlmostEqual(stats["em"], 230.0, places=3)
+
     def test_in_declaration_is_ignored(self):
         """in:: 是"收进来的"，由拐力派生；用户写它不生效。"""
         g = self.build()
