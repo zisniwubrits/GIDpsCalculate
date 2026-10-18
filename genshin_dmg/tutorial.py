@@ -147,9 +147,13 @@ HELP_TEXT = """【基本概念】
 · 右键角色标记 →「角色面板…」：左边是可以编辑的宏表，右边是拐力统计
   （给出去的 OUT / 收进来的 IN）。
 · 面板项就是本角色命名空间里的变量，名字用固定 ASCII 词表：
-  atk(攻击力) atk_pct(攻击%) atk_flat(小攻击) crit_rate(暴击率) crit_dmg(爆伤)
-  em(精通) dmg(增伤) month_dmg(月增伤) res_shred(减抗) def_shred(减防)
-  ignore_def(无视防御) base_boost(基础提升) elevate(擢升) reaction_dmg(反应增伤)。
+  攻击：atk(攻击力) atk_pct(攻击%) atk_flat(小攻击)
+  生命：hp(生命值) hp_pct(生命%) hp_flat(小生命)
+  防御：def(防御力) def_pct(防御%) def_flat(小防御)
+  其它：crit_rate(暴击率) crit_dmg(爆伤) em(精通) dmg(增伤) month_dmg(月增伤)
+  res_shred(减抗) def_shred(减防) ignore_def(无视防御) base_boost(基础提升)
+  elevate(擢升) reaction_dmg(反应增伤)。
+  三件套的读法一样：不带后缀是基础值（白值）、_pct 是大增益%、_flat 是小增益。
 · 面板项同时是普通变量，可以在算式里用（如白值填 atk*1.5）。
 · 面板项之间也能互相引用（如 atk_flat = atk*0.05）。
 
