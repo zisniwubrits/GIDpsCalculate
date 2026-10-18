@@ -1094,13 +1094,20 @@ class TestExternalDomain(unittest.TestCase):
         self.assertIn("data/", paths)                    # 目录补成 名字/
         self.assertNotIn("说明.txt", paths)              # 非 .json 文件不补
         self.assertEqual(self.ext.suggest_paths("da", str(self.dir)), ["data/"])
-        self.assertIn("data/幻灭.json", self.ext.suggest_paths("data/", str(self.dir)))
+        # 文件候选**不带 .json**（用户要求：补全忽略 json，解析时会自动补后缀）
+        self.assertIn("data/幻灭", self.ext.suggest_paths("data/", str(self.dir)))
+        self.assertNotIn("data/幻灭.json", self.ext.suggest_paths("data/", str(self.dir)))
         self.assertEqual(self.ext.suggest_paths("data/幻", str(self.dir)),
-                         ["data/幻灭.json"])
+                         ["data/幻灭"])
+        # 已经手打了 .json 也照样能匹配
+        self.assertEqual(self.ext.suggest_paths("data/幻灭.json", str(self.dir)),
+                         ["data/幻灭"])
         self.assertEqual(self.ext.suggest_paths("没有这个目录/", str(self.dir)), [])
 
         full = str(sub / "幻灭.json")
         self.assertEqual(self.ext.suggest_domains(full, str(self.dir)), ["胡桃"])
+        # 补全给的是不带 .json 的写法，解析时要自动补后缀
+        self.assertEqual(self.ext.suggest_domains("data/幻灭", str(self.dir)), ["胡桃"])
         # 相对路径同样能读（补全用相对路径也顺手）
         self.assertEqual(self.ext.suggest_domains("data/幻灭.json", str(self.dir)),
                          ["胡桃"])

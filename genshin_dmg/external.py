@@ -82,10 +82,15 @@ def suggest_paths(partial: str, base_dir: str | None = None, extra_bases=(),
     """给「外部域」输入框用的路径补全：列出候选的目录 / .json 文件。
 
     * 已输入部分按「目录 + 名字前缀」拆开，目录优先按 ``base_dir`` 等基准找；
-    * 目录补成 ``名字/``（可以继续往里输入），文件补全名；
+    * 目录补成 ``名字/``（可以继续往里输入）；
+    * 文件**不带 .json 后缀**（用户要求：补全忽略 json —— 解析时会自动补后缀）；
+    * 已经手打了 ``.json`` 也照样能匹配（匹配时忽略这个后缀）；
     * 前缀大小写不敏感；目录排前面；最多 ``limit`` 条。
     """
     dir_part, prefix = _split_partial(partial)
+    # 用户可能已经把 .json 打进去了：匹配时忽略它，候选里也不显示
+    if prefix.lower().endswith(".json"):
+        prefix = prefix[: -len(".json")]
     want_dir = dir_part.strip().rstrip("/\\") or "."
     target = ""
     for base in _bases(base_dir, extra_bases):
@@ -112,7 +117,8 @@ def suggest_paths(partial: str, base_dir: str | None = None, extra_bases=(),
         if os.path.isdir(full):
             found_dirs.append(shown + "/")
         elif name.lower().endswith(".json"):
-            found_files.append(shown)
+            # 忽略后缀：候选给不带 .json 的名字（读写时后端会自动补回来）
+            found_files.append(shown[: -len(".json")])
         if len(found_dirs) + len(found_files) >= limit:
             break
     return found_dirs + found_files
