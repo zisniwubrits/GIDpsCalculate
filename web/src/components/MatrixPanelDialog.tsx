@@ -6,7 +6,7 @@
  * 区别只是只读：值来自"汇总了该行 + 该列 + 全局拐力之后"的求值结果。
  */
 import type { CellPanel } from "../api";
-import { BuffRows, PanelMacroGrid, SourceRows } from "./PanelParts";
+import { BuffRows, PanelMacroGrid } from "./PanelParts";
 
 export interface MatrixPanelDialogProps {
   data: CellPanel;
@@ -38,12 +38,15 @@ export default function MatrixPanelDialog({ data, onClose }: MatrixPanelDialogPr
         />
         <div className="panel-sources" data-testid="cell-panel-sources">
           <h3>词条来源统计</h3>
-          <SourceRows
-            list={rows.map((r) => ({
-              label: r.label,
-              selfTerms: r.self_terms ?? [],
-              grants: r.grants ?? [],
+          {/* 与角色面板的拐力列表用同一个组件（BuffRows），一行一个来源 */}
+          <BuffRows
+            list={(data.sources ?? []).map((s) => ({
+              macro: s.macro,
+              label: s.label,
+              value: s.value,
+              role: s.source,
             }))}
+            emptyTestId="cell-panel-sources-empty"
           />
         </div>
         <div className="buff-stats">

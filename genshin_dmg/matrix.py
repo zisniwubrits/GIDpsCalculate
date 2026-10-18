@@ -310,6 +310,7 @@ def cell_panel(rows_text: str, cols_text: str, fixed_text: str,
     values = graph.variables
     own_terms = _own_terms(rfull, rrole, graph)
     rows_out = []
+    sources_out = []                      # 词条来源：一行一个（属性 / 数值 / 来源）
     for key in PANEL_MACRO_KEYS:
         # 变量表里的键是 `角色__宏`（内部用 __ 拼），不是展示用的 `角色::宏`
         raw = values.get("%s__%s" % (rrole, key))
@@ -322,10 +323,15 @@ def cell_panel(rows_text: str, cols_text: str, fixed_text: str,
             key=key, label=label,
             value="" if raw is None else fmt_num(float(raw)),
             incoming=incoming,
-            # 词条来源：自身算式里逐项（原始写法 + 数值），以及各来源给的拐力
             self_terms=[dict(text=text, value=value) for text, value in own_terms.get(key, [])],
             grants=[dict(source=label2, value=value) for label2, value in contrib.get(key, [])],
         ))
+        # 词条来源拍平：自身那部分单独一行，每条拐力各一行（与角色面板的拐力列表同形）
+        own_part = (float(raw) - incoming) if raw is not None else 0.0
+        if abs(own_part) > 1e-9:
+            sources_out.append(dict(macro=key, label=label, value=own_part, source="自身"))
+        for label2, value in contrib.get(key, []):
+            sources_out.append(dict(macro=key, label=label, value=float(value), source=label2))
     outgoing = []
     for name in _out_names(graph, rrole):
         val = float(graph.role_out_value(values, rrole, name) or 0.0)
@@ -337,6 +343,7 @@ def cell_panel(rows_text: str, cols_text: str, fixed_text: str,
         title="%s ｜ %s" % (_source_label(rows[row_index][0], rrole),
                             _source_label(cols[col_index][0], crole) if crole else DASH),
         rows=rows_out,
+        sources=sources_out,
         out=[item for item in outgoing if item["value"]],
     )
 

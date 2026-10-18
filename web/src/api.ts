@@ -116,6 +116,8 @@ export interface CellPanel {
     /** 拐力来源：哪张卡 / 哪个域给了多少 */
     grants?: { source: string; value: number }[];
   }[];
+  /** 词条来源（拍平成一格一行：属性 / 数值 / 来源），与角色面板的拐力列表同形 */
+  sources?: { macro: string; label: string; value: number; source: string }[];
   out?: { macro: string; label: string; value: number }[];
   error?: string;
 }

@@ -36,6 +36,12 @@ const DATA = {
       ],
     },
   ],
+  sources: [
+    { macro: "crit_rate", label: "暴击率", value: 25, source: "自身" },
+    { macro: "atk_pct", label: "攻击%", value: 143.2, source: "自身" },
+    { macro: "atk_pct", label: "攻击%", value: 50, source: "奥c0.odette" },
+    { macro: "atk_pct", label: "攻击%", value: 20, source: "箭头" },
+  ],
   out: [{ macro: "em", label: "元素精通", value: 120 }],
 };
 
@@ -48,26 +54,28 @@ describe("MatrixPanelDialog", () => {
     expect(dialog.querySelectorAll(".panel-macro-row").length).toBe(2);
   });
 
-  it("词条来源统计：自身算式逐项（纯数字只显示值）+ 各来源拐力", () => {
+  it("词条来源统计：一行一个来源（属性 数值 来源），与角色面板同一段代码", () => {
     render(<MatrixPanelDialog data={DATA} onClose={() => {}} />);
     const block = screen.getByTestId("cell-panel-sources");
     expect(block).toHaveTextContent("词条来源统计");
-    // 纯数字项只写数值；算式项保留原样并给出结果
-    expect(block).toHaveTextContent("自身 5 + 20");
-    expect(block).toHaveTextContent("34.8*2（69.6）");
-    // 拐力来源：哪个域给了多少
-    expect(block).toHaveTextContent("奥c0.odette +50");
-    expect(block).toHaveTextContent("箭头 +20");
+    // 与角色面板的 OUT/IN 用同一个 BuffRows（.buff-list），一行一个来源
+    const items = [...block.querySelectorAll(".buff-list li")].map((li) => li.textContent);
+    expect(items).toEqual([
+      "暴击率25自身",
+      "攻击%143.2自身",
+      "攻击%50奥c0.odette",
+      "攻击%20箭头",
+    ]);
   });
 
   it("没有任何来源时给（无）", () => {
     render(
       <MatrixPanelDialog
-        data={{ ok: true, title: "x", rows: [{ key: "em", label: "元素精通", value: "0", incoming: 0 }], out: [] }}
+        data={{ ok: true, title: "x", rows: [], sources: [], out: [] }}
         onClose={() => {}}
       />,
     );
-    expect(screen.getByTestId("source-empty")).toHaveTextContent("（无）");
+    expect(screen.getByTestId("cell-panel-sources-empty")).toHaveTextContent("（无）");
   });
 
   it("点关闭回调 onClose", () => {
