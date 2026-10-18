@@ -353,6 +353,9 @@ describe("关键字高亮与页面图标", () => {
     const bar = ruleBody(".mx-bar");
     expect(bar).toMatch(/background:\s*linear-gradient\(90deg, #9fc3e8/);
     // 数字放在条下方（不再压在条里），所以不要底色、要上边距
+    // 条的粗细/圆角与第一版一致（12px、2px），比之前 6px 的版本更醒目
+    expect(ruleBody(".mx-track")).toMatch(/height:\s*12px/);
+    expect(ruleBody(".mx-track")).toMatch(/border-radius:\s*2px/);
     const text = ruleBody(".mx-pct-text");
     expect(text).toMatch(/margin-top:/);
     expect(text).toMatch(/background:\s*none/);
