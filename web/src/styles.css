@@ -803,31 +803,34 @@ textarea:focus {
   display: block;
 }
 
-/* 百分比可视化：一条按"全表最大值"归一的细条 + 数字 */
+/* 百分比可视化：一条按"全表最大值"归一的细条，**数字放在条下面** */
 .mx-pct {
-  position: relative;
   display: block;
-  margin-top: 2px;
-  height: 12px;
-  line-height: 12px;
-  background: #eef2f7;
-  border-radius: 2px;
+  margin-top: 3px;
+}
+
+.mx-track {
+  display: block;
+  height: 6px;
+  border-radius: 3px;
+  background: #e3e9f1;
   overflow: hidden;
 }
 
 .mx-bar {
-  position: absolute;
-  inset: 0 auto 0 0;
-  background: linear-gradient(90deg, #9fc3e8, #4f8cc9);
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  /* 深一点的蓝色，浅色条在浅底表格里几乎看不出来 */
+  background: linear-gradient(90deg, #2f6fa7, #16324f);
 }
 
 .mx-pct-text {
-  position: relative;
   display: block;
-  padding: 0 3px;
+  margin-top: 1px;
+  padding: 0;
+  background: none;
   font-size: 10px;
-  /* 半透明白底：百分比数字压在蓝条上也看得清（493.0% 这种满条格以前糊成一片） */
-  background: rgba(255, 255, 255, 0.86);
   color: #123a6b;
   font-weight: 600;
   text-align: right;

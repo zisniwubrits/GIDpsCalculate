@@ -349,10 +349,14 @@ describe("关键字高亮与页面图标", () => {
     expect(ruleBody(".mx-wrap")).toMatch(/padding:/);
   });
 
-  it("百分比数字压在蓝条上也要看得清（白底 + 加粗）", () => {
+  it("百分比：条是深蓝色，数字排在条下面", () => {
+    // 条太浅会在浅色表格里看不见 → 用深蓝渐变
+    const bar = ruleBody(".mx-bar");
+    expect(bar).toMatch(/background:\s*linear-gradient\(90deg, #2f6fa7/);
+    // 数字放在条下方（不再压在条里），所以不要底色、要上边距
     const text = ruleBody(".mx-pct-text");
-    expect(text).toMatch(/background:\s*rgba\(255, 255, 255/);
-    expect(text).toMatch(/font-weight:\s*600/);
+    expect(text).toMatch(/margin-top:/);
+    expect(text).toMatch(/background:\s*none/);
   });
 
   it("页面用自己的图标，不用浏览器默认的那个", () => {

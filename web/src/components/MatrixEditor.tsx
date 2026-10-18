@@ -209,10 +209,13 @@ export default function MatrixEditor({
                   <span className="mx-cell-value">{body[index]?.[ci + 1] ?? "—"}</span>
                   {pct === null ? null : (
                     <span className="mx-pct">
-                      <span
-                        className="mx-bar"
-                        style={{ width: `${Math.min(100, pct / maxPct * 100)}%` }}
-                      />
+                      <span className="mx-track">
+                        <span
+                          className="mx-bar"
+                          style={{ width: `${Math.min(100, pct / maxPct * 100)}%` }}
+                        />
+                      </span>
+                      {/* 数字放在条下面（用户要求）：不会再压在深色条上看不清 */}
                       <span className="mx-pct-text">{pct.toFixed(1)}%</span>
                     </span>
                   )}
