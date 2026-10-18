@@ -430,7 +430,11 @@ class Graph:
         out: dict = {}
 
         def bucket(node_id: str) -> dict:
-            return out.setdefault(node_id, {"all": {}, "rows": {}, "cols": {}})
+            return out.setdefault(node_id, {
+                "all": {}, "rows": {}, "cols": {},
+                # 溯源：每一条箭头是谁给的（[(来源标签, 宏, 值)]），"源"键分别对应上面的聚合值
+                "all_src": [], "rows_src": {}, "cols_src": {},
+            })
 
         for link in self.links:
             src = self.nodes.get(link.src)
@@ -440,15 +444,24 @@ class Graph:
             port = int(getattr(link, "port", 0) or 0)
             grants = bucket(dst.id)
             if port >= self.MATRIX_COL_BASE:
-                target = grants["cols"].setdefault(port - self.MATRIX_COL_BASE, {})
+                index = port - self.MATRIX_COL_BASE
+                target = grants["cols"].setdefault(index, {})
+                noted = grants["cols_src"].setdefault(index, [])
             elif port > 0:
-                target = grants["rows"].setdefault(port - 1, {})
+                index = port - 1
+                target = grants["rows"].setdefault(index, {})
+                noted = grants["rows_src"].setdefault(index, [])
             else:
                 target = grants["all"]
+                noted = grants["all_src"]
             if self._is_external(src):
-                for macro, val in self._external_grants(src).items():
-                    if val:
+                # 一张外部域卡可能列了多个来源：逐个记，标签写 文件名.域名
+                for label, values in self._external_parts(src):
+                    for macro, val in (values or {}).items():
+                        if not val:
+                            continue
                         target[macro] = target.get(macro, 0.0) + float(val)
+                        noted.append((label, macro, float(val)))
                 continue
             if not self._is_ns(src):
                 continue                        # 源＝角色 / 武器 / 外部域
@@ -459,6 +472,7 @@ class Graph:
                 val = self.role_out_value(base_vars, role_from, macro)
                 if val:
                     target[macro] = target.get(macro, 0.0) + val
+                    noted.append((role_from, macro, val))
         return out
 
     @staticmethod

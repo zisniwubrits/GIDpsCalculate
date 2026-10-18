@@ -287,9 +287,15 @@ def cell_panel(rows_text: str, cols_text: str, fixed_text: str,
                 fixed_grants[name] = fixed_grants.get(name, 0.0) + float(val)
                 note(name, val, label)
     arrow = arrow_grants or {}
+
+    def note_arrow(items) -> None:
+        """箭头拐力逐条记来源（(来源标签, 宏, 值)），别再笼统写"箭头"。"""
+        for label, name, val in (items or []):
+            note(name, val, label)
+
     for name, val in (arrow.get("all") or {}).items():
         fixed_grants[name] = fixed_grants.get(name, 0.0) + float(val)
-        note(name, val, "箭头")
+    note_arrow(arrow.get("all_src"))
 
     rfull, rrole, _rgrants = _load(*rows[row_index], base_dir, extra_bases)
     _cfull, crole, cgrants = _load(*cols[col_index], base_dir, extra_bases)
@@ -297,10 +303,11 @@ def cell_panel(rows_text: str, cols_text: str, fixed_text: str,
         return {}
     row_extra = (arrow.get("rows") or {}).get(row_index)
     col_extra = (arrow.get("cols") or {}).get(col_index)
-    for extra, label in ((row_extra, "箭头（行）"), (col_extra, "箭头（列）"),
-                         (cgrants, _source_label(cols[col_index][0], crole) if crole else DASH)):
-        for name, val in (extra or {}).items():
-            note(name, val, label)
+    # 行 / 列接入点上的箭头：逐条用真实来源（角色名 / 文件名.域名）
+    note_arrow((arrow.get("rows_src") or {}).get(row_index))
+    note_arrow((arrow.get("cols_src") or {}).get(col_index))
+    for name, val in (cgrants or {}).items():
+        note(name, val, _source_label(cols[col_index][0], crole) if crole else DASH)
     merged = _merged_cell_grants(
         fixed_grants, arrow, row_extra, col_extra, cgrants,
     )

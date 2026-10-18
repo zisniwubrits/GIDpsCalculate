@@ -219,7 +219,12 @@ class TestMatrix(unittest.TestCase):
         col = self.buff("列.json", "拐", "out::atk_pct = 50")
         panel = matrix.cell_panel(
             str(row), str(col), "", 0, 0, str(self.dir),
-            arrow_grants={"all": {"atk_pct": 20}, "rows": {}, "cols": {}},
+            arrow_grants={
+                "all": {"atk_pct": 20}, "rows": {}, "cols": {},
+                # 箭头要能溯源到具体来源，而不是只写"箭头"
+                "all_src": [("砂糖", "atk_pct", 20)],
+                "rows_src": {}, "cols_src": {},
+            },
         )
         self.assertIn("行.甲", panel["title"])
         rows = {r["key"]: r for r in panel["rows"]}
@@ -230,7 +235,9 @@ class TestMatrix(unittest.TestCase):
         # 词条来源统计：自身算式逐项 + 拐力来源（列 / 箭头 / 固定）
         self.assertEqual(rows["atk_pct"]["self_terms"], [dict(text="10", value=10.0)])
         sources = {g["source"]: g["value"] for g in rows["atk_pct"]["grants"]}
-        self.assertEqual(sources.get("箭头"), 20.0)
+        # 来源写成真实角色名（不是"箭头"）
+        self.assertEqual(sources.get("砂糖"), 20.0)
+        self.assertNotIn("箭头", sources)
         self.assertTrue(any(v == 50.0 for v in sources.values()))
         # 自身项里带算式的也能算出来（24 + 34.8*2）
         self.assertEqual([t["value"] for t in rows["atk_pct"]["self_terms"]], [10.0])
