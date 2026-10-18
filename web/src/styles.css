@@ -824,9 +824,12 @@ textarea:focus {
 .mx-pct-text {
   position: relative;
   display: block;
-  padding-right: 4px;
+  padding: 0 3px;
   font-size: 10px;
+  /* 半透明白底：百分比数字压在蓝条上也看得清（493.0% 这种满条格以前糊成一片） */
+  background: rgba(255, 255, 255, 0.86);
   color: #123a6b;
+  font-weight: 600;
   text-align: right;
 }
 

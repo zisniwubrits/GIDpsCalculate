@@ -349,6 +349,12 @@ describe("关键字高亮与页面图标", () => {
     expect(ruleBody(".mx-wrap")).toMatch(/padding:/);
   });
 
+  it("百分比数字压在蓝条上也要看得清（白底 + 加粗）", () => {
+    const text = ruleBody(".mx-pct-text");
+    expect(text).toMatch(/background:\s*rgba\(255, 255, 255/);
+    expect(text).toMatch(/font-weight:\s*600/);
+  });
+
   it("页面用自己的图标，不用浏览器默认的那个", () => {
     const html = ["index.html", "web/index.html"]
       .map((p) => resolve(process.cwd(), p))
