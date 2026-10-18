@@ -1279,28 +1279,20 @@ class Graph:
             info["rows"] = self.variable_rows()
             return info
         if spec.get("table") == "matrix":
-            # 域对照表：**手动计算** —— 只有点过「计算」（run_id 非空）才读盘求值；
-            # 之后同一个 run_id 复用缓存结果（拖卡片 / 改别的字段都不会重算整表）。
+            # 域对照表：行文件 × 列文件 的期望伤害矩阵（读盘 + 逐格求值，放这里算）
             from genshin_dmg import matrix as _matrix
 
-            run_id = str(node.fields.get("run_id") or "").strip()
-            if not run_id:
-                info["rows"] = None
-                info["ratios"] = None
-                info["display"] = "待计算（点卡片上的「计算」）"
-                return info
-            table, values = _matrix.build_cached(
+            table, values = _matrix.build(
                 node.fields.get("row_files") or "",
                 node.fields.get("col_files") or "",
                 node.fields.get("fixed_file") or "",
-                run_id,
                 self.base_dir,
                 self.extra_bases,
                 arrow_grants=(getattr(self, "_matrix_grants", {}) or {}).get(nid, {}),
+                with_values=True,
             )
             info["rows"] = table
-            # 双击某个单元格设成基准（"行,列"）；百分比只跟缓存的数值有关，很便宜，
-            # 所以换基准立刻生效（不必重新点「计算」）
+            # 双击某个单元格设成基准（"行,列"）；据此给每格算百分比
             info["ratios"] = _matrix.ratio_table(values, node.fields.get("base_cell") or "")
             info["display"] = "共 %d 行 × %d 列" % (
                 max(0, len(table) - 1), max(0, len(table[0]) - 1) if table else 0)

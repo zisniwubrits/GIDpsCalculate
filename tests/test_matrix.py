@@ -113,8 +113,7 @@ class TestMatrix(unittest.TestCase):
         g = Graph()
         g.add(GraphNode("ra", "role", fields={"role_name": "瓦", "panel": "out::atk = 300"}))
         g.add(GraphNode("m1", "matrix", fields={
-            "row_files": str(row), "col_files": str(col), "fixed_file": str(f1),
-            "run_id": "t1"}))
+            "row_files": str(row), "col_files": str(col), "fixed_file": str(f1)}))
         g.links.append(Link("ra", "m1", 0))
         out = g.evaluate()
         table = out["nodes"]["m1"]["rows"]
@@ -128,7 +127,7 @@ class TestMatrix(unittest.TestCase):
         g = Graph()
         g.add(GraphNode("x1", "external", fields={"ext_sources": "%s::捐" % donor}))
         g.add(GraphNode("m1", "matrix", fields={
-            "row_files": str(row), "col_files": "", "fixed_file": "", "run_id": "t1"}))
+            "row_files": str(row), "col_files": "", "fixed_file": ""}))
         g.links.append(Link("x1", "m1", 0))
         out = g.evaluate()
         self.assertEqual(out["nodes"]["m1"]["rows"][1][0], "行.甲")
@@ -148,7 +147,6 @@ class TestMatrix(unittest.TestCase):
             "row_files": "%s\n%s" % (row1, row2),
             "col_files": "%s\n%s" % (col1, col2),
             "fixed_file": "",
-            "run_id": "t1",
         }))
         # 端口：0 = 全局；1 = 第 1 行；1000+1 = 第 2 列
         g.links.append(Link("r_g", "m1", 0))
@@ -212,40 +210,6 @@ class TestMatrix(unittest.TestCase):
         self.assertEqual(matrix.ratio_table(values, "x"), [])
         self.assertEqual(matrix.ratio_table([[None, 0.0]], "0,0"), [])
         self.assertEqual(matrix.ratio_table(values, "5,5"), [])
-
-    def test_manual_run_required_and_cached(self):
-        """没点「计算」不算；同一个 run_id 只算一次（手动启动计算）。"""
-        row = self.make("行.json", "甲", "atk = 1000")
-        g = Graph()
-        g.add(GraphNode("m1", "matrix", fields={
-            "row_files": str(row), "col_files": "", "fixed_file": ""}))
-        info = g.evaluate()["nodes"]["m1"]
-        self.assertIsNone(info["rows"])
-        self.assertIn("待计算", info["display"])
-
-        # 点过「计算」：有表；同一个 run_id 再求值不会重算（缓存命中）
-        calls = []
-        original = matrix.build
-        def counting(*args, **kwargs):
-            calls.append(1)
-            return original(*args, **kwargs)
-        matrix.build = counting
-        matrix.clear_cache()
-        try:
-            for _ in range(3):
-                g2 = Graph()
-                g2.add(GraphNode("m1", "matrix", fields={
-                    "row_files": str(row), "col_files": "", "fixed_file": "",
-                    "run_id": "run-1"}))
-                info2 = g2.evaluate()["nodes"]["m1"]
-                self.assertIsNotNone(info2["rows"])
-        finally:
-            matrix.build = original
-        self.assertEqual(len(calls), 1)          # 三次求值只真正算了一次
-        # 换一个 run_id → 重新算
-        matrix.clear_cache()
-        table, values = matrix.build_cached(str(row), "", "", "run-2", str(self.dir))
-        self.assertIsNotNone(table)
 
     def test_parse_spec_reuses_external_syntax(self):
         self.assertEqual(matrix.parse_spec("a.json::dds\nb.json"), [

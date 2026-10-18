@@ -1189,9 +1189,6 @@ it("域对照表：行列直接写在表格里（不再有底部字段），回�
 
     // 表格在；底部不再有「固定拐力」这种普通字段
     expect(within(card).getByTestId("matrix-n1")).toBeInTheDocument();
-    // 手动计算：新卡片先显示「待计算」，有「计算」按钮
-    expect(within(card).getByTestId("mx-status-n1")).toHaveTextContent("待计算");
-    expect(within(card).getByTestId("mx-run-n1")).toBeInTheDocument();
     expect(within(card).queryByText("固定拐力")).toBeNull();
 
     // 列 / 行各一个单行输入框；左上角是固定拐力（可多选，至少一个输入框）
