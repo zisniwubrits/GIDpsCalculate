@@ -1302,7 +1302,12 @@ export function connect(
   dst: string,
   port: number,
 ): GraphLinkJSON[] {
-  const kept = links.filter((l) => !(l.src === src && l.dst === dst));
+  // 同一个源可以拉出**多条**箭头？只有目标/端口不同才算不同（外部域扇出、
+  // 或同一张对照表的"全局 / 某行 / 某列"不同接入点）。
+  // 早先按 (src,dst) 去重，结果同一张卡换个端口连就把前一条顶掉了。
+  const kept = links.filter(
+    (l) => !(l.src === src && l.dst === dst && l.port === port),
+  );
   return [...kept, { src, dst, port }];
 }
 

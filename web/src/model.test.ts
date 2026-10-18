@@ -1043,4 +1043,23 @@ describe("卡片 / 域的复制粘贴", () => {
     expect(back?.nodes.map((n) => n.id)).toEqual(["a"]);
     expect(back?.links).toEqual([]);
   });
+  it("同一个源可以连多个目标 / 多个端口（扇出），同端口再连才替换", () => {
+    // 外部域一个输出点 → 两个角色
+    let links = connect([], "x1", "rA", 0);
+    links = connect(links, "x1", "rB", 0);
+    expect(links).toEqual([
+      { src: "x1", dst: "rA", port: 0 },
+      { src: "x1", dst: "rB", port: 0 },
+    ]);
+    // 同一张对照表的不同接入点（全局 0 / 第 1 行 1）也要能同时连
+    links = connect(links, "x1", "m1", 0);
+    links = connect(links, "x1", "m1", 1);
+    expect(links.filter((l) => l.dst === "m1")).toEqual([
+      { src: "x1", dst: "m1", port: 0 },
+      { src: "x1", dst: "m1", port: 1 },
+    ]);
+    // 同一个 (源,目标,端口) 再连一次 → 只留一条
+    links = connect(links, "x1", "m1", 1);
+    expect(links.filter((l) => l.dst === "m1")).toHaveLength(2);
+  });
 });
