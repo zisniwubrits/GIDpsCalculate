@@ -36,6 +36,7 @@ function setup(props: Partial<React.ComponentProps<typeof MatrixEditor>> = {}) {
         onCols={() => {}}
         onFixed={() => {}}
         onBase={onBase}
+        onCellPanel={() => {}}
         {...props}
       />
     </ReactFlowProvider>,

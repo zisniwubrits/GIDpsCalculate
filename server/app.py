@@ -32,7 +32,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
-from genshin_dmg import __version__, external, nodes, report, tutorial
+from genshin_dmg import __version__, external, matrix, nodes, report, tutorial
 from genshin_dmg.graph import Graph, GraphError
 from server import build_check, dialogs, storage
 
@@ -226,6 +226,46 @@ def create_app() -> FastAPI:
     def get_storage():
         """当前工程目录（前端在工具栏显示，便于确认「存哪儿」）。"""
         return storage.info()
+
+    @app.post("/api/matrix/cell")
+    async def matrix_cell(request: Request):
+        """域对照表某个单元格的「角色面板」：汇总该行 / 该列 / 全局拐力之后的面板。
+
+        前端右键单元格时调用；把整张图传过来，后端按图里指向对照表的箭头算固定拐力，
+        再复用 matrix.cell_panel 求值（与表格里的数值同一套口径）。
+        """
+        try:
+            data = await request.json()
+        except Exception as e:
+            return JSONResponse(status_code=400,
+                                content=dict(ok=False, error="请求体不是合法 JSON：%s" % e))
+        graph_data = data.get("graph") or {}
+        try:
+            graph = Graph.from_dict(graph_data)
+        except GraphError as e:
+            return JSONResponse(status_code=400, content=dict(ok=False, error=str(e)))
+        graph.base_dir = str(data.get("dir") or "")
+        _attach_bases(graph)
+        try:
+            graph.evaluate()
+        except Exception as e:                       # 求值失败也给个短错误，不 500
+            return JSONResponse(status_code=400, content=dict(ok=False, error=str(e)))
+        node = graph.nodes.get(str(data.get("nodeId") or ""))
+        if node is None or node.type != "matrix":
+            return JSONResponse(status_code=400, content=dict(ok=False, error="没有这张对照表"))
+        grants = (getattr(graph, "_matrix_grants", {}) or {}).get(node.id, {})
+        try:
+            row = int(data.get("row"))
+            col = int(data.get("col"))
+        except (TypeError, ValueError):
+            return JSONResponse(status_code=400, content=dict(ok=False, error="行列号不合法"))
+        info = matrix.cell_panel(
+            node.fields.get("row_files") or "",
+            node.fields.get("col_files") or "",
+            node.fields.get("fixed_file") or "",
+            row, col, graph.base_dir, graph.extra_bases, arrow_grants=grants,
+        )
+        return dict(ok=True, **info)
 
     @app.post("/api/save/project")
     async def save_project(request: Request):

@@ -211,6 +211,27 @@ class TestMatrix(unittest.TestCase):
         self.assertEqual(matrix.ratio_table([[None, 0.0]], "0,0"), [])
         self.assertEqual(matrix.ratio_table(values, "5,5"), [])
 
+    def test_cell_panel_merges_row_col_and_global_buffs(self):
+        """右键单元格的角色面板：值 = 自身 + 该行 + 该列 + 全局拐力。"""
+        # 面板里的"生效值"要真的吃到拐，行文件得按预设写法把 in:: 加进去
+        row = self.make("行.json", "甲",
+                        "atk = 1000\nown::atk_pct = 10\natk_pct = own::atk_pct + in::atk_pct")
+        col = self.buff("列.json", "拐", "out::atk_pct = 50")
+        panel = matrix.cell_panel(
+            str(row), str(col), "", 0, 0, str(self.dir),
+            arrow_grants={"all": {"atk_pct": 20}, "rows": {}, "cols": {}},
+        )
+        self.assertIn("行.甲", panel["title"])
+        rows = {r["key"]: r for r in panel["rows"]}
+        # 自身 atk_pct = 10；列给 50、全局给 20 → 生效 80，收到 70
+        self.assertEqual(rows["atk_pct"]["incoming"], 70.0)
+        self.assertAlmostEqual(float(rows["atk_pct"]["value"]), 80.0, places=3)
+        self.assertAlmostEqual(float(rows["atk"]["value"]), 1000.0, places=3)
+
+    def test_cell_panel_unknown_cell_is_empty(self):
+        row = self.make("行.json", "甲", "atk = 1000")
+        self.assertEqual(matrix.cell_panel(str(row), "", "", 5, 5, str(self.dir)), {})
+
     def test_parse_spec_reuses_external_syntax(self):
         self.assertEqual(matrix.parse_spec("a.json::dds\nb.json"), [
             ("a.json", "dds"), ("b.json", ""),

@@ -102,6 +102,25 @@ export function suggestExternal(
   return getJSON<ExternalSuggest>(`/api/external/suggest?${params.toString()}`, signal);
 }
 
+/** 域对照表某个单元格的「角色面板」（汇总行列拐力之后）。 */
+export interface CellPanel {
+  ok: boolean;
+  title?: string;
+  rows?: { key: string; label: string; value: string; incoming: number }[];
+  out?: { macro: string; label: string; value: number }[];
+  error?: string;
+}
+
+export function cellPanel(payload: {
+  graph: GraphJSON;
+  nodeId: string;
+  row: number;
+  col: number;
+  dir?: string;
+}): Promise<CellPanel> {
+  return postJSON<CellPanel>("/api/matrix/cell", payload);
+}
+
 export interface OpenResult {  ok: boolean;
   /** 用户取消（或没有图形环境）时为 true */
   cancelled?: boolean;

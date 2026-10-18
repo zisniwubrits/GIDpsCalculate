@@ -50,6 +50,8 @@ export interface MatrixEditorProps {
   onFixed: (next: string) => void;
   /** 双击单元格 → 把它设成百分比基准 */
   onBase: (next: string) => void;
+  /** 右键数据格 → 看这个单元格的角色面板（汇总了行列拐力之后） */
+  onCellPanel: (row: number, col: number) => void;
 }
 
 type Axis = "row" | "col";
@@ -68,6 +70,7 @@ export default function MatrixEditor({
   onCols,
   onFixed,
   onBase,
+  onCellPanel,
 }: MatrixEditorProps) {
   const rowLines = sourceLines(rows);
   const colLines = sourceLines(cols);
@@ -219,6 +222,10 @@ export default function MatrixEditor({
                       : `${pct.toFixed(2)}%${isBase ? "（基准）" : ""}\n双击设为基准`
                   }
                   onDoubleClick={() => onBase(`${index},${ci}`)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    onCellPanel(index, ci);
+                  }}
                 >
                   <span className="mx-cell-value">{body[index]?.[ci + 1] ?? "—"}</span>
                   {pct === null ? null : (

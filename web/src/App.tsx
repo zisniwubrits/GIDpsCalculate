@@ -80,6 +80,8 @@ import {
   type SizeOf,
   isMatrixNode,
 } from "./model";
+import MatrixPanelDialog from "./components/MatrixPanelDialog";
+import { cellPanel, type CellPanel } from "./api";
 import { loadLocal, saveLocal } from "./state/persistence";
 import { useEvaluate, useHelp, useSchema } from "./state/useBackend";
 import { useGraphHistory, type GraphState } from "./state/useGraphHistory";
@@ -805,6 +807,46 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
   );
 
   /** 缩放结束：把最终尺寸与左上角坐标写回模型（拖动缩放是界面行为，不进求值载荷）。 */
+  /** 「域对照表」右键单元格：拿这一格的角色面板（汇总行列拐力之后） */
+  const [cellPanelData, setCellPanelData] = useState<CellPanel | null>(null);
+  const onCellPanel = useCallback(
+    (id: string, row: number, col: number) => {
+      void cellPanel({
+        graph: {
+          version: 1,
+          app: "GenshinDamageCalc",
+          zoom: 1,
+          name,
+          nodes: nodes.map((n) => ({
+            id: n.id,
+            type: n.type,
+            pos: [n.pos[0], n.pos[1]] as [number, number],
+            size: n.size ? ([n.size[0], n.size[1]] as [number, number]) : null,
+            font_size: n.font_size,
+            inputs: n.inputs,
+            fields: { ...n.fields },
+            collapsed: Boolean(n.collapsed),
+            role: roles[n.id] ?? "",
+          })),
+          links: links.map((l) => ({ src: l.src, dst: l.dst, port: l.port })),
+        },
+        nodeId: id,
+        row,
+        col,
+        dir: saveDir,
+      })
+        .then((res) => {
+          if (!res.ok) {
+            setToast(`面板读取失败：${res.error ?? "未知错误"}`);
+            return;
+          }
+          setCellPanelData(res);
+        })
+        .catch((e) => setToast(`面板读取失败：${(e as Error).message}`));
+    },
+    [nodes, links, roles, name, saveDir],
+  );
+
   const onResize = useCallback(
     (id: string, size: [number, number], pos: [number, number]) => {
       // 角色区域不许互相压：缩放后压上了就退回原尺寸 / 原位置
@@ -1081,6 +1123,7 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
           onField,
           onDelete: removeNode,
           onResize,
+          onCellPanel,
           onMenu: (id, kind, ev) => setMenu({ id, kind, x: ev.clientX, y: ev.clientY }),
           onCopy,
         };
@@ -1122,7 +1165,7 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
           dragHandle: CARD_DRAG_HANDLE,
         };
       }),
-    [orderedNodes, schema, results, roles, onField, removeNode, onCopy, onResize,
+    [orderedNodes, schema, results, roles, onField, removeNode, onCopy, onResize, onCellPanel,
      evaluation.data, hiddenCards, revision],
   );
 
@@ -1286,6 +1329,10 @@ function Board({ schema, help }: { schema: Schema; help: { text: string; section
           onClose={() => setMenu(null)}
           testId={`ctx-${menu.kind}`}
         />
+      ) : null}
+
+      {cellPanelData ? (
+        <MatrixPanelDialog data={cellPanelData} onClose={() => setCellPanelData(null)} />
       ) : null}
 
       {resultDialog ? (

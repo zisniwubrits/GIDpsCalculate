@@ -45,22 +45,33 @@ def _load(path: str, role: str, base_dir, extra_bases) -> tuple:
     return (full, actual, dict(per_role.get(actual) or {}))
 
 
-def _expected(full: str, role: str, grants: dict) -> float | None:
-    """把 ``grants`` 注入到 ``full`` 这个工程里的 ``role`` 上，返回其 ★结果 的期望值。"""
+def _row_graph(full: str, role: str, grants: dict):
+    """把 ``grants`` 注入到 ``full`` 这个工程里的 ``role`` 上求值，返回 ``(graph, out)``。
+
+    读不到 / 求值炸了 → ``(None, None)``（调用方按"这格空着"处理）。
+    """
     from .graph import Graph
 
     try:
         with open(full, encoding="utf-8") as f:
             data = json.load(f)
     except (OSError, ValueError):
-        return None
+        return None, None
     try:
         graph = Graph.from_dict(data)
         graph.base_dir = os.path.dirname(full)
         graph.extra_bases = []
         graph.extra_buffs = {role: dict(grants)} if role else {}
         out = graph.evaluate()
-    except Exception:                                    # 行文件坏了就当一个空格子
+    except Exception:
+        return None, None
+    return graph, out
+
+
+def _expected(full: str, role: str, grants: dict) -> float | None:
+    """把 ``grants`` 注入到 ``full`` 这个工程里的 ``role`` 上，返回其 ★结果 的期望值。"""
+    graph, out = _row_graph(full, role, grants)
+    if graph is None or out is None:
         return None
     # **要取指定域的那张 ★结果**：一个文件里可能有多个域（各有自己的结果卡），
     # out["result"] 只代表"第一张连上的结果卡"，拿它会把别的域的伤害算进来
@@ -184,3 +195,95 @@ def ratio_table(values: list, base_cell: str) -> list:
             for v in line[1:]
         ])
     return out
+
+
+def _merged_cell_grants(fixed_grants, arrow_grants, row_grants, col_grants, col_own):
+    """一个单元格吃到的全部拐力：固定 + 全局箭头 + 该行 + 该列 + 列文件自己的 out::。"""
+    merged = dict(fixed_grants)
+    for extra in (row_grants or {}, col_grants or {}, col_own or {}):
+        for name, val in extra.items():
+            merged[name] = merged.get(name, 0.0) + float(val)
+    return merged
+
+
+def cell_panel(rows_text: str, cols_text: str, fixed_text: str,
+               row_index: int, col_index: int, base_dir=None, extra_bases=(),
+               arrow_grants=None) -> dict:
+    """某个单元格的「角色面板」：**汇总了该行 / 该列 / 全局拐力之后**的宏表。
+
+    右键单元格用（用户要求）。返回::
+
+        {"title": "米c0.factor7 ｜ 奥c0.odette",
+         "rows": [{"key","label","value","incoming"}…],   # incoming = 收到的拐
+         "out":  [{"macro","label","value"}…]}            # 它给出去的拐（非 0 的）
+    """
+    from .nodes import PANEL_MACROS, PANEL_MACRO_KEYS
+    from .expr import fmt_num
+
+    rows = parse_spec(rows_text)
+    cols = parse_spec(cols_text)
+    if row_index < 0 or col_index < 0 or row_index >= len(rows) or col_index >= len(cols):
+        return {}
+    fixed_grants: dict = {}
+    fixed = parse_spec(fixed_text)
+    for path, role in fixed:
+        _full, actual, grants = _load(path, role, base_dir, extra_bases)
+        if actual:
+            for name, val in grants.items():
+                fixed_grants[name] = fixed_grants.get(name, 0.0) + float(val)
+    arrow = arrow_grants or {}
+    for name, val in (arrow.get("all") or {}).items():
+        fixed_grants[name] = fixed_grants.get(name, 0.0) + float(val)
+
+    rfull, rrole, _rgrants = _load(*rows[row_index], base_dir, extra_bases)
+    _cfull, crole, cgrants = _load(*cols[col_index], base_dir, extra_bases)
+    if not (rfull and rrole):
+        return {}
+    merged = _merged_cell_grants(
+        fixed_grants, arrow,
+        (arrow.get("rows") or {}).get(row_index),
+        (arrow.get("cols") or {}).get(col_index),
+        cgrants,
+    )
+    graph, _out = _row_graph(rfull, rrole, merged)
+    if graph is None:
+        return {}
+    values = graph.variables
+    rows_out = []
+    for key in PANEL_MACRO_KEYS:
+        # 变量表里的键是 `角色__宏`（内部用 __ 拼），不是展示用的 `角色::宏`
+        raw = values.get("%s__%s" % (rrole, key))
+        incoming = float(merged.get(key) or 0.0)
+        empty = raw is None or abs(float(raw)) < 1e-9
+        if empty and not incoming:
+            continue                     # 这一项既没有值也没收到拐：不占一行
+        label = next((lb for k, lb, _f in PANEL_MACROS if k == key), key)
+        rows_out.append(dict(
+            key=key, label=label,
+            value="" if raw is None else fmt_num(float(raw)),
+            incoming=incoming,
+        ))
+    outgoing = []
+    for name in _out_names(graph, rrole):
+        val = float(graph.role_out_value(values, rrole, name) or 0.0)
+        if not val:
+            continue
+        label = next((lb for k, lb, _f in PANEL_MACROS if k == name), name)
+        outgoing.append(dict(macro=name, label=label, value=val))
+    return dict(
+        title="%s ｜ %s" % (_source_label(rows[row_index][0], rrole),
+                            _source_label(cols[col_index][0], crole) if crole else DASH),
+        rows=rows_out,
+        out=[item for item in outgoing if item["value"]],
+    )
+
+
+def _out_names(graph, role: str) -> list:
+    """该域声明过的 out:: 名字（读变量表里的 ``角色__out__*`` 键）。"""
+    prefix = role + "::"
+    names = set()
+    for key in graph.variables:
+        shown = key.replace("__", "::")
+        if shown.startswith(prefix + "out::"):
+            names.add(shown[len(prefix) + 5:])
+    return sorted(names)

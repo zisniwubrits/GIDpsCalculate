@@ -33,6 +33,8 @@ export interface CardData extends Record<string, unknown> {
   onDelete: (id: string) => void;
   /** 拖动缩放手柄结束后把最终尺寸（含左上角坐标变化）写回模型 */
   onResize: (id: string, size: [number, number], pos: [number, number]) => void;
+  /** 「域对照表」右键单元格 → 看该格的角色面板（汇总行列拐力之后） */
+  onCellPanel?: (id: string, row: number, col: number) => void;
   onMenu: (id: string, kind: MenuKind, ev: { clientX: number; clientY: number }) => void;
   onCopy: (id: string) => void;
 }
@@ -234,6 +236,7 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
           onCols={(v) => onField("col_files", v)}
           onFixed={(v) => onField("fixed_file", v)}
           onBase={(v) => onField("base_cell", v)}
+          onCellPanel={(row, col) => data.onCellPanel?.(id, row, col)}
         />
         </div>
       ) : null}
