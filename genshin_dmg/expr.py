@@ -21,6 +21,7 @@
 from __future__ import annotations
 
 import ast
+from functools import lru_cache
 import keyword
 import operator
 import re
@@ -89,6 +90,7 @@ def mangle(text: str) -> str:
     return _NS_RE.sub(repl, text or "")
 
 
+@lru_cache(maxsize=8192)
 def demangle(name: str) -> str:
     """内部标识符 → 展示名：``角色__变量`` → ``角色::变量``（没有前缀则原样返回）。
 
@@ -117,11 +119,16 @@ def qualify(name: str, role: str = "") -> str:
     return t
 
 
-def split_ns(name: str) -> list:
-    """把 ``角色::out::atk`` 拆成 ``["角色", "out", "atk"]``（``::`` 空白已去掉）。"""
-    return [p.strip() for p in (name or "").split(NS_SEP) if p.strip()]
+@lru_cache(maxsize=8192)
+def split_ns(name: str) -> tuple:
+    """把 ``角色::out::atk`` 拆成 ``("角色", "out", "atk")``（``::`` 空白已去掉）。
+
+    返回值是 **tuple**（可以缓存）：调用方只读、按序列用，不影响原有判断。
+    """
+    return tuple(p.strip() for p in (name or "").split(NS_SEP) if p.strip())
 
 
+@lru_cache(maxsize=8192)
 def is_sub_ns(name: str) -> bool:
     """这个名字是否用了子命名空间（``own`` / ``out`` / ``in``）。"""
     parts = split_ns(name)

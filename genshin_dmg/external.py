@@ -103,9 +103,8 @@ def suggest_paths(partial: str, base_dir: str | None = None, extra_bases=(),
     low = prefix.lower()
     found_dirs: list = []
     found_files: list = []
-    try:
-        entries = sorted(os.listdir(target))
-    except OSError:
+    entries = _listdir(target)
+    if not entries:
         return []
     for name in entries:
         if name.startswith("."):
@@ -167,6 +166,32 @@ _CACHE: dict = {}
 def clear_cache() -> None:
     """清空缓存（测试用；正常使用靠 mtime 失效）。"""
     _CACHE.clear()
+    _DIR_CACHE.clear()
+
+
+# 目录列表缓存：{(目录, mtime): [名字…]}。补全每敲一个字都要列一次目录，
+# 目录没变就没必要反复 os.listdir（文件多的时候这一下就是几毫秒）。
+_DIR_CACHE: dict = {}
+
+
+def _listdir(target: str) -> list:
+    """列目录（按 mtime 缓存；目录变了才会重新列）。"""
+    try:
+        stat = os.stat(target)
+    except OSError:
+        return []
+    key = (target, stat.st_mtime_ns)
+    hit = _DIR_CACHE.get(key)
+    if hit is not None:
+        return hit
+    try:
+        entries = sorted(os.listdir(target))
+    except OSError:
+        return []
+    if len(_DIR_CACHE) > 128:               # 别无限涨
+        _DIR_CACHE.clear()
+    _DIR_CACHE[key] = entries
+    return entries
 
 
 def _bases(base_dir: str | None = None, extra_bases=()) -> list:

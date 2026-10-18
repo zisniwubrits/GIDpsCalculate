@@ -51,25 +51,65 @@ export default function SourceInput({
   const [pos, setPos] = useState<{ left: number; top: number; width: number } | null>(null);
   const seq = useRef(0);
   const timer = useRef<number | null>(null);
+  const abort = useRef<AbortController | null>(null);
+  /**
+   * 候选缓存：**同一个目录只向后端要一次**，之后在本地过滤前缀。
+   * 补全卡顿的根源不是补全本身（后端一次 0.2ms），而是打字会连带触发整表重算，
+   * 请求排在重算后面 —— 少发请求、发出去能取消，手感就顺了。
+   */
+  const dirCache = useRef(new Map<string, { paths: string[]; domains: string[] }>());
 
-  /** 拉候选：光标在 `::` 后面补域名，否则补路径 */
+  /** 拆出「目录部分 + 前缀」：``data/米`` → ``("data/", "米")`` */
+  const splitPath = (text: string): [string, string] => {
+    const cut = Math.max(text.lastIndexOf("/"), text.lastIndexOf("\\"));
+    return cut < 0 ? ["", text] : [text.slice(0, cut + 1), text.slice(cut + 1)];
+  };
+
+  /** 拉候选：光标在 `::` 后面补域名，否则补路径（带本地缓存 + 本地过滤） */
   const ask = (text: string, caret: number | null | undefined) => {
     const sep = text.indexOf("::");
     const at = caret ?? text.length;
     const mode: HintMode = sep >= 0 && at > sep + 1 ? "domain" : "path";
+    // 请求只要"目录" / "文件"这半截，前缀在本地筛 —— 同一个目录只请求一次
+    const key = mode === "domain" ? text.slice(0, sep) : splitPath(text)[0];
+    const typed = mode === "domain" ? text.slice(sep + 2) : splitPath(text)[1];
     const mine = ++seq.current;                    // 只认最后一次请求
     if (timer.current !== null) window.clearTimeout(timer.current);
+
+    /** 把候选按已输入的前缀筛一遍（大小写不敏感），最多 20 条 */
+    const pick = (paths: string[], domains: string[]) => {
+      if (mine !== seq.current) return;
+      const low = typed.trim().toLowerCase();
+      const list = (mode === "domain" ? domains : paths).filter(
+        (item) => !low || displayName(item).toLowerCase().startsWith(low),
+      );
+      setHints(list.length ? { mode, list: list.slice(0, 20) } : null);
+    };
+
     timer.current = window.setTimeout(() => {
-      void suggestExternal(text, baseDir)
+      const cached = dirCache.current.get(key);
+      if (cached) {
+        pick(cached.paths, cached.domains);       // 同一目录：本地筛，不再发请求
+        return;
+      }
+      abort.current?.abort();
+      abort.current = new AbortController();
+      const query = mode === "domain" ? key + "::" : key;
+      void suggestExternal(query, baseDir, abort.current.signal)
         .then((res) => {
-          if (mine !== seq.current) return;
-          const list = (mode === "domain" ? res.domains : res.paths).slice(0, 20);
-          setHints(list.length ? { mode, list } : null);
+          dirCache.current.set(key, { paths: res.paths, domains: res.domains });
+          pick(res.paths, res.domains);
         })
         .catch(() => {
           if (mine === seq.current) setHints(null);
         });
-    }, 120);
+    }, 200);
+  };
+
+  /** 候选里"名字"那段（目录要保留结尾的 /） */
+  const displayName = (candidate: string) => {
+    const [dir, name] = splitPath(candidate);
+    return name || dir;
   };
 
   /** 小弹窗跟着输入框走（挂到 body 上，不会被卡片裁掉） */

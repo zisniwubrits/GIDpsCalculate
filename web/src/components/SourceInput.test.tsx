@@ -61,6 +61,29 @@ describe("SourceInput", () => {
     expect(onDelete).toHaveBeenCalled();              // 空行：交给调用方删掉
   });
 
+  it("同一个目录只请求一次，后面在本地过滤（补全不再越打越卡）", async () => {
+    const onChange = vi.fn();
+    const { suggestExternal } = await import("../api");
+    const mock = suggestExternal as unknown as {
+      mock: { calls: unknown[] };
+      mockClear: () => void;
+    };
+    mock.mockClear();
+    render(<SourceInput value="" onChange={onChange} testId="s6" />);
+    const el = screen.getByTestId("s6");
+
+    type(el, "da");
+    await screen.findByTestId("s6-hints");
+    const callsAfterFirst = mock.mock.calls.length;
+
+    // 同一目录（根目录）里继续打字：命中缓存，不再发请求
+    type(el, "d");
+    await waitFor(() => expect(mock.mock.calls.length).toBe(callsAfterFirst));
+    // 本地过滤：炉火.json 不以 d 开头 → 不出现；data/ 还在
+    expect(screen.queryByTestId("s6-hint-炉火.json")).toBeNull();
+    expect(screen.getByTestId("s6-hint-data/")).toBeInTheDocument();
+  });
+
   it("失焦后弹窗收起", async () => {
     render(<SourceInput value="" onChange={() => {}} testId="s4" />);
     type(screen.getByTestId("s4"), "炉");
