@@ -1568,3 +1568,28 @@ textarea:focus {
 .panel-macro-readonly .panel-macro-head {
   grid-template-columns: 108px 84px minmax(120px, 1fr) 64px;
 }
+
+/* 「域对照表」面板里的词条来源统计（沿用角色面板的列表样式） */
+.panel-sources {
+  margin-top: 8px;
+  border-top: 1px solid var(--line);
+  padding-top: 6px;
+}
+
+.panel-sources h3 {
+  margin: 0 0 4px;
+  font-size: 13px;
+}
+
+.source-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: baseline;
+}
+
+.source-self {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text);
+}

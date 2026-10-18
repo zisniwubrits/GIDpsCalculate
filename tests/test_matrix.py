@@ -227,6 +227,13 @@ class TestMatrix(unittest.TestCase):
         self.assertEqual(rows["atk_pct"]["incoming"], 70.0)
         self.assertAlmostEqual(float(rows["atk_pct"]["value"]), 80.0, places=3)
         self.assertAlmostEqual(float(rows["atk"]["value"]), 1000.0, places=3)
+        # 词条来源统计：自身算式逐项 + 拐力来源（列 / 箭头 / 固定）
+        self.assertEqual(rows["atk_pct"]["self_terms"], [dict(text="10", value=10.0)])
+        sources = {g["source"]: g["value"] for g in rows["atk_pct"]["grants"]}
+        self.assertEqual(sources.get("箭头"), 20.0)
+        self.assertTrue(any(v == 50.0 for v in sources.values()))
+        # 自身项里带算式的也能算出来（24 + 34.8*2）
+        self.assertEqual([t["value"] for t in rows["atk_pct"]["self_terms"]], [10.0])
 
     def test_cell_panel_unknown_cell_is_empty(self):
         row = self.make("行.json", "甲", "atk = 1000")

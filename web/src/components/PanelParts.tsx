@@ -133,3 +133,62 @@ export function BuffRows({
     </ul>
   );
 }
+
+
+/**
+ * 词条来源统计（只读）：某个属性的值是怎么来的。
+ *
+ * * 自身：`own::atk_pct = 24+27.6+34.8*2+46.6` 这种写法按项列出（原样 + 数值）；
+ * * 拐力：哪张卡 / 哪个域给了多少。
+ *
+ * 用 `.buff-list` 的样式，与「角色面板」的 OUT/IN 列表看起来一致。
+ */
+export interface PanelSources {
+  label: string;
+  /** 自身词条逐项 */
+  selfTerms: { text: string; value: number | null }[];
+  /** 拐力来源 */
+  grants: { source: string; value: number }[];
+}
+
+export function SourceRows({ list }: { list: PanelSources[] }) {
+  const shown = list.filter((r) => r.selfTerms.length || r.grants.length);
+  if (!shown.length) {
+    return (
+      <p className="modal-hint" data-testid="source-empty">
+        （无）
+      </p>
+    );
+  }
+  return (
+    <ul className="buff-list" data-testid="source-list">
+      {shown.map((row) => (
+        <li key={row.label} className="source-row">
+          <b>{row.label}</b>
+          {row.selfTerms.length ? (
+            <span className="source-self" title="自身（该域文件里 own:: 的算式逐项）">
+              自身{" "}
+              {row.selfTerms
+                .map((t) => {
+                  if (t.value === null) return t.text;
+                  // 纯数字项直接给数值；`34.8*2` 这种算式才把原样也写出来
+                  return String(t.value) === t.text.trim()
+                    ? String(t.value)
+                    : `${t.text}（${t.value}）`;
+                })
+                .join(" + ")}
+            </span>
+          ) : null}
+          {row.grants.length ? (
+            <span className="dim" title="拐力来源">
+              拐{" "}
+              {row.grants
+                .map((g) => `${g.source} +${Number(g.value.toFixed(2))}`)
+                .join("、")}
+            </span>
+          ) : null}
+        </li>
+      ))}
+    </ul>
+  );
+}

@@ -206,6 +206,52 @@ def _merged_cell_grants(fixed_grants, arrow_grants, row_grants, col_grants, col_
     return merged
 
 
+def _own_terms(rfull: str, role: str, graph) -> dict:
+    """``{宏: [(算式项文本, 数值)]}``：把该域 `own::名字 = a+b+c` 的算式拆成词条项。
+
+    面板里的"值"常常是 `own::atk_pct = 24 + 27.6 + 34.8*2 + 46.6` 这种把圣遗物词条
+    逐项相加的写法；这里按 **加号** 拆开，逐项在求值环境里算一遍（算不出来的项只留文本）。
+    """
+    import re as _re
+
+    from . import nodes as _nodes
+
+    try:
+        with open(rfull, encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return {}
+    texts = []
+    for node in data.get("nodes") or []:
+        fields = node.get("fields") or {}
+        if node.get("type") == "var":
+            texts.append(str(fields.get("defs") or ""))
+        elif node.get("type") in ("role", "weapon"):
+            texts.append(str(fields.get("panel") or ""))
+    out: dict = {}
+    pattern = _re.compile(
+        r"^[ \t]*own[ \t]*::[ \t]*([A-Za-z_\u4e00-\u9fff][\w\u4e00-\u9fff]*)[ \t]*=[ \t]*(.+)$")
+    for text in texts:
+        for line in text.splitlines():
+            match = pattern.match(line)
+            if not match:
+                continue
+            name, expr = match.group(1), match.group(2).strip()
+            terms = [part.strip() for part in expr.split("+") if part.strip()]
+            token = _nodes.use_env(dict(getattr(graph, "variables", {}) or {}))
+            values = []
+            try:
+                for part in terms:
+                    try:
+                        values.append((part, float(_nodes.eval_field(part))))
+                    except ValueError:
+                        values.append((part, None))
+            finally:
+                _nodes.reset_env(token)
+            out[name] = values
+    return out
+
+
 def cell_panel(rows_text: str, cols_text: str, fixed_text: str,
                row_index: int, col_index: int, base_dir=None, extra_bases=(),
                arrow_grants=None) -> dict:
@@ -225,30 +271,44 @@ def cell_panel(rows_text: str, cols_text: str, fixed_text: str,
     if row_index < 0 or col_index < 0 or row_index >= len(rows) or col_index >= len(cols):
         return {}
     fixed_grants: dict = {}
+    contrib: dict = {}                    # {宏: [(来源标签, 值)]}：词条来源统计用
+
+    def note(name: str, val, label: str) -> None:
+        if not val:
+            return
+        contrib.setdefault(name, []).append((label, float(val)))
+
     fixed = parse_spec(fixed_text)
     for path, role in fixed:
         _full, actual, grants = _load(path, role, base_dir, extra_bases)
         if actual:
+            label = _source_label(path, actual)
             for name, val in grants.items():
                 fixed_grants[name] = fixed_grants.get(name, 0.0) + float(val)
+                note(name, val, label)
     arrow = arrow_grants or {}
     for name, val in (arrow.get("all") or {}).items():
         fixed_grants[name] = fixed_grants.get(name, 0.0) + float(val)
+        note(name, val, "箭头")
 
     rfull, rrole, _rgrants = _load(*rows[row_index], base_dir, extra_bases)
     _cfull, crole, cgrants = _load(*cols[col_index], base_dir, extra_bases)
     if not (rfull and rrole):
         return {}
+    row_extra = (arrow.get("rows") or {}).get(row_index)
+    col_extra = (arrow.get("cols") or {}).get(col_index)
+    for extra, label in ((row_extra, "箭头（行）"), (col_extra, "箭头（列）"),
+                         (cgrants, _source_label(cols[col_index][0], crole) if crole else DASH)):
+        for name, val in (extra or {}).items():
+            note(name, val, label)
     merged = _merged_cell_grants(
-        fixed_grants, arrow,
-        (arrow.get("rows") or {}).get(row_index),
-        (arrow.get("cols") or {}).get(col_index),
-        cgrants,
+        fixed_grants, arrow, row_extra, col_extra, cgrants,
     )
     graph, _out = _row_graph(rfull, rrole, merged)
     if graph is None:
         return {}
     values = graph.variables
+    own_terms = _own_terms(rfull, rrole, graph)
     rows_out = []
     for key in PANEL_MACRO_KEYS:
         # 变量表里的键是 `角色__宏`（内部用 __ 拼），不是展示用的 `角色::宏`
@@ -262,6 +322,9 @@ def cell_panel(rows_text: str, cols_text: str, fixed_text: str,
             key=key, label=label,
             value="" if raw is None else fmt_num(float(raw)),
             incoming=incoming,
+            # 词条来源：自身算式里逐项（原始写法 + 数值），以及各来源给的拐力
+            self_terms=[dict(text=text, value=value) for text, value in own_terms.get(key, [])],
+            grants=[dict(source=label2, value=value) for label2, value in contrib.get(key, [])],
         ))
     outgoing = []
     for name in _out_names(graph, rrole):

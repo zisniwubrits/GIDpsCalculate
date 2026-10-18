@@ -106,7 +106,16 @@ export function suggestExternal(
 export interface CellPanel {
   ok: boolean;
   title?: string;
-  rows?: { key: string; label: string; value: string; incoming: number }[];
+  rows?: {
+    key: string;
+    label: string;
+    value: string;
+    incoming: number;
+    /** 自身词条：算式里逐项（原始写法 + 数值） */
+    self_terms?: { text: string; value: number | null }[];
+    /** 拐力来源：哪张卡 / 哪个域给了多少 */
+    grants?: { source: string; value: number }[];
+  }[];
   out?: { macro: string; label: string; value: number }[];
   error?: string;
 }
