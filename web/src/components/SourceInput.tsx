@@ -98,10 +98,14 @@ export default function SourceInput({
 
   const apply = (pick: string) => {
     const sep = value.indexOf("::");
+    // 选中一个**文件**（不是目录：目录候选带结尾的 /）时，自动补上 `::`
+    // 并把光标放到后面 —— 这样域名的候选会立刻弹出来。文件里有多个域时
+    // 不写 `::域` 是读不到拐力的（后端会提示"文件里有 N 个域"）。
+    const pickFile = hints?.mode === "path" && !pick.endsWith("/");
     const next =
       hints?.mode === "domain"
         ? (sep >= 0 ? value.slice(0, sep + 2) : value + "::") + pick
-        : pick + (sep >= 0 ? value.slice(sep) : "");
+        : pick + (sep >= 0 ? value.slice(sep) : pickFile ? "::" : "");
     onChange(next);
     setHints(null);
     // 补完继续留在输入框里，光标放到末尾

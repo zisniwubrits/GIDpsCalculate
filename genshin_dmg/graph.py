@@ -1321,7 +1321,13 @@ class Graph:
                 label = names[0]
             parts = ["输出 %s" % fmt_num(total)]
             if not grants:
-                parts.append("没读到 out::" if names or label else "没读到文件")
+                if len(names) > 1 and not label:
+                    # 不是"文件坏了"，而是没写域：文件里有多个域，必须点名
+                    # （短提示，属于当场校验，允许留在界面上）
+                    parts.append("文件里有 %d 个域，请写 文件::域（%s）"
+                                 % (len(names), " / ".join(names[:4])))
+                else:
+                    parts.append("没读到 out::" if names or label else "没读到文件")
             elif label:
                 parts.append(label)
             info["display"] = " ｜ ".join(parts)

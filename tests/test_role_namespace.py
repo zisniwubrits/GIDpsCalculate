@@ -868,6 +868,41 @@ class TestOutDeclarations(unittest.TestCase):
         self.assertEqual(out["nodes"]["co"]["values"]["noncrit"], 10)
         self.assertEqual(out["nodes"]["ci"]["values"]["noncrit"], 30)
 
+    def test_multi_domain_file_without_domain_says_so(self):
+        """文件里有多个域却没写 `::域`：给一句短提示（不是静默 0）。
+
+        砂c0.json 里就有 sucrose / 角色1 两个域 —— 只写 `data/砂c0` 读不到拐力，
+        以前只显示"没读到 out::"，看不出是少写了域名。
+        """
+        import tempfile
+        from pathlib import Path
+
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        folder = Path(tmp.name)
+
+        g0 = Graph()
+        for role in ("甲", "乙"):
+            g0.add(GraphNode("v_%s" % role, "var", fields={"defs": "out::em = 10"},
+                             role=role))
+            g0.add(GraphNode("r_%s" % role, "role", fields={"role_name": role}))
+        (folder / "多域拐力.json").write_text(
+            json.dumps(g0.to_dict(), ensure_ascii=False), encoding="utf-8")
+
+        def evaluate(sources):
+            g = Graph()
+            g.base_dir = str(folder)
+            g.add(GraphNode("x1", "external", fields={"ext_sources": sources}))
+            g.add(GraphNode("t1", "role", fields={"role_name": "目标"}))
+            g.links.append(Link("x1", "t1", 0))
+            return g.evaluate()["nodes"]["x1"]
+
+        missing = evaluate("多域拐力")
+        self.assertIn("请写 文件::域", missing["display"])
+        named = evaluate("多域拐力::甲")
+        self.assertNotIn("请写 文件::域", named["display"])
+        self.assertEqual(named["plain"], "10")
+
     def test_out_may_be_written_before_the_own_declaration(self):
         """`out::em = 50 + own::em*0.2` 可以写在 `own::em = ...` **前面**。
 

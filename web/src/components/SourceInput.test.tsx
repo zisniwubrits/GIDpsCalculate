@@ -24,8 +24,9 @@ describe("SourceInput", () => {
     type(screen.getByTestId("s1"), "炉");
     const pop = await screen.findByTestId("s1-hints");
     expect(pop.querySelectorAll(".src-pop-item").length).toBeGreaterThan(0);
+    // 选中**文件**时会自动补上 `::`（紧接着弹域名候选；多域文件不写域名读不到拐力）
     fireEvent.mouseDown(screen.getByTestId("s1-hint-炉火.json"));
-    expect(onChange).toHaveBeenCalledWith("炉火.json");
+    expect(onChange).toHaveBeenCalledWith("炉火.json::");
   });
 
   it("光标在 :: 后面补域名，只替换域名那一段", async () => {
@@ -66,5 +67,13 @@ describe("SourceInput", () => {
     await screen.findByTestId("s4-hints");
     fireEvent.blur(screen.getByTestId("s4"));
     expect(screen.queryByTestId("s4-hints")).toBeNull();
+  });
+it("选中目录不加 `::`（要继续往里输入）", async () => {
+    const onChange = vi.fn();
+    render(<SourceInput value="" onChange={onChange} testId="s5" />);
+    type(screen.getByTestId("s5"), "da");
+    await screen.findByTestId("s5-hints");
+    fireEvent.mouseDown(screen.getByTestId("s5-hint-data/"));
+    expect(onChange).toHaveBeenCalledWith("data/");
   });
 });
