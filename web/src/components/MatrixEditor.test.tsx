@@ -62,6 +62,16 @@ describe("MatrixEditor 百分比基准", () => {
     expect(onBase).toHaveBeenCalledWith("1,1");
   });
 
+  it("列宽一致：行头那列按内容给宽度，数据列用 colgroup 平分", () => {
+    const { view } = setup();
+    const cols = view.container.querySelectorAll(".mx-table colgroup > col");
+    expect(cols).toHaveLength(3);                 // 行头列 + 2 个数据列
+    // 行头列有显式宽度，数据列不给宽度 → 由 table-layout: fixed 平分
+    expect((cols[0] as HTMLElement).style.width).toMatch(/ch$/);
+    expect((cols[1] as HTMLElement).getAttribute("style")).toBeNull();
+    expect((cols[2] as HTMLElement).getAttribute("style")).toBeNull();
+  });
+
   it("没设基准时只显示数值，不显示百分比条", () => {
     const { view } = setup({ ratios: null, baseCell: "" });
     expect(view.container.querySelectorAll(".mx-pct")).toHaveLength(0);

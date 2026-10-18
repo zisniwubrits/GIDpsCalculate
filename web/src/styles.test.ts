@@ -327,6 +327,9 @@ describe("关键字高亮与页面图标", () => {
     expect(ruleBody(".mx-wrap")).toMatch(/flex:\s*1 1 auto/);
     const table = ruleBody(".mx-table");
     expect(table).toMatch(/height:\s*100%/);
+    // 列宽一致：固定布局 + 宽度 100%，配合 colgroup 让数据列平分
+    expect(table).toMatch(/table-layout:\s*fixed/);
+    expect(table).toMatch(/width:\s*100%/);
     // 表头只占一行：多余高度全给正文行
     expect(ruleBody(".mx-table thead")).toMatch(/height:\s*1px/);
   });

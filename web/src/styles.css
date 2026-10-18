@@ -707,13 +707,12 @@ textarea:focus {
 }
 
 .mx-table {
-  /* 列宽按内容（长文件名要完整显示），但至少铺满卡片宽度 */
-  width: max-content;
-  min-width: 100%;
+  /* 固定布局 + colgroup：行头列宽由内容决定，数据列平分剩下的宽度（列间距一致） */
+  table-layout: fixed;
+  width: 100%;
   height: 100%;
   border-collapse: collapse;
   font-size: 12px;
-  max-width: none;
 }
 
 /* 表头只占自己那一行的高度：卡片拉高时，多出来的高度全给正文行

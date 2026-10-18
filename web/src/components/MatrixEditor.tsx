@@ -81,6 +81,12 @@ export default function MatrixEditor({
     }
   }
   if (maxPct <= 0) maxPct = 100;
+  // 行头这一列要多宽：取最长的那条路径（全角按 2 计），夹在 16~48 字符之间
+  let rowColCh = 16;
+  for (const line of rowLines) {
+    rowColCh = Math.max(rowColCh, Math.round(displayWidthCh(line)) + 3);
+  }
+  rowColCh = Math.min(48, rowColCh);
 
   /** 行 / 列各自那串输入框；回车加一条后要把光标搬到新那条上 */
   const boxes = {
@@ -143,6 +149,14 @@ export default function MatrixEditor({
 
   return (
     <table className="mx-table" data-testid={`matrix-${id}`}>
+      {/* 列宽：行头那列按最长路径给宽度，数据列**平分**剩下的宽度 ——
+          否则 auto 布局会把多出来的空间塞给某一列，看起来列宽忽宽忽窄 */}
+      <colgroup>
+        <col style={{ width: `${rowColCh}ch` }} />
+        {colLines.map((_c, index) => (
+          <col key={index} />
+        ))}
+      </colgroup>
       <thead>
         <tr>
           <th className="mx-corner">
