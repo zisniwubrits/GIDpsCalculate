@@ -52,6 +52,7 @@ export default function SourceInput({
   const seq = useRef(0);
   const timer = useRef<number | null>(null);
   const abort = useRef<AbortController | null>(null);
+  const pop = useRef<HTMLDivElement | null>(null);
   /**
    * 候选缓存：**同一个目录只向后端要一次**，之后在本地过滤前缀。
    * 补全卡顿的根源不是补全本身（后端一次 0.2ms），而是打字会连带触发整表重算，
@@ -124,15 +125,23 @@ export default function SourceInput({
     setPos({ left: r.left, top: r.bottom + 2, width: Math.max(180, r.width) });
   }, [hints, value]);
 
-  // 关掉弹窗：点别处 / 滚动画布 / 按 Esc
+  // 关掉弹窗：滚动画布 / 缩放窗口 / 点到输入框和弹窗以外的地方（卡片失去焦点）
   useEffect(() => {
     if (!hints) return;
     const close = () => setHints(null);
+    const onDown = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (target && input.current?.contains(target)) return;   // 还在输入框里
+      if (target && pop.current?.contains(target)) return;     // 点的是弹窗自己
+      setHints(null);
+    };
     window.addEventListener("scroll", close, true);
     window.addEventListener("resize", close);
+    document.addEventListener("mousedown", onDown, true);
     return () => {
       window.removeEventListener("scroll", close, true);
       window.removeEventListener("resize", close);
+      document.removeEventListener("mousedown", onDown, true);
     };
   }, [hints]);
 
@@ -199,6 +208,7 @@ export default function SourceInput({
       {hints && pos
         ? createPortal(
             <div
+              ref={pop}
               className="src-pop"
               data-testid={testId ? `${testId}-hints` : undefined}
               style={{ left: pos.left, top: pos.top, minWidth: pos.width }}

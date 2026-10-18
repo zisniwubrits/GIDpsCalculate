@@ -84,6 +84,17 @@ describe("SourceInput", () => {
     expect(screen.getByTestId("s6-hint-data/")).toBeInTheDocument();
   });
 
+  it("点输入框以外的地方（卡片失焦）立刻收起弹窗", async () => {
+    const onChange = vi.fn();
+    render(<SourceInput value="" onChange={onChange} testId="s7" />);
+    type(screen.getByTestId("s7"), "da");
+    await screen.findByTestId("s7-hints");
+
+    // 点到卡片/画布的别处（输入框与弹窗之外）
+    fireEvent.mouseDown(document.body);
+    expect(screen.queryByTestId("s7-hints")).toBeNull();
+  });
+
   it("失焦后弹窗收起", async () => {
     render(<SourceInput value="" onChange={() => {}} testId="s4" />);
     type(screen.getByTestId("s4"), "炉");
