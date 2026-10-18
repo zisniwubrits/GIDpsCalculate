@@ -790,6 +790,44 @@ textarea:focus {
   text-align: right;
   white-space: nowrap;
   color: var(--text);
+  cursor: default;
+}
+
+/* 百分比基准格：双击设成 100% 的那一格，描边标出来 */
+.mx-cell.mx-base {
+  outline: 2px solid #d9a441;
+  outline-offset: -2px;
+}
+
+.mx-cell-value {
+  display: block;
+}
+
+/* 百分比可视化：一条按"全表最大值"归一的细条 + 数字 */
+.mx-pct {
+  position: relative;
+  display: block;
+  margin-top: 2px;
+  height: 12px;
+  line-height: 12px;
+  background: #eef2f7;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.mx-bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: linear-gradient(90deg, #9fc3e8, #4f8cc9);
+}
+
+.mx-pct-text {
+  position: relative;
+  display: block;
+  padding-right: 4px;
+  font-size: 10px;
+  color: #123a6b;
+  text-align: right;
 }
 
 /* 便签式卡片（schema 里 bare=true：「文本」卡与「变量」卡）：没有标签列、没有内层边框，

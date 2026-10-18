@@ -167,6 +167,8 @@ export interface NodeResult {
   /** 未暴击值的纯数字字符串（复制用） */
   plain: string;
   plainTriple: string[];
+  /** 「域对照表」：每格相对**基准单元格**的百分比（与 rows 同形，null = 没设基准 / 读不到） */
+  ratios?: (number | null)[][] | null;
   /** 「外部域」卡片：指向的工程文件里有哪些域（只有一个时前端藏掉「里面的域」那一栏） */
   extDomains?: string[];
   /** 哪些字段是"留空 → 用角色面板兜底"的（卡片上标「含面板」） */

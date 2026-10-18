@@ -1282,15 +1282,18 @@ class Graph:
             # 域对照表：行文件 × 列文件 的期望伤害矩阵（读盘 + 逐格求值，放这里算）
             from genshin_dmg import matrix as _matrix
 
-            table = _matrix.build(
+            table, values = _matrix.build(
                 node.fields.get("row_files") or "",
                 node.fields.get("col_files") or "",
                 node.fields.get("fixed_file") or "",
                 self.base_dir,
                 self.extra_bases,
                 arrow_grants=(getattr(self, "_matrix_grants", {}) or {}).get(nid, {}),
+                with_values=True,
             )
             info["rows"] = table
+            # 双击某个单元格设成基准（"行,列"）；据此给每格算百分比
+            info["ratios"] = _matrix.ratio_table(values, node.fields.get("base_cell") or "")
             info["display"] = "共 %d 行 × %d 列" % (
                 max(0, len(table) - 1), max(0, len(table[0]) - 1) if table else 0)
             return info

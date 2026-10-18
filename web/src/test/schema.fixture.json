@@ -1414,6 +1414,7 @@
         "row_files": "",
         "col_files": "",
         "fixed_file": "",
+        "base_cell": "",
         "card_name": ""
       },
       "isolated": true,
@@ -1433,6 +1434,7 @@
       "sink": false,
       "table": "matrix",
       "hidden_fields": [
+        "base_cell",
         "card_name",
         "card_name"
       ]

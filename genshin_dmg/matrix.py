@@ -87,8 +87,13 @@ def _expected(full: str, role: str, grants: dict) -> float | None:
 
 
 def build(rows_text: str, cols_text: str, fixed_text: str,
-          base_dir=None, extra_bases=(), arrow_grants=None) -> list:
-    """生成矩阵（第一行是表头，可直接给前端的表格卡片）。"""
+          base_dir=None, extra_bases=(), arrow_grants=None,
+          with_values: bool = False):
+    """生成矩阵（第一行是表头，可直接给前端的表格卡片）。
+
+    ``with_values=True`` 时返回 ``(table, values)``：``values`` 是同样形状的
+    **原始数值**（``None`` = 读不到）。表格里是格式化过的字符串，算百分比要用原值。
+    """
     rows = parse_spec(rows_text)
     cols = parse_spec(cols_text)
     fixed = parse_spec(fixed_text)
@@ -121,10 +126,12 @@ def build(rows_text: str, cols_text: str, fixed_text: str,
         header.append(_source_label(path, actual) if full and actual else DASH)
 
     table = [header]
+    values: list = []                       # 与 table 同形（首行是表头，用不上）
     for row_index, (path, role) in enumerate(rows):
         full, row_role, _own = _load(path, role, base_dir, extra_bases)
         row_label = _source_label(path, row_role) if full and row_role else DASH
         line = [row_label if row_label != DASH else _source_label(path, role)]
+        value_line: list = [row_label]
         for col_index, (_cfull, _crole, grants) in enumerate(col_loaded):
             if not full or not row_role or not _crole:
                 line.append(DASH)
@@ -138,7 +145,11 @@ def build(rows_text: str, cols_text: str, fixed_text: str,
                     merged[name] = merged.get(name, 0.0) + float(val)
             got = _expected(full, row_role, merged)
             line.append(_fmt(got))
+            value_line.append(got)
         table.append(line)
+        values.append(value_line)
+    if with_values:
+        return table, values
     return table
 
 
@@ -149,3 +160,27 @@ def _fmt(value) -> str:
     from .expr import fmt_num
 
     return fmt_num(value)
+
+
+def ratio_table(values: list, base_cell: str) -> list:
+    """每格相对**基准单元格**的百分比（``rows[i][j]`` 与表格同形，0 或 None = 没有）。
+
+    ``base_cell`` 形如 ``"1,2"``（第 1 行第 2 列，行列都从 0 开始，**不含表头**）。
+    基准格自己是 100%；读不到的格子给 None。基准没设 / 设的值是 0 → 全部 None。
+    """
+    try:
+        row, col = [int(part) for part in str(base_cell or "").split(",")]
+    except (TypeError, ValueError):
+        return []
+    if row < 0 or col < 0 or row >= len(values) or col >= len(values[row]) - 1:
+        return []
+    base = values[row][col + 1] if values[row] else None
+    if not base:
+        return []
+    out = []
+    for line in values:
+        out.append([
+            (float(v) / float(base) * 100.0) if v else None
+            for v in line[1:]
+        ])
+    return out

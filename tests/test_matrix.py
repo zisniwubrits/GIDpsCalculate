@@ -193,6 +193,24 @@ class TestMatrix(unittest.TestCase):
         self.assertEqual(matrix._expected(str(path), "甲", {"atk_pct": 100}), 2000.0)
         self.assertEqual(matrix._expected(str(path), "乙", {"atk_pct": 100}), 6000.0)
 
+    def test_ratio_table_uses_baseline_cell(self):
+        """百分比基准：双击设定的那一格是 100%，其余按它算。"""
+        values = [[None, 1000.0, 500.0], [None, 2000.0, 750.0]]
+        ratios = matrix.ratio_table(values, "0,0")
+        self.assertEqual(ratios[0], [100.0, 50.0])
+        self.assertEqual(ratios[1], [200.0, 75.0])
+        # 换基准：第 2 行、第 2 个数据列（列号从 0 数，不含表头）→ 750
+        ratios2 = matrix.ratio_table(values, "1,1")
+        self.assertAlmostEqual(ratios2[0][0], 1000 / 750 * 100)
+        self.assertAlmostEqual(ratios2[0][1], 500 / 750 * 100)
+        self.assertAlmostEqual(ratios2[1][0], 2000 / 750 * 100)
+        self.assertAlmostEqual(ratios2[1][1], 100.0)
+        # 没设基准 / 基准是 0 / 越界 → 不画百分比
+        self.assertEqual(matrix.ratio_table(values, ""), [])
+        self.assertEqual(matrix.ratio_table(values, "x"), [])
+        self.assertEqual(matrix.ratio_table([[None, 0.0]], "0,0"), [])
+        self.assertEqual(matrix.ratio_table(values, "5,5"), [])
+
     def test_parse_spec_reuses_external_syntax(self):
         self.assertEqual(matrix.parse_spec("a.json::dds\nb.json"), [
             ("a.json", "dds"), ("b.json", ""),

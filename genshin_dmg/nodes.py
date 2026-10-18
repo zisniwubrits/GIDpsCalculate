@@ -700,6 +700,8 @@ NODE_TYPES: dict = {
         # 由卡片自绘的表格编辑器就地编辑（见 web/src/components/MatrixEditor.tsx）
         _F("fixed_file", "固定拐力", "", "textbox"),
     ], hidden_fields=[
+        # 百分比基准单元格（"行,列"）：双击某个单元格设置，不画在卡片底部
+        _F("base_cell", "百分比基准", "", "text"),
         _F("card_name", "卡片名", "", "text"),
     ]),
 }

@@ -226,11 +226,14 @@ function CardNodeView({ id, data, selected }: NodeProps<CardRFNode>) {
           cols={node.fields.col_files}
           fixed={node.fields.fixed_file}
           table={result?.rows ?? null}
+          ratios={result?.ratios ?? null}
+          baseCell={node.fields.base_cell}
           disabled={collapsed}
           baseDir={data.baseDir}
           onRows={(v) => onField("row_files", v)}
           onCols={(v) => onField("col_files", v)}
           onFixed={(v) => onField("fixed_file", v)}
+          onBase={(v) => onField("base_cell", v)}
         />
         </div>
       ) : null}

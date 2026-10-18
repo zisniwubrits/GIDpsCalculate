@@ -39,11 +39,17 @@ export interface MatrixEditorProps {
   fixed: unknown;
   /** 后端返回的整表：第一行表头（角标 + 列名），其余每行 [行名, 格…] */
   table: string[][] | null;
+  /** 每格相对基准单元格的百分比（与 table 同形，null = 没设基准 / 读不到） */
+  ratios?: (number | null)[][] | null;
+  /** 基准单元格 "行,列"（行列都不含表头） */
+  baseCell: unknown;
   disabled?: boolean;
   baseDir?: string;
   onRows: (next: string) => void;
   onCols: (next: string) => void;
   onFixed: (next: string) => void;
+  /** 双击单元格 → 把它设成百分比基准 */
+  onBase: (next: string) => void;
 }
 
 type Axis = "row" | "col";
@@ -54,16 +60,27 @@ export default function MatrixEditor({
   cols,
   fixed,
   table,
+  ratios,
+  baseCell,
   disabled,
   baseDir,
   onRows,
   onCols,
   onFixed,
+  onBase,
 }: MatrixEditorProps) {
   const rowLines = sourceLines(rows);
   const colLines = sourceLines(cols);
   const header = table?.[0] ?? [];
   const body = table?.slice(1) ?? [];
+  // 条形宽度按"本表最大的那个百分比"归一（基准不一定最大 —— 有格子超过基准时也对）
+  let maxPct = 0;
+  for (const line of ratios ?? []) {
+    for (const pct of line ?? []) {
+      if (typeof pct === "number" && pct > maxPct) maxPct = pct;
+    }
+  }
+  if (maxPct <= 0) maxPct = 100;
 
   /** 行 / 列各自那串输入框；回车加一条后要把光标搬到新那条上 */
   const boxes = {
@@ -165,11 +182,36 @@ export default function MatrixEditor({
               />
               {renderInput("row", index)}
             </th>
-            {colLines.map((_c, ci) => (
-              <td key={ci} className="mx-cell">
-                {body[index]?.[ci + 1] ?? "—"}
-              </td>
-            ))}
+            {colLines.map((_c, ci) => {
+              const pct = ratios?.[index]?.[ci] ?? null;
+              const isBase =
+                String(baseCell ?? "") === `${index},${ci}`;
+              // 条形按"本表最大百分比"归一，100% 的基准格永远占满一半以上，
+              // 这样一眼能看出各格的相对高低
+              return (
+                <td
+                  key={ci}
+                  className={`mx-cell${isBase ? " mx-base" : ""}`}
+                  title={
+                    pct === null
+                      ? "双击设为百分比基准"
+                      : `${pct.toFixed(2)}%${isBase ? "（基准）" : ""}\n双击设为基准`
+                  }
+                  onDoubleClick={() => onBase(`${index},${ci}`)}
+                >
+                  <span className="mx-cell-value">{body[index]?.[ci + 1] ?? "—"}</span>
+                  {pct === null ? null : (
+                    <span className="mx-pct">
+                      <span
+                        className="mx-bar"
+                        style={{ width: `${Math.min(100, pct / maxPct * 100)}%` }}
+                      />
+                      <span className="mx-pct-text">{pct.toFixed(1)}%</span>
+                    </span>
+                  )}
+                </td>
+              );
+            })}
           </tr>
         ))}
       </tbody>
