@@ -127,13 +127,18 @@ class TestSubstats(unittest.TestCase):
         self.assertEqual(len(relic.substat_pool("dmg_pyro")), 10)
         self.assertEqual(sum(relic.substat_pool("dmg_pyro").values()), 1100)
 
-    def test_expected_rolls_are_linear_and_sum_to_points(self):
-        """期望词条数合计 = 每件点数；某属性 = 点数 × 权重 / 池权重。"""
+    def test_expected_rolls_sum_to_points_and_use_exact_inclusion(self):
+        """期望词条数合计 = 每件点数；单属性 = 精确入选概率 × 出现后的期望次数。"""
         rolls = relic.expected_substat_rolls("atk_pct")     # 池 9 项（去掉攻击%）
         self.assertAlmostEqual(sum(rolls.values()), 8.2, places=6)
-        total_weight = 1000.0
-        self.assertAlmostEqual(rolls["crit_rate"], 8.2 * 75 / total_weight, places=9)
-        self.assertAlmostEqual(rolls["em"], 8.2 * 100 / total_weight, places=9)
+
+        inclusion = relic.substat_inclusion("atk_pct")
+        self.assertAlmostEqual(sum(inclusion.values()), 4.0, places=9)   # 共 4 条副词条
+        # 出现之后：初始 1 次 + 0.2×5/4 + 0.8×4/4 = 2.05 次
+        self.assertAlmostEqual(rolls["crit_rate"], inclusion["crit_rate"] * 2.05, places=9)
+        self.assertAlmostEqual(rolls["em"], inclusion["em"] * 2.05, places=9)
+        # 不放回加权抽样下，入选概率略高于"4×权重/总权重"这个近似
+        self.assertGreater(inclusion["crit_rate"], 4 * 75 / 1000)
         # 攻击% 被主词条占掉，不在副词条里
         self.assertNotIn("atk_pct", rolls)
 
@@ -143,8 +148,8 @@ class TestSubstats(unittest.TestCase):
         rolls = relic.expected_substat_rolls("atk_pct")
         self.assertAlmostEqual(
             values["crit_dmg"], rolls["crit_dmg"] * relic.SUBSTAT_AVG["crit_dmg"], places=9)
-        # 沙·攻击% 下，暴击率的期望数值约 2.03%
-        self.assertAlmostEqual(values["crit_rate"], 0.615 * 3.305, places=6)
+        # 沙·攻击% 下，暴击率的期望数值 ≈ 0.673 词条 × 3.305
+        self.assertAlmostEqual(values["crit_rate"], rolls["crit_rate"] * 3.305, places=9)
 
     def test_four_sub_rate_changes_expectation(self):
         """初始 4 词条概率越高，词条期望越多（副本 20% / BOSS 34%）。"""
@@ -212,6 +217,84 @@ class TestMainCombos(unittest.TestCase):
 
     def test_limit(self):
         self.assertEqual(len(relic.feasible_combos(100000, limit=7)), 7)
+
+
+class TestSinglePieceModel(unittest.TestCase):
+    """单槽模型：单件状态分布 → 累积 → N 件里最好的分布（万能通式）。"""
+
+    def test_piece_states_is_a_distribution(self):
+        """单件状态分布：概率和为 1，状态里只出现被跟踪的属性。"""
+        for q4 in (0.0, 0.2, 0.34, 1.0):
+            states = relic.piece_states("atk_pct", q4=q4)
+            self.assertAlmostEqual(sum(states.values()), 1.0, places=9)
+            for vector in states:
+                self.assertEqual(len(vector), len(relic.DEFAULT_TRACKED))
+
+    def test_piece_states_match_analytic_expectation(self):
+        """枚举出来的期望词条次数，必须与解析公式一模一样（最强的正确性检查）。"""
+        for main in ("atk_pct", "crit_rate", "em", "dmg_pyro"):
+            states = relic.piece_states(main)
+            got = relic.expected_rolls_from_states(states)
+            want = relic.expected_substat_rolls(main)
+            for key in relic.DEFAULT_TRACKED:
+                self.assertAlmostEqual(got[key], want.get(key, 0.0), places=9,
+                                       msg="%s/%s" % (main, key))
+
+    def test_piece_states_points_follow_q4(self):
+        """初始 4 词条概率越高，单件词条点越多（20% → 8.2 点，全是 4 条 → 9 点）。"""
+        every = tuple(relic.SUBSTAT_WEIGHT)          # 全部 10 条副词条，才能数出总点数
+
+        def points(q4):
+            states = relic.piece_states("atk_pct", q4=q4, tracked=every)
+            return sum(relic.expected_rolls_from_states(states, tracked=every).values())
+
+        self.assertAlmostEqual(points(0.0), 8.0, places=9)
+        self.assertAlmostEqual(points(1.0), 9.0, places=9)
+        self.assertAlmostEqual(points(0.2), 8.2, places=9)
+
+    def test_scalar_is_the_effective_roll_count(self):
+        """默认标量 = 词条总数（"有效词条最多"就是按这个排序）。"""
+        self.assertEqual(relic.state_scalar((1, 0, 2, 0, 3)), 6.0)
+
+    def test_best_of_n_is_a_distribution(self):
+        """N 件最好的分数分布：概率和为 1，且 N=1 时就是单件分布。"""
+        states = relic.piece_states("atk_pct")
+        single = relic.best_of_n(states, 1)
+        for value, prob in single.items():
+            self.assertAlmostEqual(prob, sum(
+                p for vector, p in states.items() if relic.state_scalar(vector) == value))
+        for n in (2, 3, 10, 50):
+            dist = relic.best_of_n(states, n)
+            self.assertAlmostEqual(sum(dist.values()), 1.0, places=9, msg=n)
+
+    def test_best_of_n_matches_brute_force_for_two(self):
+        """N=2 时用暴力枚举对拍：两件的分数取 max。"""
+        states = relic.piece_states("atk_pct")
+        base = relic.best_of_n(states, 1)
+
+        brute: dict = {}
+        for a, pa in base.items():
+            for b, pb in base.items():
+                key = max(a, b)
+                brute[key] = brute.get(key, 0.0) + pa * pb
+        got = relic.best_of_n(states, 2)
+        for value in set(brute) | set(got):
+            self.assertAlmostEqual(got.get(value, 0.0), brute.get(value, 0.0), places=12,
+                                   msg=value)
+
+    def test_more_pieces_never_hurt(self):
+        """胚子越多，期望最好分数单调不减（随机占优）。"""
+        states = relic.piece_states("atk_pct")
+        values = [relic.expected_scalar(relic.best_of_n(states, n))
+                  for n in (1, 2, 3, 5, 10, 20, 50)]
+        for before, after in zip(values, values[1:]):
+            self.assertLessEqual(before, after + 1e-12)
+
+    def test_higher_q4_improves_the_best_of_n(self):
+        """4 词条起手概率更高（BOSS 34% vs 副本 20%）→ 期望更好。"""
+        domain = relic.best_of_n(relic.piece_states("atk_pct", q4=0.20), 10)
+        boss = relic.best_of_n(relic.piece_states("atk_pct", q4=0.34), 10)
+        self.assertGreater(relic.expected_scalar(boss), relic.expected_scalar(domain))
 
 
 if __name__ == "__main__":                                  # pragma: no cover

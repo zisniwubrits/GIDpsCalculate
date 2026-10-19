@@ -50,6 +50,11 @@ __all__ = [
     "substat_pool",
     "expected_substat_rolls",
     "expected_substats",
+    "PIECE_MAX_ROLLS",
+    "DEFAULT_TRACKED",
+    "piece_states",
+    "expected_rolls_from_states",
+    "best_of_n",
     "combo_cost",
     "main_combos",
     "feasible_combos",
@@ -234,21 +239,31 @@ def substat_pool(main: str) -> dict:
     return {key: w for key, w in SUBSTAT_WEIGHT.items() if key != exclude}
 
 
+def substat_inclusion(main: str) -> dict:
+    """每条副词条"**出现在这件上**"的精确概率（不放回加权抽样，不是 4w/W 近似）。"""
+    from itertools import combinations
+
+    pool = substat_pool(main)
+    out: dict = {key: 0.0 for key in pool}
+    for combo in combinations(pool, 4):
+        prob = _subset_prob(pool, combo)
+        for key in combo:
+            out[key] += prob
+    return out
+
+
 def expected_substat_rolls(main: str, q4: float = FOUR_SUB_RATE) -> dict:
     """某主词条下，**每件**的"某属性期望词条数"（``{key: 词条数}``）。
 
-    期望是线性的：把"不放回抽 3/4 条"与"强化只落在已有词条上"都算进去后，
-    某属性的期望词条数恰好 = ``点数 × 该属性权重 / 池总权重``。
+    精确算法：``E[次数_i] = P(该属性出现) × (1 + 强化期望次数)``。
+
+    * ``P(该属性出现)`` 用不放回加权抽样的**精确**入选概率（见 :func:`substat_inclusion`）；
+    * 出现之后：初始 1 次 + 5 次强化在 4 条里等概率分（期望 5/4），
+      3 词条起手时是 1 + 4/4；按 q4 加权 → ``1 + (q4·5 + (1−q4)·4)/4``。
     """
-    pool = substat_pool(main)
-    total_weight = float(sum(pool.values()))
-    if not total_weight:
-        return {}
-    points = effective_points(q4)
-    return {
-        key: points * weight / total_weight
-        for key, weight in pool.items()
-    }
+    inclusion = substat_inclusion(main)
+    extra = (float(q4) * UPGRADE_ROLLS + (1.0 - float(q4)) * (UPGRADE_ROLLS - 1)) / 4.0
+    return {key: prob * (1.0 + extra) for key, prob in inclusion.items()}
 
 
 def expected_substats(main: str, q4: float = FOUR_SUB_RATE) -> dict:
@@ -322,3 +337,154 @@ def feasible_combos(budget: float,
                 out.append(dict(mains=dict(mains), offPiece=slot, cost=cost))
     out.sort(key=lambda item: item["cost"])
     return out[:limit] if limit else out
+
+
+# ---- 单槽模型：单件状态分布 → 累积 → N 件里最好的分布 -------------------
+# 词条值统一取平均值（用户口径），所以一件圣遗物 = 每个属性的"词条次数"整数向量。
+# 一次强化最多让某条从 1 次涨到 6 次（4 条起手 1 + 5 次强化）。
+PIECE_MAX_ROLLS = 6
+# 默认只跟踪"会进伤害公式"的属性（其余属性只占词条池，不单独建轴）。
+DEFAULT_TRACKED = ("crit_rate", "crit_dmg", "atk_pct", "atk_flat", "em")
+
+
+def _perm_prob(order, pool: dict) -> float:
+    """按权重不放回抽出的**有序**序列概率。"""
+    total = float(sum(pool.values()))
+    prob = 1.0
+    used = 0.0
+    for key in order:
+        prob *= float(pool[key]) / (total - used)
+        used += float(pool[key])
+    return prob
+
+
+def _subset_prob(pool: dict, combo) -> float:
+    """抽到某个**无序**子集（不计顺序）的概率 = 所有排列的概率之和。"""
+    from itertools import permutations
+
+    return sum(_perm_prob(order, pool) for order in permutations(combo))
+
+
+def _extra_compositions(extra: int, parts: int) -> dict:
+    """把 ``extra`` 次额外强化分给 ``parts`` 条词条的所有方式 → 概率（等概率多项式）。"""
+    from itertools import product
+
+    out: dict = {}
+    total = float(parts) ** extra
+    for split in product(range(extra + 1), repeat=parts):
+        if sum(split) != extra:
+            continue
+        # 多项式系数 = extra! / Π split!
+        coeff = _factorial(extra)
+        for count in split:
+            coeff //= _factorial(count)
+        out[split] = coeff / total
+    return out
+
+
+def _factorial(n: int) -> int:
+    out = 1
+    for k in range(2, n + 1):
+        out *= k
+    return out
+
+
+def piece_states(main: str, q4: float = FOUR_SUB_RATE,
+                 tracked=DEFAULT_TRACKED) -> dict:
+    """**单件**圣遗物的状态分布：``{(词条次数向量): 概率}``。
+
+    状态只保留 ``tracked`` 里的属性（别的属性只占词条池，不影响伤害）；
+    词条次数是整数，数值 = 次数 × 平均值。
+
+    * 4 条起手（概率 ``1-q4``）：4 条各 1 次 + 5 次强化（多项式分布）；
+    * 3 条起手（概率 ``q4``）：3 条各 1 次 + +4 级补第 4 条 1 次 + 4 次强化。
+      两种起手最终都是"4 条各至少 1 次"，区别只在总点数 9 / 8。
+    """
+    from itertools import combinations
+
+    pool = substat_pool(main)
+    keys = tuple(pool)
+    index = {key: i for i, key in enumerate(tracked)}
+    states: dict = {}
+
+    def add(combo, counts, prob: float) -> None:
+        vector = [0] * len(tracked)
+        for key, count in zip(combo, counts):
+            slot = index.get(key)
+            if slot is not None:
+                vector[slot] += count
+        states[tuple(vector)] = states.get(tuple(vector), 0.0) + prob
+
+    # q4 = 初始 4 词条的概率（副本 20%）→ 9 个词条点；否则 3 词条起手 → 8 个点
+    for size, extra, weight in ((4, UPGRADE_ROLLS, float(q4)),
+                                (4, UPGRADE_ROLLS - 1, 1.0 - float(q4))):
+        for combo in combinations(keys, size):
+            p_sub = _subset_prob(pool, combo) * weight
+            if not p_sub:
+                continue
+            for split, p_split in _extra_compositions(extra, size).items():
+                add(combo, [1 + value for value in split], p_sub * p_split)
+    return states
+
+
+def expected_rolls_from_states(states: dict, tracked=DEFAULT_TRACKED) -> dict:
+    """用单件状态分布算"每件各属性的期望词条次数"（键是属性名）。"""
+    out: dict = {name: 0.0 for name in tracked}
+    for vector, prob in states.items():
+        for i, count in enumerate(vector):
+            if count:
+                out[tracked[i]] += count * prob
+    return out
+
+
+def state_scalar(vector, tracked=DEFAULT_TRACKED) -> float:
+    """把一个状态映射成**标量**（默认 = 跟踪属性的词条总数）。
+
+    "最好"必须是标量比较：状态向量之间是偏序，互不支配时没有"最好"这回事，
+    而"有效词条最多"本身就是标量，所以先用词条总数排序（之后可换成真实伤害）。
+    """
+    return float(sum(vector))
+
+
+def _scalar_distribution(states: dict, score) -> dict:
+    """{状态: 概率} → {分数: 概率}（同一分数的状态概率相加）。"""
+    out: dict = {}
+    for vector, prob in states.items():
+        key = score(vector)
+        out[key] = out.get(key, 0.0) + prob
+    return out
+
+
+def best_of_n(states: dict, n: int, score=state_scalar) -> dict:
+    """N 个胚子里"最好那个"的分数分布（用户的万能通式）。
+
+    ``P_N[s] = S[s]^n − (S[s] − P₁[s])^n``
+
+    * ``S[s]``：单件分数 ≤ s 的累积概率；
+    * 物理意义：N 件都不超过 s，减去 N 件都严格劣于 s；
+    * 要求按**标量**排序（分数），状态向量本身是偏序、不能直接套这个式子。
+    """
+    if n <= 0:
+        raise ValueError("n 必须为正整数")
+    base = _scalar_distribution(states, score) if score else dict(states)
+    scores = sorted(base)
+    out: dict = {}
+    cum = 0.0
+    for value in scores:
+        p1 = base[value]
+        cum = min(1.0, cum + p1)          # S[s]：≤ s 的累积
+        if n == 1:
+            out[value] = p1
+            continue
+        below = max(0.0, cum - p1)        # S[s] − P₁[s]：严格劣于 s
+        if cum <= 0.0 or p1 <= 0.0:
+            out[value] = 0.0
+        else:
+            # 写成 S^n·(1 − (1−P/S)^n)，避免两个接近 1 的数相减丢精度
+            out[value] = cum ** n * (1.0 - (below / cum) ** n)
+    return out
+
+
+def expected_scalar(dist: dict) -> float:
+    """一个标量分布 {值: 概率} 的期望。"""
+    return sum(value * prob for value, prob in dist.items())
