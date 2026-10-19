@@ -5,7 +5,16 @@
 
 ---
 
-## 0. 定位（重要）
+## 0. 动手前先概述（重要，用户要求）
+
+**每次动手之前，先用一两句话向用户概述"我接下来要做什么"**（改哪个文件、加什么函数、跑什么命令），
+然后再执行。不要把多步操作一次性闷头做完才汇报。
+
+- 一步一个原子逻辑；每步做完报结果（改了什么、测试多少 passed、提交号）；
+- 概述里要写清"是否会碰 `graph.py` / 前端 / HTTP"，让用户一眼判断影响面；
+- 发现方向不对就停下来说，不要"先做了再说"。
+
+## 0.1 定位（重要）
 
 - **纯后端、纯 Python 层**：只写到 `genshin_dmg/relic.py` 里的函数，**不出 HTTP 接口、不改 `/api/schema`、不动前端**。
 - 只依赖 `genshin_dmg/nodes.py` 的参考表（`RELIC_ROWS`）与 `genshin_dmg/damage.py` 的公式，不复制数值。
@@ -135,3 +144,33 @@
 - 只改 `genshin_dmg/relic.py` + `tests/test_relic.py` 时不需要 `pnpm build`；
   一旦碰了 `web/` 或 `nodes.py` 的 schema，按 `AGENTS.md` §6 重建前端产物。
 - 不自动 `git push`。
+
+
+---
+
+## 8. 伤害函数抽象与 DLL 加速（计划）
+
+目标：圣遗物模拟/DP 要调用伤害链**几十万到几百万次**，Python 的图求值太慢。
+做法：把"某工程的伤害链"抽象成一个**纯数值函数**，编译成 DLL，用 `ctypes` 调用。
+
+### 8.1 分层
+
+| 层 | 内容 |
+|---|---|
+| 抽象层 | `DamageFn = Callable[[Sequence[float]], float]` + 固定的**属性顺序** `stats_order` |
+| 解释层 | 现有 `Graph.evaluate` 包一层（等价但慢，作为回退与对拍基准） |
+| 生成层 | 把工程链**常量折叠**后生成 C 源码（只含算术表达式，不执行用户字符串） |
+| 编译层 | MinGW `gcc -O3 -shared` → `damage_<指纹>.dll`，缓存到 `private/.dll/`（不进 git） |
+| 调用层 | `ctypes` 载入；**批量接口**一次算 N 组，减少调用开销 |
+| 回退 | 没有 gcc / 编译失败 / 指纹不符 → 自动走解释层，结果必须一致 |
+
+### 8.2 约定
+
+- 导出 ABI（草案）：
+  - `int calc(const double* x)` → 返回伤害（`x` 按 `stats_order` 排列）
+  - `void calc_batch(const double* x, int rows, double* out)` → 一次算 `rows` 组
+- **生成 C 代码必须白名单**：只允许数字、四则运算、括号、已知变量名；
+  用户填的算式先用现有求值器解析成数字/四则表达式再翻译，**绝不把原始字符串拼进 C**。
+- 等价性：同一批随机属性，DLL 与解释层的相对误差 < 1e-9（pytest 用例守住）。
+- 指纹：工程 JSON + 属性顺序 + gcc 版本 → 变了就重新编译。
+- 只在 `relic` 的模拟/DP 用 DLL；**不改变工程本身的求值路径**（前端 `/api/evaluate` 仍走 Python）。
