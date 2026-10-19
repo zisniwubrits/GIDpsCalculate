@@ -160,7 +160,7 @@
 | 抽象层 | `DamageFn = Callable[[Sequence[float]], float]` + 固定的**属性顺序** `stats_order` |
 | 解释层 | 现有 `Graph.evaluate` 包一层（等价但慢，作为回退与对拍基准） |
 | 生成层 | 把工程链**常量折叠**后生成 C 源码（只含算术表达式，不执行用户字符串） |
-| 编译层 | MinGW `gcc -O3 -shared` → `damage_<指纹>.dll`，缓存到 `private/.dll/`（不进 git） |
+| 编译层 | MinGW `gcc -O3 -shared` → `damage_<指纹>.dll`，缓存到 **`build/dll/`**（`build/` 已在 `.gitignore` 里） |
 | 调用层 | `ctypes` 载入；**批量接口**一次算 N 组，减少调用开销 |
 | 回退 | 没有 gcc / 编译失败 / 指纹不符 → 自动走解释层，结果必须一致 |
 
@@ -173,4 +173,7 @@
   用户填的算式先用现有求值器解析成数字/四则表达式再翻译，**绝不把原始字符串拼进 C**。
 - 等价性：同一批随机属性，DLL 与解释层的相对误差 < 1e-9（pytest 用例守住）。
 - 指纹：工程 JSON + 属性顺序 + gcc 版本 → 变了就重新编译。
+- **DLL 不进 git**（编译产物、与平台/编译器绑定）：输出目录固定 `build/dll/`；
+  生成的 C 源码（`build/dll/*.c`）同样不进 git，需要留档时另存。
+- 不使用 `private/` 存放构建产物（`private/` 是个人存档，语义不同）。
 - 只在 `relic` 的模拟/DP 用 DLL；**不改变工程本身的求值路径**（前端 `/api/evaluate` 仍走 Python）。
