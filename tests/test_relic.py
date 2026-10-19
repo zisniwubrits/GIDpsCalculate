@@ -297,6 +297,93 @@ class TestSinglePieceModel(unittest.TestCase):
         self.assertGreater(relic.expected_scalar(boss), relic.expected_scalar(domain))
 
 
+class TestBestOfNStates(unittest.TestCase):
+    """口径 B：向量状态的 P_N[v]（"最好那个恰好等于这个状态"）。
+
+    与 TestSinglePieceModel 的区别：那边压成标量分数（"恰好 N 点"），
+    这边保留向量（"恰好 3 暴击 / 2 攻击%"），靠全序键把并列打破。
+    """
+
+    def test_is_a_distribution_and_n1_is_identity(self):
+        states = relic.piece_states("atk_pct")
+        self.assertEqual(relic.best_of_n_states(states, 1), states)
+        for n in (2, 3, 10, 50):
+            dist = relic.best_of_n_states(states, n)
+            self.assertEqual(set(dist), set(states))      # 状态集不变，只是概率重分配
+            self.assertAlmostEqual(sum(dist.values()), 1.0, places=9, msg=n)
+
+    def test_projects_onto_the_scalar_formula(self):
+        """按默认键的第一分量（词条总数）投影 → 必须与 best_of_n 完全一致。"""
+        states = relic.piece_states("crit_dmg")
+        for n in (1, 2, 5, 20):
+            projected: dict = {}
+            for vector, prob in relic.best_of_n_states(states, n).items():
+                key = relic.state_scalar(vector)
+                projected[key] = projected.get(key, 0.0) + prob
+            scalar = relic.best_of_n(states, n)
+            for key in set(projected) | set(scalar):
+                self.assertAlmostEqual(projected.get(key, 0.0), scalar.get(key, 0.0),
+                                       places=12, msg=(n, key))
+
+    def test_matches_brute_force_for_two(self):
+        """N=2 暴力枚举所有有序对，取键最大的那个向量。"""
+        states = relic.piece_states("atk_pct")
+        items = list(states.items())
+
+        brute: dict = {}
+        for va, pa in items:
+            for vb, pb in items:
+                best = va if relic.total_state_key(va) >= relic.total_state_key(vb) else vb
+                brute[best] = brute.get(best, 0.0) + pa * pb
+        got = relic.best_of_n_states(states, 2)
+        for vector in set(brute) | set(got):
+            self.assertAlmostEqual(got.get(vector, 0.0), brute.get(vector, 0.0),
+                                   places=12, msg=vector)
+
+    def test_custom_key_behaves_like_damage(self):
+        """自定义全序键（模拟"真实伤害 + 向量打破并列"）也要与暴力枚举一致。"""
+        # 假的"伤害"：双爆权重高、防御无用 —— 只为验证 key 通道，不是真实公式
+        weights = (2.0, 1.0, 0.0, 0.0, 0.0)
+
+        def key(vector):
+            return (sum(w * c for w, c in zip(weights, vector)), tuple(vector))
+
+        states = relic.piece_states("atk_pct")
+        items = list(states.items())
+        brute: dict = {}
+        for va, pa in items:
+            for vb, pb in items:
+                best = va if key(va) >= key(vb) else vb
+                brute[best] = brute.get(best, 0.0) + pa * pb
+        got = relic.best_of_n_states(states, 2, key=key)
+        for vector in set(brute) | set(got):
+            self.assertAlmostEqual(got.get(vector, 0.0), brute.get(vector, 0.0),
+                                   places=12, msg=vector)
+
+    def test_more_pieces_never_hurt_under_any_key(self):
+        def key(vector):
+            return (vector[1] * 2.0 + vector[0], tuple(vector))   # 偏爱小攻击 + 攻击%
+
+        states = relic.piece_states("atk_pct")
+        values = [sum(key(v)[0] * p
+                      for v, p in relic.best_of_n_states(states, n, key=key).items())
+                  for n in (1, 2, 3, 5, 10, 20)]
+        for before, after in zip(values, values[1:]):
+            self.assertLessEqual(before, after + 1e-12)
+
+    def test_duplicate_keys_are_rejected(self):
+        """两个不同状态同键 → "恰好等于 v" 无定义，必须报错而不是静默合并。"""
+        states = relic.piece_states("atk_pct")
+        with self.assertRaises(ValueError):
+            relic.best_of_n_states(states, 2, key=lambda vector: relic.state_scalar(vector))
+
+    def test_rejects_non_positive_n(self):
+        states = relic.piece_states("atk_pct")
+        for n in (0, -1):
+            with self.assertRaises(ValueError):
+                relic.best_of_n_states(states, n)
+
+
 class TestDamageFn(unittest.TestCase):
     """伤害函数抽象层：9 个属性 → 期望伤害（解释层实现）。"""
 

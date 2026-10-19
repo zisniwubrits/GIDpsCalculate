@@ -56,6 +56,7 @@ __all__ = [
     "piece_states",
     "expected_rolls_from_states",
     "best_of_n",
+    "best_of_n_states",
     "combo_cost",
     "main_combos",
     "feasible_combos",
@@ -489,6 +490,65 @@ def best_of_n(states: dict, n: int, score=state_scalar) -> dict:
 def expected_scalar(dist: dict) -> float:
     """一个标量分布 {值: 概率} 的期望。"""
     return sum(value * prob for value, prob in dist.items())
+
+
+# ---- 口径 B：向量状态的 best-of-N（P_N[v]）--------------------------------
+def total_state_key(vector) -> tuple:
+    """默认的**全序键**：``(词条总数, 向量本身)``。
+
+    向量之间只有偏序，套不了 :func:`best_of_n`；这里补一个确定性的细化：
+    先比词条总数（= 现在的"有效词条数"口径），同分再按向量字典序。
+    将来接上真实伤害后，换 ``key=lambda v: (damage(v), tuple(v))`` 即可。
+    """
+    return (state_scalar(vector), tuple(vector))
+
+
+def best_of_n_states(states: dict, n: int, key=total_state_key) -> dict:
+    """N 个胚子里"最好那个"的**状态分布** ``{状态向量: 概率}``（口径 B）。
+
+    与 :func:`best_of_n` 是同一个通式，只是累积按**全序**做，因此输出到向量层：
+
+        ``P_N[v] = S[v]^n − (S[v] − P₁[v])^n``，``S[v] = Σ_{w ≤ v} P₁[w]``
+
+    参数 ``key`` 必须把状态映射到**可哈希且互不相同**的全序键：
+
+    * 互不相同是硬要求——两个不同状态同键时"最好那个恰好等于 v"没有定义，
+      这里直接 ``ValueError``，**不**静默合并（合并后只能得到"分数层"的分布，
+      那是 :func:`best_of_n` 的事）；
+    * 想让"最好"= 伤害最大，就用 ``key=lambda v: (damage(v), tuple(v))``：
+      伤害相同时由向量字典序打破并列。
+
+    概率和保证为 1（``n`` 件独立同分布时的严格结果，非抽样）。
+    """
+    if n <= 0:
+        raise ValueError("n 必须为正整数")
+    key = key or total_state_key
+    tokens: dict = {}
+    owner: dict = {}
+    for vector in states:
+        token = key(vector)
+        if token in owner:
+            raise ValueError(
+                "排序键不唯一：%r 与 %r 同键 %r，需要更细的排序规则（如追加向量本身）"
+                % (owner[token], vector, token))
+        owner[token] = vector
+        tokens[vector] = token
+
+    out: dict = {}
+    cum = 0.0
+    for vector in sorted(states, key=lambda v: tokens[v]):
+        p1 = states[vector]
+        cum = min(1.0, cum + p1)          # S[v]：全序下 ≤ v 的累积
+        if n == 1:
+            out[vector] = p1
+            continue
+        below = max(0.0, cum - p1)        # S[v] − P₁[v]：严格劣于 v
+        if cum <= 0.0 or p1 <= 0.0:
+            out[vector] = 0.0
+        else:
+            # 同 best_of_n：写成 S^n·(1 − (1−P/S)^n) 避免大 n 时丢精度
+            out[vector] = cum ** n * (1.0 - (below / cum) ** n)
+    return out
 
 
 # ---- 伤害函数抽象层 -------------------------------------------------------
