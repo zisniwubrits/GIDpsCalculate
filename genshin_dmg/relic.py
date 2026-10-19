@@ -527,11 +527,16 @@ class GraphDamageFn:
         self.stats_order = STATS_ORDER
         node_id = ""
         for node in self.graph.nodes.values():
-            if node.type == "result" and getattr(node, "role", "") == role:
+            if node.type != "result":
+                continue
+            if role and getattr(node, "role", "") == role:
                 node_id = node.id
                 break
+            if not role and node_id == "":
+                node_id = node.id          # role="" → 用第一张 ★结果 卡
         if not node_id:
-            raise ValueError("工程里没有属于 %s 的 ★结果 卡" % role)
+            raise ValueError("工程里没有 %s 的 ★结果 卡"
+                             % ("属于 %s" % role if role else "任何"))
         self.node_id = node_id
 
     # -- 内部 --------------------------------------------------------------

@@ -1232,6 +1232,12 @@ class Graph:
             self.variables = dict(env)
             # 角色卡自带的面板宏（右键「角色面板…」里编辑的那些）
             self._apply_role_panels(env)
+            # 全局（无角色）的外部注入：圣遗物属性落到全局变量上（工程没有角色容器时用）
+            for macro, extra in ((self.extra_own or {}).get("") or {}).items():
+                if not extra:
+                    continue
+                key = env_key(macro)
+                env[key] = float(env.get(key, 0.0)) + float(extra)
             # **拐力生效前**的快照 = 各变量的"自身值"（own 的来源）
             own = dict(env)
             self.variables = dict(env)

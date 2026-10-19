@@ -137,10 +137,19 @@ def _run_expr(expr, stats) -> float:
 
 # ---- 编译工程 ------------------------------------------------------------
 def _role_result(graph, role: str):
+    first = None
     for node in graph.nodes.values():
-        if node.type == "result" and getattr(node, "role", "") == role:
+        if node.type != "result":
+            continue
+        if role and getattr(node, "role", "") == role:
             return node
-    raise NotCompilable("工程里没有属于 %s 的 ★结果 卡" % role)
+        if first is None:
+            first = node
+    if first is None:
+        raise NotCompilable("工程里没有 ★结果 卡")
+    if role:
+        raise NotCompilable("工程里没有属于 %s 的 ★结果 卡" % role)
+    return first
 
 
 def _compile_node(graph, nid: str, resolve, seen=()) -> list:
