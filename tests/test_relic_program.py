@@ -68,10 +68,9 @@ class TestProgram(unittest.TestCase):
         for stats in ([0] * 9, [30, 200] + [0] * 7, [0] * 7 + [20, 40], [80, 50, 0, 0, 0, 0, 300, 0, 0]):
             self.assertAlmostEqual(rp.run_expected(prog, stats), fn.calc(stats), places=9)
 
-    def test_run_returns_branches_and_rate(self):
+    def test_run_returns_branches(self):
         prog = rp.compile_project(simple(), "T")
         got = rp.run(prog, [0] * 9)
-        self.assertAlmostEqual(got["rate"], 0.5, places=9)
         self.assertAlmostEqual(got["noncrit"], 2000.0, places=9)
         self.assertAlmostEqual(got["crit"], 4000.0, places=9)
         self.assertAlmostEqual(got["expected"], 3000.0, places=9)
@@ -80,7 +79,6 @@ class TestProgram(unittest.TestCase):
         """暴击率超过 100% 时封顶（与工程链一致）。"""
         prog = rp.compile_project(simple(), "T")
         got = rp.run(prog, [0] * 7 + [150, 100])
-        self.assertAlmostEqual(got["rate"], 1.0, places=9)
         self.assertAlmostEqual(got["expected"], got["crit"], places=9)
 
     def test_not_compilable_for_foreign_card(self):
@@ -104,6 +102,49 @@ class TestProgram(unittest.TestCase):
         prog = rp.compile_project(simple(), "T")
         with self.assertRaises(ValueError):
             rp.run(prog, [0] * 8)
+
+
+def with_add():
+    """两条基础值链 → 「加法合并」→ 暴击区 → ★结果。"""
+    from genshin_dmg.graph import Graph, GraphNode
+
+    g = Graph()
+    g.add(GraphNode("r1", "role", fields={"role_name": "T", "panel": (
+        "atk = 1000\natk_pct = 0\natk_flat = 0\ncrit_rate = 50\ncrit_dmg = 100")}))
+    g.add(GraphNode("b1", "base", fields={
+        "stat_base": "atk*(1+atk_pct/100)+atk_flat", "multiplier": "100"}))
+    g.add(GraphNode("b2", "base", fields={"stat_base": "atk", "multiplier": "50"}))
+    g.add(GraphNode("ad", "add"))
+    g.add(GraphNode("cr", "crit", fields={"crit_rate": "crit_rate", "crit_damage": "crit_dmg"}))
+    g.add(GraphNode("rs", "result"))
+    for nid in ("b1", "b2", "ad", "cr", "rs"):
+        g.nodes[nid].role = "T"
+    g.connect("b1", "ad", 0)
+    g.connect("b2", "ad", 1)
+    g.connect("ad", "cr")
+    g.connect("cr", "rs")
+    return g
+
+
+class TestAddMerge(unittest.TestCase):
+    def test_multi_input_add_compiles_and_matches(self):
+        """「加法合并」多输入：各分支分量相加，结果必须与工程一致。"""
+        g = with_add()
+        prog = rp.compile_project(g, "T")
+        first = prog["stages"][0]
+        self.assertEqual(first["op"], "add")
+        self.assertEqual(len(first["branches"]), 2)
+
+        fn = relic.GraphDamageFn(g, "T")
+        for stats in ([0] * 9, [50] + [0] * 8, [0] * 8 + [100], [30, 200] + [0] * 7):
+            self.assertAlmostEqual(rp.run_expected(prog, stats), fn.calc(stats), places=9)
+
+    def test_add_without_inputs_is_not_compilable(self):
+        g = with_add()
+        # 直接清掉两条输入
+        g.links = [l for l in g.links if l.dst != "ad"]
+        with self.assertRaises(rp.NotCompilable):
+            rp.compile_project(g, "T")
 
 
 if __name__ == "__main__":  # pragma: no cover

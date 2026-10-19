@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from . import damage as _damage
 from . import nodes as _nodes
-from .expr import _OPS, _FULLWIDTH, mangle
+from .expr import _FULLWIDTH, mangle
 from .relic import STATS_ORDER
 
 __all__ = ["NotCompilable", "compile_project", "run", "run_expected"]
@@ -32,11 +32,10 @@ OP_MUL = "mul"
 OP_RES = "res"
 OP_DEF = "def"
 OP_CRIT = "crit"
+OP_ADD = "add"
 OP_RESULT = "result"
 
 _CORE = ("base", "dmg", "res", "def", "crit", "add", "result")
-_UNARY = {_OPS[type(op)]: name for op, name in
-          ((None, None),)} if False else None   # 占位，实际映射见下方
 
 _OP_NAMES = {
     "add": "add", "sub": "sub", "mul": "mul", "truediv": "div",
@@ -144,24 +143,64 @@ def _role_result(graph, role: str):
     raise NotCompilable("工程里没有属于 %s 的 ★结果 卡" % role)
 
 
-def _chain(graph, result_id: str) -> list:
-    """从 ★结果 往上游走，返回 [base, …, result]；遇到未知类型就 NotCompilable。"""
-    order: list = []
-    seen: set = set()
-    nid = result_id
-    while nid:
-        if nid in seen:
-            raise NotCompilable("链里有环")
-        seen.add(nid)
-        node = graph.nodes.get(nid)
-        if node is None:
-            raise NotCompilable("链上缺少节点: %s" % nid)
-        if node.type not in _CORE:
-            raise NotCompilable("暂不支持编译卡片类型: %s" % node.type)
-        order.append(node.id)
-        nid = graph.link_src(nid, 0)
-    order.reverse()
-    return order
+def _compile_node(graph, nid: str, resolve, seen=()) -> list:
+    """递归编译某个节点的整条子链，返回阶段列表。
+
+    「加法合并」有多个输入：每个输入各自编译成子程序，运行时分量相加。
+    """
+    if nid in seen:
+        raise NotCompilable("链里有环")
+    node = graph.nodes.get(nid)
+    if node is None:
+        raise NotCompilable("链上缺少节点: %s" % nid)
+    if node.type not in _CORE:
+        raise NotCompilable("暂不支持编译卡片类型: %s" % node.type)
+
+    def field(key, default="0"):
+        raw = node.getter()(key)
+        return default if raw is None or (isinstance(raw, str) and not raw.strip()) else raw
+
+    if node.type == "add":
+        count = graph.input_count(nid)
+        branches = []
+        for port in range(count):
+            src = graph.link_src(nid, port)
+            if src:
+                branches.append(_compile_node(graph, src, resolve, seen + (nid,)))
+        if not branches:
+            raise NotCompilable("「加法合并」没有输入")
+        return [dict(op="add", branches=branches)]
+
+    upstream = graph.link_src(nid, 0)
+    stages = _compile_node(graph, upstream, resolve, seen + (nid,)) if upstream else []
+
+    if node.type == "base":
+        expr = _emit(field("stat_base"), resolve)
+        expr += _emit(field("stat_big"), resolve) + [("const", 100.0), ("div",),
+                                                    ("const", 1.0), ("add",), ("mul",)]
+        expr += _emit(field("stat_flat"), resolve) + [("add",)]
+        expr += _emit(field("multiplier", "200"), resolve) + [("const", 100.0), ("div",), ("mul",)]
+        stages.append(dict(op=OP_BASE, expr=expr))
+    elif node.type == "dmg":
+        expr = _emit(field("dmg_net"), resolve) + [("const", 100.0), ("div",),
+                                                   ("const", 1.0), ("add",)]
+        stages.append(dict(op=OP_MUL, expr=expr))
+    elif node.type == "res":
+        stages.append(dict(op=OP_RES, expr=_emit(field("resistance", "10"), resolve)))
+    elif node.type == "def":
+        stages.append(dict(op=OP_DEF, exprs=[
+            _emit(field("char_level", "90"), resolve),
+            _emit(field("enemy_level", "90"), resolve),
+            _emit(field("def_reduction", "0"), resolve),
+            _emit(field("ignore_def", "0"), resolve),
+        ]))
+    elif node.type == "crit":
+        stages.append(dict(op=OP_CRIT,
+                           rate=_emit(field("crit_rate", "50"), resolve),
+                           cd=_emit(field("crit_damage", "100"), resolve)))
+    elif node.type == "result":
+        stages.append(dict(op=OP_RESULT))
+    return stages
 
 
 def compile_project(project, role: str) -> dict:
@@ -170,7 +209,6 @@ def compile_project(project, role: str) -> dict:
 
     graph = project if isinstance(project, Graph) else Graph.from_dict(project or {})
     result = _role_result(graph, role)
-    chain = _chain(graph, result.id)
 
     # 先把「不注入圣遗物」的变量表算出来：面板宏的常数部分就在这里
     graph.extra_own = {}
@@ -192,96 +230,71 @@ def compile_project(project, role: str) -> dict:
             return [("const", base_env[scoped])]
         raise NotCompilable("解析不到变量: %s" % name)
 
-    stages: list = []
-    for nid in chain:
-        node = graph.nodes[nid]
-        get = node.getter()
-
-        def field(key, default="0"):
-            raw = get(key)
-            return default if raw is None or (isinstance(raw, str) and not raw.strip()) else raw
-
-        if node.type == "base":
-            expr = _emit(field("stat_base"), resolve)
-            expr += _emit(field("stat_big"), resolve) + [("const", 100.0), ("div",),
-                                                         ("const", 1.0), ("add",), ("mul",)]
-            expr += _emit(field("stat_flat"), resolve) + [("add",)]
-            expr += _emit(field("multiplier", "200"), resolve) + [("const", 100.0), ("div",), ("mul",)]
-            stages.append(dict(op=OP_BASE, expr=expr))
-        elif node.type == "dmg":
-            expr = _emit(field("dmg_net"), resolve) + [("const", 100.0), ("div",),
-                                                       ("const", 1.0), ("add",)]
-            stages.append(dict(op=OP_MUL, expr=expr))
-        elif node.type == "res":
-            stages.append(dict(op=OP_RES, expr=_emit(field("resistance", "10"), resolve)))
-        elif node.type == "def":
-            stages.append(dict(op=OP_DEF, exprs=[
-                _emit(field("char_level", "90"), resolve),
-                _emit(field("enemy_level", "90"), resolve),
-                _emit(field("def_reduction", "0"), resolve),
-                _emit(field("ignore_def", "0"), resolve),
-            ]))
-        elif node.type == "crit":
-            stages.append(dict(op=OP_CRIT,
-                               rate=_emit(field("crit_rate", "50"), resolve),
-                               cd=_emit(field("crit_damage", "100"), resolve)))
-        elif node.type == "add":
-            if graph.input_count(nid) != 1:
-                raise NotCompilable("「加法合并」多输入暂不支持")
-        elif node.type == "result":
-            stages.append(dict(op=OP_RESULT))
-    return dict(role=role, stats_order=list(STATS_ORDER), stages=stages)
+    return dict(role=role, stats_order=list(STATS_ORDER),
+                stages=_compile_node(graph, result.id, resolve))
 
 
 # ---- 解释执行（与 DLL 对拍的基准）----------------------------------------
-def run(program: dict, stats) -> dict:
-    """执行程序，返回 ``{"noncrit", "crit", "rate", "expected"}``。"""
-    values = [float(v) for v in stats]
-    if len(values) != len(STATS_ORDER):
-        raise ValueError("需要 %d 个属性" % len(STATS_ORDER))
-    noncrit = 1.0
-    crit = 1.0
-    critted = False
-    rate = 0.0
-    cd = 0.0
-    for stage in program.get("stages") or []:
+def _run_stages(stages, values) -> tuple:
+    """执行一串阶段，返回 (未暴击, 暴击, 期望) 三分量。"""
+    nc = c = e = 1.0
+    for stage in stages:
         op = stage["op"]
         if op == OP_BASE:
             value = _run_expr(stage["expr"], values)
-            noncrit *= value
-            crit *= value
+            nc *= value
+            c *= value
+            e *= value
         elif op == OP_MUL:
             coeff = _run_expr(stage["expr"], values)
-            noncrit *= coeff
-            crit *= coeff
+            nc *= coeff
+            c *= coeff
+            e *= coeff
         elif op == OP_RES:
             coeff = _damage.resistance_coefficient(
                 _run_expr(stage["expr"], values) / 100.0)
-            noncrit *= coeff
-            crit *= coeff
+            nc *= coeff
+            c *= coeff
+            e *= coeff
         elif op == OP_DEF:
             exprs = stage["exprs"]
             coeff = _damage.defense_coefficient(
                 _run_expr(exprs[0], values), _run_expr(exprs[1], values),
                 def_reduction=_run_expr(exprs[2], values) / 100.0,
-                ignore_def=_run_expr(exprs[3], values) / 100.0,
-            )
-            noncrit *= coeff
-            crit *= coeff
+                ignore_def=_run_expr(exprs[3], values) / 100.0)
+            nc *= coeff
+            c *= coeff
+            e *= coeff
         elif op == OP_CRIT:
-            if critted:
-                raise NotCompilable("链里有多个暴击区")
-            rate = _run_expr(stage["rate"], values) / 100.0
+            rate = min(1.0, max(0.0, _run_expr(stage["rate"], values) / 100.0))
             cd = _run_expr(stage["cd"], values) / 100.0
-            crit *= 1.0 + cd
-            critted = True
+            base = nc
+            nc = base
+            c = base * (1.0 + cd)
+            e = base * (1.0 + rate * cd)
+        elif op == OP_ADD:
+            total = [0.0, 0.0, 0.0]
+            for branch in stage["branches"]:
+                part = _run_stages(branch, values)
+                total[0] += part[0]
+                total[1] += part[1]
+                total[2] += part[2]
+            # 「加法合并」= 各分支分量相加（与 _t_add 一致，不乘上游）
+            nc, c, e = total[0], total[1], total[2]
         elif op == OP_RESULT:
             continue
         else:
             raise NotCompilable("未知阶段: %r" % (op,))
-    rate = min(1.0, max(0.0, rate))
-    expected = (1.0 - rate) * noncrit + rate * crit
-    return dict(noncrit=noncrit, crit=crit, rate=rate, expected=expected)
+    return nc, c, e
+
+
+def run(program: dict, stats) -> dict:
+    """执行程序，返回 ``{"noncrit", "crit", "expected"}``。"""
+    values = [float(v) for v in stats]
+    if len(values) != len(STATS_ORDER):
+        raise ValueError("需要 %d 个属性" % len(STATS_ORDER))
+    nc, c, e = _run_stages(program.get("stages") or [], values)
+    return dict(noncrit=nc, crit=c, expected=e)
 
 
 def run_expected(program: dict, stats) -> float:
