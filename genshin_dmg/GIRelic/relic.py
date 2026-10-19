@@ -24,7 +24,7 @@
 
 from __future__ import annotations
 
-from . import nodes as _nodes
+from genshin_dmg import nodes as _nodes
 
 __all__ = [
     "RESIN_PER_RUN",
@@ -520,7 +520,7 @@ class GraphDamageFn:
     """
 
     def __init__(self, graph, role: str):
-        from .graph import Graph
+        from genshin_dmg.graph import Graph
 
         self.graph = graph if isinstance(graph, Graph) else Graph.from_dict(graph or {})
         self.role = role

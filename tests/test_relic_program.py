@@ -3,7 +3,7 @@
 
 import unittest
 
-from genshin_dmg import relic, relic_program as rp
+from genshin_dmg.GIRelic import relic, relic_program as rp
 
 
 def simple():

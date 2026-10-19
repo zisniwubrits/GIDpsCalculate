@@ -20,9 +20,9 @@ RPN 项：``("const", 值)`` / ``("stat", 下标)`` / ``("add",)`` / ``("sub",)`
 
 from __future__ import annotations
 
-from . import damage as _damage
-from . import nodes as _nodes
-from .expr import _FULLWIDTH, mangle
+from genshin_dmg import damage as _damage
+from genshin_dmg import nodes as _nodes
+from genshin_dmg.expr import _FULLWIDTH, mangle
 from .relic import STATS_ORDER
 
 __all__ = ["NotCompilable", "compile_project", "run", "run_expected"]
@@ -214,7 +214,7 @@ def _compile_node(graph, nid: str, resolve, seen=()) -> list:
 
 def compile_project(project, role: str) -> dict:
     """工程（dict / Graph）→ 函数表示（可直接交给通用 DLL）。"""
-    from .graph import Graph
+    from genshin_dmg.graph import Graph
 
     graph = project if isinstance(project, Graph) else Graph.from_dict(project or {})
     result = _role_result(graph, role)

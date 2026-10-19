@@ -7,7 +7,8 @@
 import math
 import unittest
 
-from genshin_dmg import nodes, relic
+from genshin_dmg import nodes
+from genshin_dmg.GIRelic import relic
 
 
 class TestTables(unittest.TestCase):
