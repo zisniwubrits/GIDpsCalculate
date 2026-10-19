@@ -222,3 +222,54 @@ fn.calc_batch(rows) -> list[float]            # rows = 行优先扁平数组（�
   面板里写过的宏相加、没写过的也登记；因此 `own::` 会包含圣遗物，`in::` 不会；
 - 输入校验：长度必须 9、不得 NaN/inf、批量必须整除，错误一律 `ValueError`；
 - 同一个 `Graph` 实例可反复求值（`evaluate` 会重置运行时状态），所以批量只重建 `extra_own`。
+
+
+---
+
+## 10. 与主体分离（接口化，重要）
+
+圣遗物这一块**必须能脱离主程序单独存在**：主程序（画布 / `/api/evaluate` / 前端）不需要知道圣遗物，
+圣遗物也不需要知道卡片类型、连线、前端。两边只通过下面这层**窄接口**接触。
+
+```
+relic.py            纯算术：树脂 / 主词条 / 副词条 / 单件状态分布 / 万能通式
+relic_program.py    函数表示：compile_project(工程) → 程序；run(程序, 属性) → 伤害
+relic_adapter.py    ★唯一允许 import graph 的地方（工程 → 上述两者）
+```
+
+### 10.1 硬性规则
+
+1. **`relic.py` / `relic_program.py` 不 import `graph.py`**。
+   需要"从工程拿东西"时，只能接收**已经算好/编译好**的数据（属性向量、程序、常量表）。
+   目前的 `GraphDamageFn` 与 `compile_project` 里对 graph 的引用属于临时代码，
+   提取到 `relic_adapter.py` 之后必须删掉。
+2. **主体不得 import relic**：主程序不依赖圣遗物；将来要暴露功能，只加一个薄接口
+   （如 `POST /api/relic/...`，且由 adapter 调用），不让画布/求值逻辑引用 relic。
+3. **接口只认数字**：跨边界传递的只有 `list[float]`（9 个属性）、`dict` 程序结构、
+   `float` 伤害值；不传 Graph 对象、不传卡片、不传前端字段。
+4. **失败用异常表达**：不能编译的工程 → `NotCompilable`；输入非法 → `ValueError`。
+   调用方据此回退解释层，不做静默兜底。
+5. **可删性自检**：删掉 `relic*.py` 后主程序必须仍能完整运行（`pytest` 全绿）。
+
+### 10.2 接口定义（草案）
+
+```python
+# 伤害函数（两种实现可互换：解释层 / 程序执行 / 将来的 DLL）
+class DamageFn(Protocol):
+    stats_order: tuple[str, ...]              # 9 个属性名，顺序 = 下标
+    def calc(self, xs: Sequence[float]) -> float: ...
+    def calc_batch(self, xs: Sequence[float]) -> list[float]: ...   # 行优先，长度 = n×9
+
+# 函数表示（可交给通用 DLL 的数据结构）
+Program = dict          # {"role", "stats_order", "stages": [ {op, ...}, ... ]}
+
+compile_project(project, role="") -> Program     # adapter 提供；project 只被 adapter 解释
+run_expected(program: Program, stats) -> float   # 纯函数，不碰工程
+```
+
+### 10.3 验收
+
+- `relic.py` / `relic_program.py` 的头部不得出现 `from .graph`；
+- 纯算术层用**假数据**测试（不建工程）：`tests/test_relic.py` 已如此；
+- 适配层用**最小工程**测试：`tests/test_relic_program.py`；
+- 新增接口必须在本文档登记函数签名与异常语义。
