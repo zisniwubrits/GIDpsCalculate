@@ -57,6 +57,14 @@ __all__ = [
     "expected_rolls_from_states",
     "best_of_n",
     "best_of_n_states",
+    "POOL_KEYS",
+    "check_effective",
+    "start_line_sets",
+    "effective_lines",
+    "pass_probability",
+    "filtered_piece_states",
+    "filtered_summary",
+    "resin_per_accepted",
     "combo_cost",
     "main_combos",
     "feasible_combos",
@@ -549,6 +557,135 @@ def best_of_n_states(states: dict, n: int, key=total_state_key) -> dict:
             # 同 best_of_n：写成 S^n·(1 − (1−P/S)^n) 避免大 n 时丢精度
             out[vector] = cum ** n * (1.0 - (below / cum) ** n)
     return out
+
+
+# ---- 带筛选的刷取模型：有效词条 + 接受条件 --------------------------------
+# 副词条池：10 项（元素伤害 / 物理 / 治疗加成没有副词条，不进池）
+POOL_KEYS = tuple(SUBSTAT_LABELS)
+
+
+def check_effective(effective) -> tuple:
+    """规范化「明显有效词条」集合。
+
+    用户可以任选 **1~10 项**（攻击型通常 4~5 项，辅助可能只有 1 项如充能）：
+    顺序保留、去重、必须是副词条池里的键，不得为空。
+    """
+    if isinstance(effective, str):
+        raise ValueError("有效词条要传序列（如 ('crit_rate', 'crit_dmg')），不是单个字符串")
+    out: list = []
+    for key in effective:
+        if key not in SUBSTAT_LABELS:
+            raise ValueError("未知词条: %r（可选：%s）" % (key, ", ".join(POOL_KEYS)))
+        if key not in out:
+            out.append(key)
+    if not out:
+        raise ValueError("有效词条不能为空")
+    return tuple(out)
+
+
+def start_line_sets(main: str, q4: float = FOUR_SUB_RATE) -> dict:
+    """判定时刻「4 条词条集合」的分布：``{(frozenset(4 条), 起手类型): 概率}``。
+
+    判定时机（用户口径）：
+
+    * ``four``（4 条起手，概率 ``q4``）：**+0** 就有 4 条，直接判；
+    * ``three``（3 条起手，概率 ``1-q4``）：升到 **+4** 补出第 4 条后再判。
+
+    两种起手的**集合分布相同**（恒等式：先抽 3 条再补 1 条，就是"第 4 次顺序抽样"，
+    与直接抽 4 条完全一致；由 ``test_four_and_three_starts_share_the_same_set_distribution``
+    守住）。所以这里只算一次"顺序抽 4 条"的概率，再按起手概率分发；
+    两种起手的差别只在**后续强化次数**（9 点 vs 8 点），见 :func:`filtered_piece_states`。
+    """
+    from itertools import combinations
+
+    pool = substat_pool(main)
+    keys = tuple(pool)
+    p4 = float(q4)
+    p3 = 1.0 - p4
+    out: dict = {}
+    for combo in combinations(keys, 4):
+        prob = _subset_prob(pool, combo)
+        out[(frozenset(combo), "four")] = prob * p4
+        out[(frozenset(combo), "three")] = prob * p3
+    return out
+
+
+def effective_lines(lines, effective) -> int:
+    """这 4 条里有几条属于「有效词条」。"""
+    return len(frozenset(effective) & frozenset(lines))
+
+
+def pass_probability(main: str, effective, min_effective: int = 1,
+                     q4: float = FOUR_SUB_RATE) -> float:
+    """胚子通过接受条件（有效条数 ``>= min_effective``）的概率。"""
+    eff = check_effective(effective)
+    if min_effective < 0:
+        raise ValueError("min_effective 不能为负")
+    return sum(prob for (lines, _kind), prob in start_line_sets(main, q4).items()
+               if effective_lines(lines, eff) >= min_effective)
+
+
+def filtered_piece_states(main: str, effective, min_effective: int = 1,
+                          q4: float = FOUR_SUB_RATE, tracked=None) -> dict:
+    """**通过筛选的件在满级时**的状态分布（条件分布，和为 1）。
+
+    * 未通过的胚子**直接丢弃**（用户口径：不投强化、不产出）；
+    * 通过的件继续强化到 +20：4 起手再强化 5 次（9 点），3 起手再强化 4 次（8 点）；
+    * 默认 ``tracked = effective``，即状态只保留有效词条的次数；
+      传更宽的 ``tracked``（如 ``STATS_ORDER``）可保留其它属性的次数，便于接伤害打分。
+    """
+    eff = check_effective(effective)
+    tracked = tuple(tracked) if tracked is not None else eff
+    index = {key: i for i, key in enumerate(tracked)}
+    accepted = {key: prob for key, prob in start_line_sets(main, q4).items()
+                if effective_lines(key[0], eff) >= min_effective}
+    total = sum(accepted.values())
+    if total <= 0.0:
+        raise ValueError("没有胚子能通过该条件（至少要 %d 个有效词条）" % min_effective)
+
+    states: dict = {}
+    for (lines, kind), prob in accepted.items():
+        extra = UPGRADE_ROLLS if kind == "four" else UPGRADE_ROLLS - 1
+        order = sorted(lines)
+        share = prob / total
+        for split, p_split in _extra_compositions(extra, 4).items():
+            vector = [0] * len(tracked)
+            for key, count in zip(order, split):
+                slot = index.get(key)
+                if slot is not None:
+                    vector[slot] += 1 + count
+            vector = tuple(vector)
+            states[vector] = states.get(vector, 0.0) + share * p_split
+    return states
+
+
+def filtered_summary(main: str, effective, min_effective: int = 1,
+                     q4: float = FOUR_SUB_RATE, tracked=None) -> dict:
+    """筛选模型的一站式结果：通过率、条件状态分布、有效词条期望、件数期望。"""
+    eff = check_effective(effective)
+    rate = pass_probability(main, eff, min_effective, q4)
+    out = {"pass_rate": rate, "effective": eff, "min_effective": min_effective,
+           "tracked": tuple(tracked) if tracked is not None else eff}
+    if rate <= 0.0:
+        out["states"] = {}
+        out["expected_rolls"] = {}
+        return out
+    states = filtered_piece_states(main, eff, min_effective, q4, tracked=out["tracked"])
+    out["states"] = states
+    out["expected_rolls"] = expected_rolls_from_states(states, out["tracked"])
+    return out
+
+
+def resin_per_accepted(slot: str, main: str, effective, min_effective: int = 1,
+                       off_piece: bool = False, q4: float = FOUR_SUB_RATE) -> float:
+    """一件**通过筛选且满级**的圣遗物的期望树脂 = 单件树脂 / 通过率。
+
+    强化材料不建模（用户口径：垃圾胚子本身就是强化材料，不额外算树脂）。
+    """
+    rate = pass_probability(main, effective, min_effective, q4)
+    if rate <= 0.0:
+        return float("inf")
+    return resin_cost(slot, main, off_piece=off_piece) / rate
 
 
 # ---- 伤害函数抽象层 -------------------------------------------------------

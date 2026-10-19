@@ -384,6 +384,155 @@ class TestBestOfNStates(unittest.TestCase):
                 relic.best_of_n_states(states, n)
 
 
+class TestFilteredModel(unittest.TestCase):
+    """带筛选的刷取模型：有效词条集合 + 初始胚子接受条件。
+
+    口径（用户确认）：
+    * 4 起手在 **+0** 判定（4 条都能看到）；
+    * 3 起手在 **+4** 判定（补出第 4 条之后）；
+    * 未通过的胚子**直接丢弃**，不投强化、不产出；
+    * 预算只算树脂（垃圾胚子充当强化材料）。
+    """
+
+    EFF3 = ("crit_rate", "crit_dmg", "atk_flat")
+
+    def test_start_line_sets_is_a_distribution(self):
+        sets = relic.start_line_sets("atk_pct")
+        self.assertAlmostEqual(sum(sets.values()), 1.0, places=12)
+        for (lines, kind), prob in sets.items():
+            self.assertEqual(len(lines), 4)          # 判定时刻一律 4 条
+            self.assertIn(kind, ("four", "three"))
+            self.assertGreaterEqual(prob, 0.0)
+
+    def test_three_start_set_distribution_matches_explicit_enumeration(self):
+        """3 起手 = 先抽 3 条再补 1 条；用有序枚举独立验证（不是直接抽 4 条）。"""
+        pool = relic.substat_pool("atk_pct")
+        total = float(sum(pool.values()))
+        keys = tuple(pool)
+
+        four: dict = {}
+        for a in keys:
+            for b in keys:
+                if b == a:
+                    continue
+                for c in keys:
+                    if c in (a, b):
+                        continue
+                    p = (pool[a] / total) * (pool[b] / (total - pool[a])) \
+                        * (pool[c] / (total - pool[a] - pool[b]))
+                    rest = total - pool[a] - pool[b] - pool[c]
+                    for d in keys:
+                        if d in (a, b, c):
+                            continue
+                        q = frozenset((a, b, c, d))
+                        four[q] = four.get(q, 0.0) + p * pool[d] / rest
+
+        got: dict = {}
+        for (lines, kind), prob in relic.start_line_sets("atk_pct", q4=0.0).items():
+            if kind == "three":
+                got[lines] = got.get(lines, 0.0) + prob
+        self.assertEqual(set(got), set(four))
+        for lines in four:
+            self.assertAlmostEqual(got[lines], four[lines], places=14, msg=sorted(lines))
+
+    def test_four_and_three_starts_share_the_same_set_distribution(self):
+        """恒等式：先抽 3 条再补 1 条 == 直接顺序抽 4 条（第 4 次抽样同一件事）。
+
+        所以两种起手**判定时刻的集合分布相同**，差别只在后续强化次数（9 点 vs 8 点）。
+        这里守住这条恒等式，防止有人"优化"成错误的近似。
+        """
+        four = relic.start_line_sets("atk_pct", q4=1.0)
+        three = relic.start_line_sets("atk_pct", q4=0.0)
+        four_sets = {lines: prob for (lines, kind), prob in four.items() if kind == "four"}
+        three_sets = {lines: prob for (lines, kind), prob in three.items() if kind == "three"}
+        self.assertEqual(set(four_sets), set(three_sets))
+        for lines, prob in four_sets.items():
+            self.assertAlmostEqual(prob, three_sets[lines], places=14, msg=sorted(lines))
+
+    def test_pass_probability_is_monotone_in_k(self):
+        rates = [relic.pass_probability("atk_pct", self.EFF3, k) for k in range(0, 5)]
+        self.assertAlmostEqual(rates[0], 1.0, places=12)      # 要求 0 个必然通过
+        for before, after in zip(rates, rates[1:]):
+            self.assertGreaterEqual(before, after)
+        self.assertGreater(rates[1], rates[2])
+
+    def test_pass_probability_k4_means_all_four_effective(self):
+        eff = tuple(relic.POOL_KEYS)
+        self.assertAlmostEqual(relic.pass_probability("atk_pct", eff, 4), 1.0, places=12)
+        # 只允许 3 个有效词条 → 永远凑不满 4 个
+        self.assertEqual(relic.pass_probability("atk_pct", eff[:3], 4), 0.0)
+
+    def test_effective_set_sizes_one_to_five(self):
+        """有效词条数量 1~5 都要支持（辅助可能只有 1 个）。"""
+        main = "dmg_pyro"                     # 元素伤害主词条：不在副词条池里，池是满的 10 项
+        for size in (1, 2, 3, 4, 5):
+            eff = tuple(relic.POOL_KEYS[:size])
+            k = min(2, size)
+            rate = relic.pass_probability(main, eff, k)
+            self.assertGreater(rate, 0.0, msg=size)
+            self.assertLessEqual(rate, 1.0, msg=size)
+            states = relic.filtered_piece_states(main, eff, k)
+            self.assertAlmostEqual(sum(states.values()), 1.0, places=12, msg=size)
+
+    def test_filtered_states_are_conditional_and_agree_with_accept_condition(self):
+        states = relic.filtered_piece_states("atk_pct", self.EFF3, 2)
+        self.assertAlmostEqual(sum(states.values()), 1.0, places=12)
+        for vector in states:
+            # 只有有效词条进状态，所以非零分量数 = 这条件的有效词条条数
+            self.assertGreaterEqual(sum(1 for count in vector if count), 2)
+            self.assertLessEqual(sum(vector), 9)
+
+    def test_no_filter_equals_plain_piece_states(self):
+        """条件放宽到"至少 1 个有效"且有效集合覆盖全池时，必须等于不筛选的分布。"""
+        eff = tuple(relic.POOL_KEYS)
+        filtered = relic.filtered_piece_states("atk_pct", eff, 1, tracked=eff)
+        plain = relic.piece_states("atk_pct", tracked=eff)
+        self.assertEqual(set(filtered), set(plain))
+        for vector in plain:
+            self.assertAlmostEqual(filtered[vector], plain[vector], places=14, msg=vector)
+
+    def test_pass_rate_mixes_start_types(self):
+        """q4 越大（4 起手越多），通过率随 4 起手/3 起手的差异单调变化。"""
+        eff = self.EFF3
+        domain = relic.pass_probability("atk_pct", eff, 2, q4=0.20)
+        boss = relic.pass_probability("atk_pct", eff, 2, q4=0.34)
+        four_only = relic.pass_probability("atk_pct", eff, 2, q4=1.0)
+        three_only = relic.pass_probability("atk_pct", eff, 2, q4=0.0)
+        self.assertAlmostEqual(domain, 0.2 * four_only + 0.8 * three_only, places=12)
+        self.assertAlmostEqual(boss, 0.34 * four_only + 0.66 * three_only, places=12)
+
+    def test_resin_per_accepted_is_base_over_pass_rate(self):
+        base = relic.resin_cost("sands", "atk_pct")
+        rate = relic.pass_probability("atk_pct", self.EFF3, 2)
+        self.assertAlmostEqual(
+            relic.resin_per_accepted("sands", "atk_pct", self.EFF3, 2),
+            base / rate, places=9)
+        # 无条件（全池、k=1）时必须等于不筛选的树脂
+        eff = tuple(relic.POOL_KEYS)
+        self.assertAlmostEqual(relic.resin_per_accepted("sands", "atk_pct", eff, 1),
+                               base, places=9)
+        # 不可能达成的条件 → inf
+        self.assertEqual(relic.resin_per_accepted("sands", "atk_pct", eff[:3], 4),
+                         float("inf"))
+
+    def test_summary_reports_pass_rate_and_expected_rolls(self):
+        summary = relic.filtered_summary("atk_pct", self.EFF3, 2)
+        self.assertAlmostEqual(summary["pass_rate"],
+                               relic.pass_probability("atk_pct", self.EFF3, 2), places=12)
+        rolls = summary["expected_rolls"]
+        self.assertEqual(set(rolls), set(self.EFF3))
+        self.assertGreaterEqual(rolls["atk_flat"], 0.0)
+
+    def test_rejects_bad_effective_sets(self):
+        for bad in ([], ("not_a_stat",), "crit_rate"):
+            with self.assertRaises(ValueError):
+                relic.check_effective(bad)
+        with self.assertRaises(ValueError):
+            relic.pass_probability("atk_pct", self.EFF3, -1)
+        with self.assertRaises(ValueError):
+            relic.filtered_piece_states("atk_pct", self.EFF3, 4)
+
+
 class TestDamageFn(unittest.TestCase):
     """伤害函数抽象层：9 个属性 → 期望伤害（解释层实现）。"""
 
