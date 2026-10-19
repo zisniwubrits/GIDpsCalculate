@@ -17,7 +17,9 @@
 ## 0.1 定位（重要）
 
 - **纯后端、纯 Python 层**：只写到 `genshin_dmg/relic.py` 里的函数，**不出 HTTP 接口、不改 `/api/schema`、不动前端**。
-- 只依赖 `genshin_dmg/nodes.py` 的参考表（`RELIC_ROWS`）与 `genshin_dmg/damage.py` 的公式，不复制数值。
+- **包里自带副本，不 import 主程序**（用户口径，2025 变更）：参考表 → `relic_tables.py`，
+  通用公式/工具（`mangle` / 全角表 / 抗性系数 / 防御系数）→ `relic_math.py`。
+  副本与主体的一致性由 `tests/test_relic_independence.py` 对拍守住；整目录搬走时连同该测试一起删。
 - 现阶段**不碰 `graph.py`**。将来若要接伤害链（`Graph.extra_own` 之类），必须单独提交，并带上全部既有后端测试的回归。
 
 ---
@@ -59,7 +61,7 @@
 
 ### 数值
 
-- **词条值一律取平均值**（用户当前口径简化）：初始与强化都按 `nodes.RELIC_ROWS` 第 4 列，
+- **词条值一律取平均值**（用户当前口径简化）：初始与强化都按 `relic_tables.RELIC_ROWS` 第 4 列，
   于是"一件圣遗物 = 每个属性的**词条次数**整数向量"。
 - 满级主词条值见 `MAIN_STAT_VALUE`（五星 +20）。
 - 4 件套的**效果数值不建模**（用户在圣遗物域里自己固定）。
@@ -71,7 +73,8 @@
 - **键一律 ASCII**：槽位 `flower / plume / sands / goblet / circlet`；
   副词条键与面板宏同名（`crit_rate / crit_dmg / atk_pct / atk_flat / hp_pct / em / er / …`）。
   中文只放显示标签（`SLOT_LABELS` / `SUBSTAT_LABELS`），**不得当字典键**。
-- **数值单一来源**：平均值从 `nodes.RELIC_ROWS` 取（`_relic_average`），不要在 relic.py 里抄一份数字。
+- **数值单一来源 = 包内 `relic_tables.RELIC_ROWS`**：平均值一律经 `_relic_average` 从那张表取，
+  不要在任何地方再散抄数字。主程序 `nodes.RELIC_ROWS` 与它的差异由对拍测试报出来（改一边不跟另一边 = 红）。
 - **不用 `random`**：所有概率/期望都必须来自解析公式或**精确枚举**；需要抽样时必须单独开函数并显式传入种子。
 - **"最好"必须按标量排序**：状态向量之间是偏序，互不支配时没有"最好"。默认标量 = 追踪属性的词条总数
   （`state_scalar`），将来可换成真实伤害（接上伤害链之后）。
@@ -232,10 +235,15 @@ fn.calc_batch(rows) -> list[float]            # rows = 行优先扁平数组（�
 圣遗物也不需要知道卡片类型、连线、前端。两边只通过下面这层**窄接口**接触。
 
 ```
+relic_tables.py     参考表副本（RELIC_ROWS），零 import
+relic_math.py       通用工具副本（mangle / 全角表 / 抗性系数 / 防御系数），零外依赖
 relic.py            纯算术：树脂 / 主词条 / 副词条 / 单件状态分布 / 万能通式
 relic_program.py    函数表示：compile_project(工程) → 程序；run(程序, 属性) → 伤害
 relic_adapter.py    ★唯一允许 import graph 的地方（工程 → 上述两者）
 ```
+
+副本与主体的一致性由 `tests/test_relic_independence.py` 对拍（值相等 + 静态 import 检查）；
+该测试属于"主程序还在"时才成立的护栏，整目录搬走时删掉。
 
 ### 10.1 硬性规则
 

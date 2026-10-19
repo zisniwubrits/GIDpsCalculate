@@ -20,9 +20,7 @@ RPN 项：``("const", 值)`` / ``("stat", 下标)`` / ``("add",)`` / ``("sub",)`
 
 from __future__ import annotations
 
-from genshin_dmg import damage as _damage
-from genshin_dmg import nodes as _nodes
-from genshin_dmg.expr import _FULLWIDTH, mangle
+from . import relic_math as _math
 from .relic import STATS_ORDER
 
 __all__ = ["NotCompilable", "compile_project", "run", "run_expected"]
@@ -53,13 +51,13 @@ def _emit(text, resolve) -> list:
     import ast
 
     t = (text or "").strip()
-    for k, v in _FULLWIDTH.items():
+    for k, v in _math.FULLWIDTH.items():
         t = t.replace(k, v)
     t = "".join(t.split())
     if not t:
         raise NotCompilable("空表达式")
     try:
-        tree = ast.parse(mangle(t), mode="eval")
+        tree = ast.parse(_math.mangle(t), mode="eval")
     except SyntaxError:
         raise NotCompilable("语法错误: %r" % text)
 
@@ -224,17 +222,17 @@ def compile_project(project, role: str) -> dict:
     out = graph.evaluate()
     base_env = {}
     for row in out.get("variables") or []:
-        base_env[mangle(row["name"])] = float(row["value"])
+        base_env[_math.mangle(row["name"])] = float(row["value"])
 
     def resolve(name: str) -> list:
-        key = mangle(name)
+        key = _math.mangle(name)
         if name in STATS_ORDER:
-            panel = float(base_env.get(mangle("%s::%s" % (role, name)),
+            panel = float(base_env.get(_math.mangle("%s::%s" % (role, name)),
                                        base_env.get(key, 0.0)))
             return [("const", panel), ("stat", STATS_ORDER.index(name)), ("add",)]
         if key in base_env:
             return [("const", base_env[key])]
-        scoped = mangle("%s::%s" % (role, name))
+        scoped = _math.mangle("%s::%s" % (role, name))
         if scoped in base_env:
             return [("const", base_env[scoped])]
         raise NotCompilable("解析不到变量: %s" % name)
@@ -260,14 +258,14 @@ def _run_stages(stages, values) -> tuple:
             c *= coeff
             e *= coeff
         elif op == OP_RES:
-            coeff = _damage.resistance_coefficient(
+            coeff = _math.resistance_coefficient(
                 _run_expr(stage["expr"], values) / 100.0)
             nc *= coeff
             c *= coeff
             e *= coeff
         elif op == OP_DEF:
             exprs = stage["exprs"]
-            coeff = _damage.defense_coefficient(
+            coeff = _math.defense_coefficient(
                 _run_expr(exprs[0], values), _run_expr(exprs[1], values),
                 def_reduction=_run_expr(exprs[2], values) / 100.0,
                 ignore_def=_run_expr(exprs[3], values) / 100.0)

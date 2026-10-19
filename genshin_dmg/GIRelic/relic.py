@@ -13,7 +13,7 @@
   空之杯「每类属性伤害各 5%」，**物理伤害也算一类**（7 元素 + 物理 = 8 类，合计 100%））；
 * 副词条按**权重**抽取（见 :data:`SUBSTAT_WEIGHT`，总权重 1100）；
 * 初始副词条 3 或 4 条：副本 **20%** 是 4 条 → 每件期望词条点 = `8 + 0.2 = 8.2`；
-* 词条数值取 :data:`nodes.RELIC_ROWS` 的**平均值**（不另抄一份数字）；
+* 词条数值取参考表 :data:`relic_tables.RELIC_ROWS` 的**平均值**（副本在包内，不 import 主程序）；
 * 4 件套的**效果数值不建模**（用户在圣遗物域里自己固定）。
 
 由上面的规则推出的两个关键量：
@@ -24,7 +24,7 @@
 
 from __future__ import annotations
 
-from genshin_dmg import nodes as _nodes
+from .relic_tables import RELIC_ROWS
 
 __all__ = [
     "RESIN_PER_RUN",
@@ -86,7 +86,7 @@ SLOT_LABELS = {
 }
 
 
-# ---- 副词条：权重 + 平均值（平均值取自 nodes.RELIC_ROWS）-------------------
+# ---- 副词条：权重 + 平均值（平均值取自包内副本 relic_tables.RELIC_ROWS）-----
 # 键一律用 ASCII（与面板宏同名，方便直接注入）；中文只作"显示 / 查参考表"的标签
 SUBSTAT_LABELS = {
     "crit_rate": "暴击率（%）",
@@ -118,7 +118,7 @@ SUBSTAT_WEIGHT = {
 
 def _relic_average(name: str) -> float:
     """从参考表里取某个属性的"平均值"（第 4 列）。找不到就报错（数据源只有这一份）。"""
-    for row in _nodes.RELIC_ROWS:
+    for row in RELIC_ROWS:
         if row[0] == name:
             return float(row[3])
     raise KeyError("参考表里没有这个词条：%s" % name)
