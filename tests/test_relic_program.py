@@ -3,7 +3,7 @@
 
 import unittest
 
-from genshin_dmg.GIRelic import relic, relic_program as rp
+from genshin_dmg.GIRelic import relic, relic_adapter as adapter, relic_program as rp
 
 
 def simple():
@@ -50,26 +50,26 @@ def full():
 
 class TestProgram(unittest.TestCase):
     def test_compiles_core_chain(self):
-        prog = rp.compile_project(simple(), "T")
+        prog = adapter.compile_project(simple(), "T")
         self.assertEqual([s["op"] for s in prog["stages"]], ["base", "crit", "result"])
         self.assertEqual(prog["stats_order"], list(relic.STATS_ORDER))
 
     def test_matches_interpreter_simple(self):
         g = simple()
-        prog = rp.compile_project(g, "T")
-        fn = relic.GraphDamageFn(g, "T")
+        prog = adapter.compile_project(g, "T")
+        fn = adapter.GraphDamageFn(g, "T")
         for stats in ([0] * 9, [50] + [0] * 8, [0, 311] + [0] * 7, [0] * 8 + [100]):
             self.assertAlmostEqual(rp.run_expected(prog, stats), fn.calc(stats), places=9)
 
     def test_matches_interpreter_full_chain(self):
         g = full()
-        prog = rp.compile_project(g, "T")
-        fn = relic.GraphDamageFn(g, "T")
+        prog = adapter.compile_project(g, "T")
+        fn = adapter.GraphDamageFn(g, "T")
         for stats in ([0] * 9, [30, 200] + [0] * 7, [0] * 7 + [20, 40], [80, 50, 0, 0, 0, 0, 300, 0, 0]):
             self.assertAlmostEqual(rp.run_expected(prog, stats), fn.calc(stats), places=9)
 
     def test_run_returns_branches(self):
-        prog = rp.compile_project(simple(), "T")
+        prog = adapter.compile_project(simple(), "T")
         got = rp.run(prog, [0] * 9)
         self.assertAlmostEqual(got["noncrit"], 2000.0, places=9)
         self.assertAlmostEqual(got["crit"], 4000.0, places=9)
@@ -77,7 +77,7 @@ class TestProgram(unittest.TestCase):
 
     def test_crit_rate_is_clamped(self):
         """暴击率超过 100% 时封顶（与工程链一致）。"""
-        prog = rp.compile_project(simple(), "T")
+        prog = adapter.compile_project(simple(), "T")
         got = rp.run(prog, [0] * 7 + [150, 100])
         self.assertAlmostEqual(got["expected"], got["crit"], places=9)
 
@@ -90,16 +90,16 @@ class TestProgram(unittest.TestCase):
         g.nodes["n9"].role = "T"
         g.connect("n9", "n3")            # 结果卡的上游换成变量表卡
         with self.assertRaises(rp.NotCompilable):
-            rp.compile_project(g, "T")
+            adapter.compile_project(g, "T")
 
     def test_not_compilable_for_unknown_name(self):
         g = simple()
         g.nodes["n1"].fields["stat_base"] = "不存在的名字 * 2"
         with self.assertRaises(rp.NotCompilable):
-            rp.compile_project(g, "T")
+            adapter.compile_project(g, "T")
 
     def test_empty_or_invalid_stats(self):
-        prog = rp.compile_project(simple(), "T")
+        prog = adapter.compile_project(simple(), "T")
         with self.assertRaises(ValueError):
             rp.run(prog, [0] * 8)
 
@@ -130,12 +130,12 @@ class TestAddMerge(unittest.TestCase):
     def test_multi_input_add_compiles_and_matches(self):
         """「加法合并」多输入：各分支分量相加，结果必须与工程一致。"""
         g = with_add()
-        prog = rp.compile_project(g, "T")
+        prog = adapter.compile_project(g, "T")
         first = prog["stages"][0]
         self.assertEqual(first["op"], "add")
         self.assertEqual(len(first["branches"]), 2)
 
-        fn = relic.GraphDamageFn(g, "T")
+        fn = adapter.GraphDamageFn(g, "T")
         for stats in ([0] * 9, [50] + [0] * 8, [0] * 8 + [100], [30, 200] + [0] * 7):
             self.assertAlmostEqual(rp.run_expected(prog, stats), fn.calc(stats), places=9)
 
@@ -144,7 +144,7 @@ class TestAddMerge(unittest.TestCase):
         # 直接清掉两条输入
         g.links = [l for l in g.links if l.dst != "ad"]
         with self.assertRaises(rp.NotCompilable):
-            rp.compile_project(g, "T")
+            adapter.compile_project(g, "T")
 
 
 if __name__ == "__main__":  # pragma: no cover

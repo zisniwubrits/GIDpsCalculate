@@ -23,7 +23,7 @@ from __future__ import annotations
 from . import relic_math as _math
 from .relic import STATS_ORDER
 
-__all__ = ["NotCompilable", "compile_project", "run", "run_expected"]
+__all__ = ["NotCompilable", "_emit", "run", "run_expected"]
 
 OP_BASE = "base"
 OP_MUL = "mul"
@@ -131,114 +131,6 @@ def _run_expr(expr, stats) -> float:
     if len(stack) != 1:
         raise NotCompilable("表达式栈不平衡")
     return stack[0]
-
-
-# ---- 编译工程 ------------------------------------------------------------
-def _role_result(graph, role: str):
-    first = None
-    for node in graph.nodes.values():
-        if node.type != "result":
-            continue
-        if role and getattr(node, "role", "") == role:
-            return node
-        if first is None:
-            first = node
-    if first is None:
-        raise NotCompilable("工程里没有 ★结果 卡")
-    if role:
-        raise NotCompilable("工程里没有属于 %s 的 ★结果 卡" % role)
-    return first
-
-
-def _compile_node(graph, nid: str, resolve, seen=()) -> list:
-    """递归编译某个节点的整条子链，返回阶段列表。
-
-    「加法合并」有多个输入：每个输入各自编译成子程序，运行时分量相加。
-    """
-    if nid in seen:
-        raise NotCompilable("链里有环")
-    node = graph.nodes.get(nid)
-    if node is None:
-        raise NotCompilable("链上缺少节点: %s" % nid)
-    if node.type not in _CORE:
-        raise NotCompilable("暂不支持编译卡片类型: %s" % node.type)
-
-    def field(key, default="0"):
-        raw = node.getter()(key)
-        return default if raw is None or (isinstance(raw, str) and not raw.strip()) else raw
-
-    if node.type == "add":
-        count = graph.input_count(nid)
-        branches = []
-        for port in range(count):
-            src = graph.link_src(nid, port)
-            if src:
-                branches.append(_compile_node(graph, src, resolve, seen + (nid,)))
-        if not branches:
-            raise NotCompilable("「加法合并」没有输入")
-        return [dict(op="add", branches=branches)]
-
-    upstream = graph.link_src(nid, 0)
-    stages = _compile_node(graph, upstream, resolve, seen + (nid,)) if upstream else []
-
-    if node.type == "base":
-        expr = _emit(field("stat_base"), resolve)
-        expr += _emit(field("stat_big"), resolve) + [("const", 100.0), ("div",),
-                                                    ("const", 1.0), ("add",), ("mul",)]
-        expr += _emit(field("stat_flat"), resolve) + [("add",)]
-        expr += _emit(field("multiplier", "200"), resolve) + [("const", 100.0), ("div",), ("mul",)]
-        stages.append(dict(op=OP_BASE, expr=expr))
-    elif node.type == "dmg":
-        expr = _emit(field("dmg_net"), resolve) + [("const", 100.0), ("div",),
-                                                   ("const", 1.0), ("add",)]
-        stages.append(dict(op=OP_MUL, expr=expr))
-    elif node.type == "res":
-        stages.append(dict(op=OP_RES, expr=_emit(field("resistance", "10"), resolve)))
-    elif node.type == "def":
-        stages.append(dict(op=OP_DEF, exprs=[
-            _emit(field("char_level", "90"), resolve),
-            _emit(field("enemy_level", "90"), resolve),
-            _emit(field("def_reduction", "0"), resolve),
-            _emit(field("ignore_def", "0"), resolve),
-        ]))
-    elif node.type == "crit":
-        stages.append(dict(op=OP_CRIT,
-                           rate=_emit(field("crit_rate", "50"), resolve),
-                           cd=_emit(field("crit_damage", "100"), resolve)))
-    elif node.type == "result":
-        stages.append(dict(op=OP_RESULT))
-    return stages
-
-
-def compile_project(project, role: str) -> dict:
-    """工程（dict / Graph）→ 函数表示（可直接交给通用 DLL）。"""
-    from genshin_dmg.graph import Graph
-
-    graph = project if isinstance(project, Graph) else Graph.from_dict(project or {})
-    result = _role_result(graph, role)
-
-    # 先把「不注入圣遗物」的变量表算出来：面板宏的常数部分就在这里
-    graph.extra_own = {}
-    out = graph.evaluate()
-    base_env = {}
-    for row in out.get("variables") or []:
-        base_env[_math.mangle(row["name"])] = float(row["value"])
-
-    def resolve(name: str) -> list:
-        key = _math.mangle(name)
-        if name in STATS_ORDER:
-            panel = float(base_env.get(_math.mangle("%s::%s" % (role, name)),
-                                       base_env.get(key, 0.0)))
-            return [("const", panel), ("stat", STATS_ORDER.index(name)), ("add",)]
-        if key in base_env:
-            return [("const", base_env[key])]
-        scoped = _math.mangle("%s::%s" % (role, name))
-        if scoped in base_env:
-            return [("const", base_env[scoped])]
-        raise NotCompilable("解析不到变量: %s" % name)
-
-    return dict(role=role, stats_order=list(STATS_ORDER),
-                stages=_compile_node(graph, result.id, resolve))
 
 
 # ---- 解释执行（与 DLL 对拍的基准）----------------------------------------

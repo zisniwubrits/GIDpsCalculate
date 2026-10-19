@@ -26,7 +26,8 @@ from genshin_dmg.GIRelic import relic_math, relic_tables
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 PKG = ROOT / "genshin_dmg" / "GIRelic"
 # 允许（暂时）出现的跨包依赖：adapter 层落地前 relic.py 里的惰性 Graph import
-_PENDING_GRAPH = {"relic.py", "relic_program.py"}
+_PENDING_GRAPH = set()          # adapter 落地后：除 relic_adapter.py 外一律不许出现 graph
+_ADAPTER = "relic_adapter.py"
 
 
 # ---------------------------------------------------------------- 参考表
@@ -120,11 +121,20 @@ def test_no_main_package_imports(path):
 
 
 @pytest.mark.parametrize("path", sorted(PKG.glob("*.py")), ids=lambda p: p.name)
-def test_graph_import_is_lazy_and_temporary(path):
-    """`graph.py` 只能在函数内惰性 import，且只允许那一个待迁移的文件。"""
-    if path.name not in _PENDING_GRAPH:
+def test_graph_import_only_in_adapter(path):
+    """`graph.py` 只允许适配层 import；且适配层也不许在模块顶层 import（惰性、用不到就不载入）。"""
+    if path.name == _ADAPTER:
+        assert not [m for m in _module_level_imports(path) if m == "genshin_dmg.graph"]
+    else:
         assert not [m for m in _all_imports(path) if m == "genshin_dmg.graph"], path.name
-    assert not [m for m in _module_level_imports(path) if m == "genshin_dmg.graph"], path.name
+
+
+@pytest.mark.parametrize("path", sorted(PKG.glob("*.py")), ids=lambda p: p.name)
+def test_pure_layers_do_not_import_adapter(path):
+    """纯算术层不许反过来 import 适配层（依赖方向单向：adapter → 其余）。"""
+    if path.name == _ADAPTER:
+        return
+    assert "relic_adapter" not in path.read_text(encoding="utf-8"), path.name
 
 
 def test_importing_relic_does_not_pull_main_modules():

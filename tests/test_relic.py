@@ -7,8 +7,7 @@
 import math
 import unittest
 
-from genshin_dmg import nodes
-from genshin_dmg.GIRelic import relic
+from genshin_dmg.GIRelic import relic, relic_adapter, relic_tables
 
 
 class TestTables(unittest.TestCase):
@@ -27,7 +26,7 @@ class TestTables(unittest.TestCase):
 
     def test_substat_average_comes_from_reference_table(self):
         """平均值直接取参考表第 4 列（不许另抄一份数字）。"""
-        rows = {row[0]: float(row[3]) for row in nodes.RELIC_ROWS}
+        rows = {row[0]: float(row[3]) for row in relic_tables.RELIC_ROWS}
         self.assertAlmostEqual(relic.SUBSTAT_AVG["crit_rate"], rows["暴击率（%）"])
         self.assertAlmostEqual(relic.SUBSTAT_AVG["crit_dmg"], rows["暴击伤害（%）"])
         self.assertAlmostEqual(relic.SUBSTAT_AVG["em"], rows["元素精通"])
@@ -331,19 +330,19 @@ class TestDamageFn(unittest.TestCase):
     def test_baseline_matches_plain_evaluation(self):
         """全 0 注入时，伤害函数 = 不做任何注入的工程求值。"""
         g = self.make()
-        fn = relic.damage_fn_from_project(g, "测试")
+        fn = relic_adapter.damage_fn_from_project(g, "测试")
         base = fn.calc([0] * 9)
         self.assertAlmostEqual(base, 3000.0, places=6)   # 1000×200%×(1+0.5×1.0)
 
     def test_injects_attack_percent(self):
         """攻击% 注入后基础值变大，伤害必须变高。"""
-        fn = relic.damage_fn_from_project(self.make(), "测试")
+        fn = relic_adapter.damage_fn_from_project(self.make(), "测试")
         base = fn.calc([0] * 9)
         got = fn.calc([50, 0, 0, 0, 0, 0, 0, 0, 0])      # atk_pct = 50
         self.assertAlmostEqual(got, base * 1.5, places=6)
 
     def test_injects_flat_attack_and_crit_damage(self):
-        fn = relic.damage_fn_from_project(self.make(), "测试")
+        fn = relic_adapter.damage_fn_from_project(self.make(), "测试")
         base = fn.calc([0] * 9)
         self.assertAlmostEqual(fn.calc([0, 311, 0, 0, 0, 0, 0, 0, 0]),
                                base * (1000 + 311) / 1000, places=6)
@@ -353,13 +352,13 @@ class TestDamageFn(unittest.TestCase):
     def test_injection_counts_as_own(self):
         """圣遗物属性算"自身"（own::），不是别人给的拐（in::）。"""
         g = self.make()
-        fn = relic.damage_fn_from_project(g, "测试")
+        fn = relic_adapter.damage_fn_from_project(g, "测试")
         fn.calc([50, 0, 0, 0, 0, 0, 0, 0, 0])
         self.assertAlmostEqual(g.variables["测试__own__atk_pct"], 50.0, places=9)
         self.assertAlmostEqual(g.variables.get("测试__in__atk_pct", 0.0), 0.0, places=9)
 
     def test_batch_equals_single_calls(self):
-        fn = relic.damage_fn_from_project(self.make(), "测试")
+        fn = relic_adapter.damage_fn_from_project(self.make(), "测试")
         rows = [[0] * 9, [50] + [0] * 8, [0, 311] + [0] * 7, [0] * 8 + [50]]
         flat = [value for row in rows for value in row]
         got = fn.calc_batch(flat)
@@ -369,7 +368,7 @@ class TestDamageFn(unittest.TestCase):
             self.assertAlmostEqual(got_value, want_value, places=9)
 
     def test_rejects_bad_input(self):
-        fn = relic.damage_fn_from_project(self.make(), "测试")
+        fn = relic_adapter.damage_fn_from_project(self.make(), "测试")
         with self.assertRaises(ValueError):
             fn.calc([0] * 8)                      # 少一个
         with self.assertRaises(ValueError):
@@ -381,7 +380,7 @@ class TestDamageFn(unittest.TestCase):
 
     def test_unknown_role(self):
         with self.assertRaises(ValueError):
-            relic.damage_fn_from_project(self.make(), "不存在的角色")
+            relic_adapter.damage_fn_from_project(self.make(), "不存在的角色")
 
 
 if __name__ == "__main__":                                  # pragma: no cover

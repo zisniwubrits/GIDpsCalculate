@@ -211,10 +211,10 @@
 
 ### 9.1 已实现的接口（解释层）
 
-`genshin_dmg/relic.py`：
+`genshin_dmg/GIRelic/relic_adapter.py`（需要工程的那一层）：
 
 ```python
-STATS_ORDER                      # 9 个属性名，顺序即 ABI 下标
+STATS_ORDER                      # 9 个属性名，顺序即 ABI 下标（定义在 relic.py）
 
 fn = damage_fn_from_project(project, role)   # project = 工程 dict 或文件路径
 fn.calc([...9 个 float...]) -> float          # 单次
@@ -238,19 +238,23 @@ fn.calc_batch(rows) -> list[float]            # rows = 行优先扁平数组（�
 relic_tables.py     参考表副本（RELIC_ROWS），零 import
 relic_math.py       通用工具副本（mangle / 全角表 / 抗性系数 / 防御系数），零外依赖
 relic.py            纯算术：树脂 / 主词条 / 副词条 / 单件状态分布 / 万能通式
-relic_program.py    函数表示：compile_project(工程) → 程序；run(程序, 属性) → 伤害
-relic_adapter.py    ★唯一允许 import graph 的地方（工程 → 上述两者）
+relic_program.py    函数表示：run(程序, 属性) → 伤害（纯执行，不碰工程）
+relic_adapter.py    ★唯一允许 import graph 的地方：GraphDamageFn / damage_fn_from_project /
+                    compile_project（工程 → 上面两者）
 ```
 
 副本与主体的一致性由 `tests/test_relic_independence.py` 对拍（值相等 + 静态 import 检查）；
 该测试属于"主程序还在"时才成立的护栏，整目录搬走时删掉。
 
+**状态：adapter 已落地**（`relic_adapter.py`）。`relic.py` / `relic_program.py` 里已无任何
+`graph` 引用；`graph.py` 只在适配层的函数体内惰性 import，`import relic` 不会把图求值拖进来。
+
 ### 10.1 硬性规则
 
 1. **`relic.py` / `relic_program.py` 不 import `graph.py`**。
    需要"从工程拿东西"时，只能接收**已经算好/编译好**的数据（属性向量、程序、常量表）。
-   目前的 `GraphDamageFn` 与 `compile_project` 里对 graph 的引用属于临时代码，
-   提取到 `relic_adapter.py` 之后必须删掉。
+   工程相关的两个入口（`GraphDamageFn` / `compile_project`）已经在 `relic_adapter.py`，
+   纯算术层不再持有任何 Graph 引用。
 2. **主体不得 import relic**：主程序不依赖圣遗物；将来要暴露功能，只加一个薄接口
    （如 `POST /api/relic/...`，且由 adapter 调用），不让画布/求值逻辑引用 relic。
 3. **接口只认数字**：跨边界传递的只有 `list[float]`（9 个属性）、`dict` 程序结构、
@@ -278,6 +282,8 @@ run_expected(program: Program, stats) -> float   # 纯函数，不碰工程
 ### 10.3 验收
 
 - `relic.py` / `relic_program.py` 的头部不得出现 `from .graph`；
+  由 `tests/test_relic_independence.py` 静态守住（`graph` 只许出现在 `relic_adapter.py`，
+  且必须是函数内惰性 import；反向依赖 adapter → 纯层也不许倒过来）；
 - 纯算术层用**假数据**测试（不建工程）：`tests/test_relic.py` 已如此；
 - 适配层用**最小工程**测试：`tests/test_relic_program.py`；
 - 新增接口必须在本文档登记函数签名与异常语义。

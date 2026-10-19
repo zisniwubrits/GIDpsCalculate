@@ -51,8 +51,6 @@ __all__ = [
     "expected_substat_rolls",
     "expected_substats",
     "STATS_ORDER",
-    "GraphDamageFn",
-    "damage_fn_from_project",
     "PIECE_MAX_ROLLS",
     "DEFAULT_TRACKED",
     "piece_states",
@@ -506,83 +504,3 @@ STATS_ORDER = (
     "crit_rate",    # 7 百分数
     "crit_dmg",     # 8 百分数
 )
-
-
-class GraphDamageFn:
-    """**解释层**实现：``stats(9 个 float) → 期望伤害``，内部跑现有工程链。
-
-    这是 DLL 的基准实现（慢但绝对可信）：属性以 ``Graph.extra_own`` 注入该角色
-    （算作"自身"，进 ``own::``），再取该角色 ★结果卡的 ``expected``。
-
-    * ``calc(xs)``：单次，返回 ``float``；
-    * ``calc_batch(rows)``：批量，``rows`` 是 ``len(xs)//9`` 组扁平输入（行优先），返回 ``list[float]``；
-    * 长度不对 / 非有限数 → ``ValueError``（不静默返回 0）。
-    """
-
-    def __init__(self, graph, role: str):
-        from genshin_dmg.graph import Graph
-
-        self.graph = graph if isinstance(graph, Graph) else Graph.from_dict(graph or {})
-        self.role = role
-        self.stats_order = STATS_ORDER
-        node_id = ""
-        for node in self.graph.nodes.values():
-            if node.type != "result":
-                continue
-            if role and getattr(node, "role", "") == role:
-                node_id = node.id
-                break
-            if not role and node_id == "":
-                node_id = node.id          # role="" → 用第一张 ★结果 卡
-        if not node_id:
-            raise ValueError("工程里没有 %s 的 ★结果 卡"
-                             % ("属于 %s" % role if role else "任何"))
-        self.node_id = node_id
-
-    # -- 内部 --------------------------------------------------------------
-    @staticmethod
-    def _check(xs) -> list:
-        values = [float(value) for value in xs]
-        if len(values) != len(STATS_ORDER):
-            raise ValueError("输入必须是 %d 个属性（收到 %d 个）"
-                             % (len(STATS_ORDER), len(values)))
-        for value in values:
-            if value != value or value in (float("inf"), float("-inf")):
-                raise ValueError("属性不能是 NaN / inf：%r" % (values,))
-        return values
-
-    def _calc_values(self, values: list) -> float:
-        self.graph.extra_own = {self.role: dict(zip(STATS_ORDER, values))}
-        out = self.graph.evaluate()
-        node = (out.get("nodes") or {}).get(self.node_id) or {}
-        result = (node.get("values") or {}).get("expected")
-        if result is None:
-            raise ValueError("★结果卡没有算出 expected")
-        return float(result)
-
-    # -- 接口 --------------------------------------------------------------
-    def calc(self, xs) -> float:
-        """单次：9 个属性 → 期望伤害。"""
-        return self._calc_values(self._check(xs))
-
-    def calc_batch(self, rows) -> list:
-        """批量：``rows`` 是行优先的扁平序列（长度 = 组合数 × 9）→ 每组的伤害。"""
-        flat = [float(value) for value in rows]
-        width = len(STATS_ORDER)
-        if len(flat) % width:
-            raise ValueError("批量输入长度必须是 %d 的整数倍（收到 %d）"
-                             % (width, len(flat)))
-        out = []
-        for start in range(0, len(flat), width):
-            out.append(self._calc_values(self._check(flat[start:start + width])))
-        return out
-
-
-def damage_fn_from_project(project, role: str) -> GraphDamageFn:
-    """从工程（dict 或文件路径）造一个伤害函数（解释层）。"""
-    if isinstance(project, str):
-        with open(project, encoding="utf-8") as f:
-            data = json.load(f)
-    else:
-        data = project
-    return GraphDamageFn(data, role)
