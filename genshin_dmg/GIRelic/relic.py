@@ -18,8 +18,14 @@
 
 由上面的规则推出的两个关键量：
 
-* 一件"目标套 + 指定主词条"的期望树脂 ``20 / (1.065 × 0.5 × p)``；
-* 一件"散件槽 + 指定主词条"的期望树脂 ``20 / (1.065 × p)``。
+* 一件"目标套 + 指定部位 + 指定主词条"的期望树脂 ``20 / (1.065 × 0.5 × 1/5 × p)``；
+* 一件"散件槽 + 指定部位 + 指定主词条"的期望树脂 ``20 / (1.065 × 1/5 × p)``。
+
+**三级近似**（用户指定，见 AGENTS.md §1.0）：
+
+1. 5 个部位**严格等概率**（1/5）→ `SLOT_SHARE`；
+2. 副本两个套装**严格等概率**（50/50）→ `SET_SHARE`；
+3. 初始词条数**严格按 3:4 = 4:1**（即 80% 三词条、20% 四词条）→ `FOUR_SUB_RATE = 0.2`。
 """
 
 from __future__ import annotations
@@ -73,8 +79,8 @@ __all__ = [
 # ---- 刷取侧常量 ----------------------------------------------------------
 RESIN_PER_RUN = 20              # 一次副本 20 树脂
 EXTRA_DROP_RATE = 0.065         # 额外掉一件的概率 → 1.065 件/次
-SET_SHARE = 0.5                 # 副本两套各 50%
-FOUR_SUB_RATE = 0.2             # 副本掉落初始 4 词条的概率（BOSS/周本/三合一是 34%）
+SET_SHARE = 0.5                 # 副本两套各 50%（二级近似：严格等概率）
+FOUR_SUB_RATE = 0.2             # 初始 4 词条概率；三级近似：初始三:四 = 4:1（BOSS/周本/三合一是 34%）
 UPGRADE_ROLLS = 5               # +4/+8/+12/+16/+20
 # 槽位用 ASCII 标识（代码里不要用中文当键）；中文只在界面上显示
 SLOT_FLOWER = "flower"      # 生之花
@@ -83,6 +89,8 @@ SLOT_SANDS = "sands"        # 时之沙
 SLOT_GOBLET = "goblet"      # 空之杯
 SLOT_CIRCLET = "circlet"    # 理之冠
 SLOTS = (SLOT_FLOWER, SLOT_PLUME, SLOT_SANDS, SLOT_GOBLET, SLOT_CIRCLET)
+# 一级近似：5 个部位严格等概率 → 指定部位要乘 1/5
+SLOT_SHARE = 1.0 / len(SLOTS)
 # 显示用中文名（只在需要给人看的时候用）
 SLOT_LABELS = {
     SLOT_FLOWER: "生之花",
@@ -224,11 +232,15 @@ def effective_points(q4: float = FOUR_SUB_RATE) -> float:
 def resin_cost(slot: str, main: str, off_piece: bool = False,
                extra_rate: float = EXTRA_DROP_RATE,
                set_share: float = SET_SHARE,
+               slot_share: float = SLOT_SHARE,
                resin_per_run: float = RESIN_PER_RUN) -> float:
     """某个槽位想要某个主词条的**期望树脂**（``inf`` 表示该槽位出不了这个词条）。
 
-    * 目标套槽：``resin_per_run / (extra_rate 修正后的目标套期望 × p)``
-    * 散件槽：``resin_per_run / (件数期望 × p)``（散件不限套装）
+    * 目标套槽：``resin_per_run / (件数期望 × 套装份额 × 部位份额 × p)``
+    * 散件槽：``resin_per_run / (件数期望 × 部位份额 × p)``（散件不限套装）
+
+    一级近似：**5 个部位严格等概率**（`SLOT_SHARE = 1/5`），所以要"指定部位"时
+    必须乘这 1/5，否则成本会偏小 5 倍（曾经踩过）。
     """
     prob = (MAIN_STAT_PROB.get(slot) or {}).get(main)
     if not prob:
@@ -236,6 +248,7 @@ def resin_cost(slot: str, main: str, off_piece: bool = False,
     per_run = 1.0 + float(extra_rate)
     if not off_piece:
         per_run *= float(set_share)
+    per_run *= float(slot_share)
     return float(resin_per_run) / (per_run * float(prob))
 
 

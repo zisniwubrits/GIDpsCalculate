@@ -81,26 +81,34 @@ class TestPieces(unittest.TestCase):
 
 class TestResinCost(unittest.TestCase):
     def test_cost_for_target_set_slot(self):
-        """目标套槽：20 / (1.065 × 0.5 × p)。"""
+        """目标套槽：20 / (1.065 × 0.5 × 1/5 × p)（部位严格等概率 → 乘 1/5）。"""
         cost = relic.resin_cost(relic.SLOT_SANDS, "atk_pct")
         p = relic.MAIN_STAT_PROB[relic.SLOT_SANDS]["atk_pct"]
-        self.assertAlmostEqual(cost, 20 / (1.065 * 0.5 * p), places=6)
-        # 用户表里的例子：沙·攻击% ≈ 141 树脂
-        self.assertAlmostEqual(cost, 140.9, places=1)
+        self.assertAlmostEqual(cost, 20 / (1.065 * 0.5 * 0.2 * p), places=6)
+        # 沙·攻击% ≈ 704 树脂
+        self.assertAlmostEqual(cost, 704.4, places=1)
+
+    def test_slot_share_is_one_fifth(self):
+        """一级近似：5 个部位严格等概率。不加这个因子成本会偏小 5 倍。"""
+        self.assertAlmostEqual(relic.SLOT_SHARE, 0.2, places=12)
+        base = relic.resin_cost("sands", "atk_pct", slot_share=1.0)
+        with_share = relic.resin_cost("sands", "atk_pct")
+        self.assertAlmostEqual(with_share, base * 5.0, places=6)
 
     def test_cost_for_off_piece_slot(self):
-        """散件槽不限套装：20 / (1.065 × p)，正好是目标套槽的一半。"""
+        """散件槽不限套装：正好是目标套槽的一半。"""
         target = relic.resin_cost(relic.SLOT_SANDS, "atk_pct")
         off = relic.resin_cost(relic.SLOT_SANDS, "atk_pct", off_piece=True)
         self.assertAlmostEqual(off, target / 2, places=6)
-        # 沙·攻击% 的散件槽 ≈ 70.4 树脂（比目标套槽的 140.9 便宜一半）
-        self.assertAlmostEqual(off, 20 / (1.065 * 0.2666), places=6)
+        # 沙·攻击% 的散件槽 ≈ 352 树脂（比目标套槽的 704 便宜一半）
+        p = relic.MAIN_STAT_PROB[relic.SLOT_SANDS]["atk_pct"]
+        self.assertAlmostEqual(off, 20 / (1.065 * 0.2 * p), places=6)
 
     def test_cost_of_rare_elemental_cup(self):
         """元素伤害杯每类只有 5% → 明显更贵。"""
         cost = relic.resin_cost(relic.SLOT_GOBLET, "dmg_pyro")
-        self.assertAlmostEqual(cost, 20 / (1.065 * 0.5 * 0.05), places=6)
-        self.assertAlmostEqual(cost, 751.2, places=1)
+        self.assertAlmostEqual(cost, 20 / (1.065 * 0.5 * 0.2 * 0.05), places=6)
+        self.assertAlmostEqual(cost, 3755.9, places=1)
         # 物理单独一类，也一样贵
         self.assertAlmostEqual(relic.resin_cost(relic.SLOT_GOBLET, "dmg_physical"), cost, places=6)
 
@@ -192,7 +200,7 @@ class TestMainCombos(unittest.TestCase):
 
     def test_budget_filters_combos(self):
         """预算太低 → 一套都买不起；预算足够 → 全部组合都可行。"""
-        self.assertEqual(relic.feasible_combos(300), [])          # 最低成本 ≈ 484
+        self.assertEqual(relic.feasible_combos(1000), [])         # 最低成本 ≈ 2421
         every = relic.feasible_combos(100000)
         self.assertEqual(len(every), len(relic.main_combos()) * len(relic.SLOTS))
         for item in every:
@@ -201,11 +209,11 @@ class TestMainCombos(unittest.TestCase):
 
     def test_feasible_combos_sorted_and_within_budget(self):
         """返回结果按成本从低到高、都不超预算。"""
-        got = relic.feasible_combos(1500)
+        got = relic.feasible_combos(8000)
         self.assertTrue(got)
         costs = [item["cost"] for item in got]
         self.assertEqual(costs, sorted(costs))
-        self.assertLessEqual(max(costs), 1500)
+        self.assertLessEqual(max(costs), 8000)
         # 每一条的"哪个槽当散件"只会是 5 个部位之一
         self.assertTrue({item["offPiece"] for item in got} <= set(relic.SLOTS))
 
