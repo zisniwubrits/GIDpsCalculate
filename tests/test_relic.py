@@ -297,5 +297,91 @@ class TestSinglePieceModel(unittest.TestCase):
         self.assertGreater(relic.expected_scalar(boss), relic.expected_scalar(domain))
 
 
+class TestDamageFn(unittest.TestCase):
+    """伤害函数抽象层：9 个属性 → 期望伤害（解释层实现）。"""
+
+    def make(self):
+        """一个最小工程：角色面板 → 基础值 → 暴击区 → ★结果。"""
+        from genshin_dmg.graph import Graph, GraphNode
+
+        g = Graph()
+        g.add(GraphNode("r1", "role", fields={
+            "role_name": "测试",
+            "panel": ("atk = 1000\natk_pct = 0\natk_flat = 0\n"
+                      "crit_rate = 50\ncrit_dmg = 100"),
+        }))
+        g.add(GraphNode("n1", "base", fields={
+            "stat_base": "atk*(1+atk_pct/100)+atk_flat", "multiplier": "200"}))
+        g.add(GraphNode("n2", "crit", fields={
+            "crit_rate": "crit_rate", "crit_damage": "crit_dmg"}))
+        g.add(GraphNode("n3", "result"))
+        for nid in ("n1", "n2", "n3"):
+            g.nodes[nid].role = "测试"
+        g.connect("n1", "n2")
+        g.connect("n2", "n3")
+        return g
+
+    def test_stats_order_is_the_nine_substats(self):
+        self.assertEqual(relic.STATS_ORDER, (
+            "atk_pct", "atk_flat", "hp_pct", "hp_flat", "def_pct",
+            "def_flat", "em", "crit_rate", "crit_dmg"))
+        self.assertEqual(len(relic.STATS_ORDER), 9)
+
+    def test_baseline_matches_plain_evaluation(self):
+        """全 0 注入时，伤害函数 = 不做任何注入的工程求值。"""
+        g = self.make()
+        fn = relic.damage_fn_from_project(g, "测试")
+        base = fn.calc([0] * 9)
+        self.assertAlmostEqual(base, 3000.0, places=6)   # 1000×200%×(1+0.5×1.0)
+
+    def test_injects_attack_percent(self):
+        """攻击% 注入后基础值变大，伤害必须变高。"""
+        fn = relic.damage_fn_from_project(self.make(), "测试")
+        base = fn.calc([0] * 9)
+        got = fn.calc([50, 0, 0, 0, 0, 0, 0, 0, 0])      # atk_pct = 50
+        self.assertAlmostEqual(got, base * 1.5, places=6)
+
+    def test_injects_flat_attack_and_crit_damage(self):
+        fn = relic.damage_fn_from_project(self.make(), "测试")
+        base = fn.calc([0] * 9)
+        self.assertAlmostEqual(fn.calc([0, 311, 0, 0, 0, 0, 0, 0, 0]),
+                               base * (1000 + 311) / 1000, places=6)
+        # 暴伤 +100 → 期望倍率从 1.5 变成 2.0
+        self.assertAlmostEqual(fn.calc([0] * 8 + [100]), base * 2.0 / 1.5, places=6)
+
+    def test_injection_counts_as_own(self):
+        """圣遗物属性算"自身"（own::），不是别人给的拐（in::）。"""
+        g = self.make()
+        fn = relic.damage_fn_from_project(g, "测试")
+        fn.calc([50, 0, 0, 0, 0, 0, 0, 0, 0])
+        self.assertAlmostEqual(g.variables["测试__own__atk_pct"], 50.0, places=9)
+        self.assertAlmostEqual(g.variables.get("测试__in__atk_pct", 0.0), 0.0, places=9)
+
+    def test_batch_equals_single_calls(self):
+        fn = relic.damage_fn_from_project(self.make(), "测试")
+        rows = [[0] * 9, [50] + [0] * 8, [0, 311] + [0] * 7, [0] * 8 + [50]]
+        flat = [value for row in rows for value in row]
+        got = fn.calc_batch(flat)
+        want = [fn.calc(row) for row in rows]
+        self.assertEqual(len(got), len(want))
+        for got_value, want_value in zip(got, want):
+            self.assertAlmostEqual(got_value, want_value, places=9)
+
+    def test_rejects_bad_input(self):
+        fn = relic.damage_fn_from_project(self.make(), "测试")
+        with self.assertRaises(ValueError):
+            fn.calc([0] * 8)                      # 少一个
+        with self.assertRaises(ValueError):
+            fn.calc([0] * 10)                     # 多一个
+        with self.assertRaises(ValueError):
+            fn.calc([float("nan")] + [0] * 8)
+        with self.assertRaises(ValueError):
+            fn.calc_batch([0] * 10)               # 不是 9 的倍数
+
+    def test_unknown_role(self):
+        with self.assertRaises(ValueError):
+            relic.damage_fn_from_project(self.make(), "不存在的角色")
+
+
 if __name__ == "__main__":                                  # pragma: no cover
     unittest.main()

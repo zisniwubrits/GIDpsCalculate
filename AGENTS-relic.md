@@ -205,3 +205,20 @@
 - 数值一律 `float`，百分数按面板口径（`25.0` = 25%）；
 - 这 9 项是**圣遗物模拟**的输入；完整工程求值（含 `month_dmg / res_shred / …` 等 20 个宏）
   仍由 `Graph.evaluate` 负责，两者不混用。
+
+### 9.1 已实现的接口（解释层）
+
+`genshin_dmg/relic.py`：
+
+```python
+STATS_ORDER                      # 9 个属性名，顺序即 ABI 下标
+
+fn = damage_fn_from_project(project, role)   # project = 工程 dict 或文件路径
+fn.calc([...9 个 float...]) -> float          # 单次
+fn.calc_batch(rows) -> list[float]            # rows = 行优先扁平数组（长度 = 组数 × 9）
+```
+
+- 内部用 `Graph.extra_own`（**新增**，在 `graph.py`）把属性注入成该角色的**自身值**：
+  面板里写过的宏相加、没写过的也登记；因此 `own::` 会包含圣遗物，`in::` 不会；
+- 输入校验：长度必须 9、不得 NaN/inf、批量必须整除，错误一律 `ValueError`；
+- 同一个 `Graph` 实例可反复求值（`evaluate` 会重置运行时状态），所以批量只重建 `extra_own`。

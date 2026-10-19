@@ -304,6 +304,10 @@ class Graph:
         # 外部注入的拐力 {目标角色: {名字: 值}}：**由调用方在求值前设置**，求值不重置。
         # 目前只有「域对照表」用它（把某列域的 out:: + 固定拐力域加成到行角色上）。
         self.extra_buffs: dict = {}
+        # 外部注入的**自身属性** {角色: {宏: 值}}（圣遗物模拟走这里）：
+        # 与 extra_buffs 不同，它算"自身"（进 own::），不是别人给的拐（in::）。
+        # 同样在求值前设置、不随求值重置；面板里写过的宏相加，没写过的也登记。
+        self.extra_own: dict = {}
         # 拐力生效后的面板值 {目标角色: {面板宏: 自身+拐力}}，用于**覆盖式**注入
         # （覆盖而不是相加，保证不管注入几次都不会重复计算）
         self._buff_totals: dict = {}
@@ -674,6 +678,7 @@ class Graph:
                             env, key, own_key, "p%d:%d" % (id(node), index), value
                         )
                     else:
+                        value += float((self.extra_own or {}).get(role, {}).get(macro, 0.0))
                         env[key] = value
                     # 记下"用户自己写的那个值"：own:: 只认它、且**先写的为准**
                     # （`atk_pct = 10` 与 `out::atk_pct = 40` 并存时，自身值仍是 10）；
@@ -687,6 +692,15 @@ class Graph:
                             env[own_key] = value
                     # 同一张角色卡里的后续面板项要能引用刚定义的（如 atk_pct = atk * 0.1）
                     _nodes.use_env(self.scoped_env(node, env, role=role))
+                # 圣遗物等外部注入的自身属性：面板里没写到的宏也要登记
+                for macro, extra in ((self.extra_own or {}).get(role) or {}).items():
+                    if macro not in _nodes.PANEL_MACRO_KEYS or not extra:
+                        continue
+                    key = env_key(qualify(macro, role))
+                    if key in env:
+                        continue                    # 面板里写过：上面已经加过了
+                    env[key] = float(extra)
+                    self._own_values.setdefault(key, float(extra))
             finally:
                 _nodes.reset_env(token)
 
