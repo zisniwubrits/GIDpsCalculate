@@ -541,6 +541,100 @@ class TestFilteredModel(unittest.TestCase):
             relic.filtered_piece_states("atk_pct", self.EFF3, 4)
 
 
+class TestTailConfidence(unittest.TestCase):
+    """n 个胚之后「每个有效维度都至少 v」的置信度（逐分量后缀和）。
+
+    输出形状 {(v1,…,vm): 置信度}，v 覆盖"单件可能出现"的全部状态
+    （≤4 个非零分量、分量和 ≤9）。
+    """
+
+    EFF = ("crit_rate", "crit_dmg", "atk_flat")
+
+    def test_shape_and_range(self):
+        conf = relic.tail_confidence("atk_pct", self.EFF, 2, 10)
+        grid = relic.state_lattice(len(self.EFF))
+        self.assertEqual(set(conf), set(grid))
+        for vector, value in conf.items():
+            self.assertEqual(len(vector), len(self.EFF))
+            self.assertLessEqual(sum(1 for c in vector if c), 4)
+            self.assertLessEqual(sum(vector), 9)
+            self.assertGreaterEqual(value, 0.0)
+            self.assertLessEqual(value, 1.0)
+        self.assertEqual(conf[tuple([0] * len(self.EFF))], 1.0)   # v=0 必然达成
+
+    def test_effective_set_sizes_one_to_five(self):
+        for size in (1, 2, 3, 4, 5):
+            eff = tuple(relic.POOL_KEYS[:size])
+            conf = relic.tail_confidence("dmg_pyro", eff, min(2, size), 5)
+            self.assertEqual(len(conf), len(relic.state_lattice(size)), msg=size)
+            self.assertEqual(conf[tuple([0] * size)], 1.0, msg=size)
+
+    def test_any_mode_matches_closed_form(self):
+        """mode=any：conf(v) = 1 − (1 − q_v)^n，q_v 直接由条件分布求和得到。"""
+        states = relic.filtered_piece_states("atk_pct", self.EFF, 2, tracked=self.EFF)
+        for n in (1, 3, 10):
+            conf = relic.tail_confidence("atk_pct", self.EFF, 2, n)
+            for vector in ((0, 0, 0), (1, 0, 0), (2, 1, 0), (1, 1, 1), (3, 2, 1)):
+                q = sum(p for w, p in states.items()
+                        if all(a >= b for a, b in zip(w, vector)))
+                self.assertAlmostEqual(conf[vector], 1 - (1 - q) ** n, places=12,
+                                       msg=(n, vector))
+
+    def test_monotone_in_n_and_in_v(self):
+        E = self.EFF
+        small = relic.tail_confidence("atk_pct", E, 2, 3)
+        big = relic.tail_confidence("atk_pct", E, 2, 30)
+        for vector in small:
+            self.assertLessEqual(small[vector], big[vector] + 1e-12, msg=vector)
+        # v 越大越难达成（逐分量比较）
+        conf = relic.tail_confidence("atk_pct", E, 2, 5)
+        for vector, worse in (((1, 0, 0), (2, 1, 1)), ((1, 1, 0), (2, 1, 1))):
+            self.assertGreaterEqual(conf[vector], conf[worse] - 1e-12)
+
+    def test_higher_k_is_better(self):
+        """k 越高（筛得更狠），同一个 v 的置信度越高。"""
+        low = relic.tail_confidence("atk_pct", self.EFF, 1, 5)
+        high = relic.tail_confidence("atk_pct", self.EFF, 2, 5)
+        for vector in ((1, 0, 0), (1, 1, 0), (2, 1, 1)):
+            self.assertGreater(high[vector], low[vector])
+
+    def test_best_mode_is_suffix_of_best_of_n(self):
+        """mode=best：等于 best_of_n_states 分布的后缀和。"""
+        states = relic.filtered_piece_states("atk_pct", self.EFF, 2, tracked=self.EFF)
+        n = 7
+        dist = relic.best_of_n_states(states, n)
+        conf = relic.tail_confidence("atk_pct", self.EFF, 2, n, mode="best")
+        for vector in list(conf)[:20]:
+            expect = sum(p for w, p in dist.items()
+                         if all(a >= b for a, b in zip(w, vector)))
+            self.assertAlmostEqual(conf[vector], expect, places=12, msg=vector)
+
+    def test_best_mode_never_exceeds_any_mode(self):
+        """按全序选出的"最好"可能不支配全部件，所以 best ≤ any。"""
+        any_mode = relic.tail_confidence("atk_pct", self.EFF, 2, 10)
+        best_mode = relic.tail_confidence("atk_pct", self.EFF, 2, 10, mode="best")
+        for vector in any_mode:
+            self.assertLessEqual(best_mode[vector], any_mode[vector] + 1e-12, msg=vector)
+
+    def test_n1_modes_agree(self):
+        any_one = relic.tail_confidence("atk_pct", self.EFF, 2, 1)
+        best_one = relic.tail_confidence("atk_pct", self.EFF, 2, 1, mode="best")
+        for vector in any_one:
+            self.assertAlmostEqual(any_one[vector], best_one[vector], places=12, msg=vector)
+
+    def test_rejects_bad_arguments(self):
+        for bad_k in (0, 5, -1):
+            with self.assertRaises(ValueError):
+                relic.tail_confidence("atk_pct", self.EFF, bad_k, 1)
+        for bad_n in (0, -3):
+            with self.assertRaises(ValueError):
+                relic.tail_confidence("atk_pct", self.EFF, 1, bad_n)
+        with self.assertRaises(ValueError):
+            relic.tail_confidence("atk_pct", self.EFF, 1, 1, mode="median")
+        with self.assertRaises(ValueError):
+            relic.state_lattice(0)
+
+
 class TestDamageFn(unittest.TestCase):
     """伤害函数抽象层：9 个属性 → 期望伤害（解释层实现）。"""
 

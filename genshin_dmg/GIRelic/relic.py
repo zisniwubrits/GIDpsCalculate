@@ -71,6 +71,9 @@ __all__ = [
     "filtered_piece_states",
     "filtered_summary",
     "resin_per_accepted",
+    "state_lattice",
+    "suffix_sum",
+    "tail_confidence",
     "combo_cost",
     "main_combos",
     "feasible_combos",
@@ -699,6 +702,100 @@ def resin_per_accepted(slot: str, main: str, effective, min_effective: int = 1,
     if rate <= 0.0:
         return float("inf")
     return resin_cost(slot, main, off_piece=off_piece) / rate
+
+
+# ---- 置信度：n 个胚之后"至少达到 v"的概率（逐分量后缀和）------------------
+def state_lattice(dims: int, max_points: int = 9, max_lines: int = 4) -> list:
+    """单件可能出现的所有状态向量 v（维度 = 有效词条数）。
+
+    约束来自物理事实：一件五星圣遗物只有 **4 条**副词条、**8 或 9** 个词条点，
+    所以 `非零分量数 ≤ 4`、`分量和 ≤ 9`。按"选支撑集 + 正整数拆分"生成，
+    不遍历 `10^dims`（dims 大到 10 也不会爆）。
+    """
+    from itertools import combinations
+
+    if dims <= 0:
+        raise ValueError("dims 必须为正整数")
+    out = [tuple([0] * dims)]
+    for size in range(1, min(max_lines, dims) + 1):
+        for support in combinations(range(dims), size):
+            for total in range(size, max_points + 1):
+                for split in _extra_compositions(total - size, size):
+                    vector = [0] * dims
+                    for index, extra in zip(support, split):
+                        vector[index] = extra + 1
+                    out.append(tuple(vector))
+    return out
+
+
+def suffix_sum(states: dict, grid=None) -> dict:
+    """逐分量**后缀和**：``q[v] = Σ_{w ≥ v} ω(w)``（每个维度都不小于 v）。
+
+    输入 ``{状态: 权重}``；``grid`` 缺省时用 :func:`state_lattice` 覆盖的全部状态。
+    在格点上做多维累积（每维从大到小一遍），复杂度 `O(dims × |grid|)`。
+    """
+    if not states:
+        return {}
+    dims = len(next(iter(states)))
+    grid = state_lattice(dims) if grid is None else grid
+    q = {vector: float(states.get(vector, 0.0)) for vector in grid}
+    for axis in range(dims):
+        for vector in sorted(grid, key=lambda v: -v[axis]):
+            above = list(vector)
+            above[axis] += 1
+            add = q.get(tuple(above))
+            if add:
+                q[vector] += add
+    return q
+
+
+def tail_confidence(main: str, effective, k: int, n: int,
+                    q4: float = FOUR_SUB_RATE, mode: str = "any",
+                    key=None) -> dict:
+    """拿到 ``n`` 个**通过筛选的胚**之后，"至少达到 v"的置信度分布。
+
+    用户口径：
+
+    * ``effective``：有效词条种类集合（长度 1~5，这里允许 1~10）；
+    * ``k``（1~4）：胚的定义。4 条起手看**初始 4 条**里有效条数 ≥ k；
+      3 条起手看**初始 3 条 + +4 的那一条**共 4 条里有效条数 ≥ k；
+    * ``n``：胚的个数（每个胚都是通过上述筛选、并强化到 +20 的件）；
+    * 返回值形状：``{(v1, v2, …): 置信度}``，覆盖所有单件可能出现的 v。
+
+    两种口径（**不等**，默认 ``"any"``）：
+
+    * ``mode="any"``：任一件逐分量支配 v 即算
+      ``1 − (1 − q_v)^n``，``q_v = Σ_{w ≥ v} P₁[w]``（= 逐分量最大值分布的后缀和）；
+    * ``mode="best"``：先按全序键选出"最好"那件（默认词条总数，将来可换伤害），
+      再取其后缀和 ``Σ_{w ≥ v} P_N[w]``。恒有 ``best ≤ any``。
+    """
+    from math import expm1, log1p
+
+    eff = check_effective(effective)
+    if not isinstance(n, int) or isinstance(n, bool) or n < 1:
+        raise ValueError("n 必须是正整数（胚的个数）")
+    if not isinstance(k, int) or isinstance(k, bool) or not 1 <= k <= 4:
+        raise ValueError("k 取 1~4（胚要求初始可见的 4 条里至少几个有效）")
+    if mode not in ("any", "best"):
+        raise ValueError("mode 只能是 'any' 或 'best'")
+
+    states = filtered_piece_states(main, eff, k, q4, tracked=eff)
+    grid = state_lattice(len(eff))
+
+    if mode == "best":
+        return suffix_sum(best_of_n_states(states, n, key=key or total_state_key), grid)
+
+    single = suffix_sum(states, grid)          # q_v
+    out: dict = {}
+    for vector, prob in single.items():
+        if prob <= 0.0:
+            out[vector] = 0.0
+        elif prob >= 1.0:
+            out[vector] = 1.0
+        else:
+            # 1 − (1−q)^n 用 expm1/log1p，避免小 q、大 n 时的精度损失
+            out[vector] = -expm1(n * log1p(-prob))
+    return out
 
 
 # ---- 伤害函数抽象层 -------------------------------------------------------
