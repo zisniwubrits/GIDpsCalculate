@@ -751,33 +751,43 @@ def suffix_sum(states: dict, grid=None) -> dict:
 
 def tail_confidence(main: str, effective, k: int, n: int,
                     q4: float = FOUR_SUB_RATE, mode: str = "any",
-                    key=None) -> dict:
-    """拿到 ``n`` 个**通过筛选的胚**之后，"至少达到 v"的置信度分布。
+                    key=None, unit: str = "piece",
+                    extra_rate: float = EXTRA_DROP_RATE) -> dict:
+    """拿到 ``n`` 次机会之后，"至少达到 v"的置信度分布（逐分量支配）。
 
     用户口径：
 
     * ``effective``：有效词条种类集合（长度 1~5，这里允许 1~10）；
     * ``k``（1~4）：胚的定义。4 条起手看**初始 4 条**里有效条数 ≥ k；
       3 条起手看**初始 3 条 + +4 的那一条**共 4 条里有效条数 ≥ k；
-    * ``n``：胚的个数（每个胚都是通过上述筛选、并强化到 +20 的件）；
+    * ``n`` + ``unit``：计数的单位
+      - ``"piece"``（默认）：n 个**通过筛选的胚**；
+      - ``"run"``：n **次副本**——每次必掉 1 件、另有 ``extra_rate`` 概率再掉 1 件，
+        即每轮 1 或 2 件（各自独立过筛选）；
     * 返回值形状：``{(v1, v2, …): 置信度}``，覆盖所有单件可能出现的 v。
 
     两种口径（**不等**，默认 ``"any"``）：
 
-    * ``mode="any"``：任一件逐分量支配 v 即算
-      ``1 − (1 − q_v)^n``，``q_v = Σ_{w ≥ v} P₁[w]``（= 逐分量最大值分布的后缀和）；
+    * ``mode="any"``：**任一件**逐分量支配 v 即算（= 逐分量最大值分布的后缀和）
+      ``1 − (1 − q_v)^n``，``q_v = Σ_{w ≥ v} P₁[w]``。
+      ``unit="run"`` 时精确换成 ``1 − [(1−q_v)(1−extra_rate·q_v)]^n``
+      （每轮 1 件的概率 ``1−extra_rate``、2 件的概率 ``extra_rate``）；
     * ``mode="best"``：先按全序键选出"最好"那件（默认词条总数，将来可换伤害），
-      再取其后缀和 ``Σ_{w ≥ v} P_N[w]``。恒有 ``best ≤ any``。
+      再取其后缀和 ``Σ_{w ≥ v} P_N[w]``。恒有 ``best ≤ any``（只支持 ``unit="piece"``）。
     """
     from math import expm1, log1p
 
     eff = check_effective(effective)
     if not isinstance(n, int) or isinstance(n, bool) or n < 1:
-        raise ValueError("n 必须是正整数（胚的个数）")
+        raise ValueError("n 必须是正整数")
     if not isinstance(k, int) or isinstance(k, bool) or not 1 <= k <= 4:
         raise ValueError("k 取 1~4（胚要求初始可见的 4 条里至少几个有效）")
     if mode not in ("any", "best"):
         raise ValueError("mode 只能是 'any' 或 'best'")
+    if unit not in ("piece", "run"):
+        raise ValueError("unit 只能是 'piece'（胚数）或 'run'（刷本次数）")
+    if unit == "run" and mode != "any":
+        raise ValueError("unit='run' 只支持 mode='any'（最好那件的分布在随机件数下不展开）")
 
     states = filtered_piece_states(main, eff, k, q4, tracked=eff)
     grid = state_lattice(len(eff))
@@ -793,8 +803,13 @@ def tail_confidence(main: str, effective, k: int, n: int,
         elif prob >= 1.0:
             out[vector] = 1.0
         else:
-            # 1 − (1−q)^n 用 expm1/log1p，避免小 q、大 n 时的精度损失
-            out[vector] = -expm1(n * log1p(-prob))
+            if unit == "piece":
+                miss = log1p(-prob)                     # log(1−q)
+            else:
+                # 每轮 1 件的概率 1−r、2 件的概率 r；全不达标 = (1−q)·(1−r·q)
+                miss = log1p(-prob) + log1p(-float(extra_rate) * prob)
+            # 1 − exp(n·log miss) 用 expm1，避免小 q、大 n 时丢精度
+            out[vector] = -expm1(n * miss)
     return out
 
 

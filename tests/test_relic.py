@@ -622,6 +622,24 @@ class TestTailConfidence(unittest.TestCase):
         for vector in any_one:
             self.assertAlmostEqual(any_one[vector], best_one[vector], places=12, msg=vector)
 
+    def test_run_unit_counts_domain_runs(self):
+        """unit="run"：每次副本 1 件（93.5%）或 2 件（6.5%），精确替掉 n 的算法。"""
+        states = relic.filtered_piece_states("atk_pct", self.EFF, 2, tracked=self.EFF)
+        for n in (1, 5, 40):
+            conf = relic.tail_confidence("atk_pct", self.EFF, 2, n, unit="run")
+            for vector in ((0, 0, 0), (1, 0, 0), (1, 1, 1)):
+                q = sum(p for w, p in states.items()
+                        if all(a >= b for a, b in zip(w, vector)))
+                expect = 1 - ((1 - q) * (1 - relic.EXTRA_DROP_RATE * q)) ** n
+                self.assertAlmostEqual(conf[vector], expect, places=12, msg=(n, vector))
+
+    def test_runs_are_at_least_as_good_as_pieces(self):
+        """同样次数下，"刷 n 次" ≥ "n 个胚"（多出来的那件只可能帮忙）。"""
+        piece = relic.tail_confidence("atk_pct", self.EFF, 2, 10)
+        runs = relic.tail_confidence("atk_pct", self.EFF, 2, 10, unit="run")
+        for vector in piece:
+            self.assertGreaterEqual(runs[vector], piece[vector] - 1e-12, msg=vector)
+
     def test_rejects_bad_arguments(self):
         for bad_k in (0, 5, -1):
             with self.assertRaises(ValueError):
@@ -631,6 +649,10 @@ class TestTailConfidence(unittest.TestCase):
                 relic.tail_confidence("atk_pct", self.EFF, 1, bad_n)
         with self.assertRaises(ValueError):
             relic.tail_confidence("atk_pct", self.EFF, 1, 1, mode="median")
+        with self.assertRaises(ValueError):
+            relic.tail_confidence("atk_pct", self.EFF, 1, 1, unit="week")
+        with self.assertRaises(ValueError):
+            relic.tail_confidence("atk_pct", self.EFF, 1, 1, mode="best", unit="run")
         with self.assertRaises(ValueError):
             relic.state_lattice(0)
 
