@@ -344,9 +344,10 @@ run_expected(program: Program, stats) -> float   # 纯函数，不碰工程
 
 | 口径 | 事件 | 是否分布 | 实现 |
 |---|---|---|---|
-| A 至少达到（支配） | `P(任一件 ≽ v) = 1 − (1 − q_v)^N`，`q_v = Σ_{w ≽ v} P₁[w]` | 否（单调递减，求和 ≠ 1）；就是逐分量最大值分布的后缀和 | `tail_confidence(..., mode="any")`，见 §13 |
+| A 至少达到（支配） | `P(任一件 ≽ v) = 1 − (1 − q_v)^N`，`q_v = Σ_{w ≽ v} P₁[w]` | 否（单调递减，求和 ≠ 1）；就是逐分量最大值分布的后缀和 | `tail_confidence`，见 §13 |
 | **B 恰好等于** | `P(最好那个 = v)` | **是**，`Σ_v P_N[v] = 1` | `best_of_n_states` |
-| B′ 最优件的后缀和 | `Σ_{w ≽ v} P_N[w]` | 否 | `tail_confidence(..., mode="best")`；恒有 B′ ≤ A |
+
+> 用户已明确：**置信度只要 A**（`tail_confidence` 不再有 `mode` 参数，B′ 已删除）。
 
 ### 11.1 定义与公式
 
@@ -480,15 +481,23 @@ resin_per_accepted(slot, main, effective, k, off_piece, q4) -> float
 - 输出形状：`{(v1, v2, …, vm): 置信度}`，`m = |E|`，
   覆盖"单件可能出现"的全部 v（`非零分量 ≤ 4`、`分量和 ≤ 9`），由 `state_lattice` 生成。
 
-### 13.2 两种口径（不等，默认 `any`）
+### 13.2 口径（唯一）
 
-| mode | 含义 | 公式 | 关系 |
-|---|---|---|---|
-| `"any"` | 任一件逐分量支配 v 即算（= 逐分量最大值分布的后缀和） | `1 − (1 − q_v)^n`；`unit="run"` 时 `1 − [(1−q_v)(1−0.065·q_v)]^n` | 上界 |
-| `"best"` | 先按全序键选出"最好"那件，再取其后缀和 | `Σ_{w ≽ v} P_N[w]` | 恒有 `best ≤ any`；仅支持 `unit="piece"` |
+**任一件逐分量支配 v 即算**（等价于"逐分量最大值 ≥ v"，也就是"最好的那件每个维度都 ≥ v"）：
 
-`unit="run"` 的推导：每轮 1 件的概率 `1−0.065`、2 件的概率 `0.065`，
+$$
+q_v = \sum_{w \ge v} P_1[w],
+\qquad P[v] = 1 - (1 - q_v)^n
+$$
+
+`unit="run"` 时精确换成 `1 − [(1−q_v)(1−0.065·q_v)]^n`。
+
+推导：每轮 1 件的概率 `1−0.065`、2 件的概率 `0.065`，
 "一件都没达标"= `(1−q_v)[(1−0.065) + 0.065(1−q_v)] = (1−q_v)(1−0.065·q_v)`，n 轮取幂。
+
+`q_v` 与 `P₁` 都是**通过筛选后的条件分布**（`filtered_piece_states`）。
+
+> 不做"先选最好再判 v"的口径（用户已明确不要）：它是另一种问题，且 `≤` 上式。
 
 ### 13.3 接口
 
@@ -496,7 +505,7 @@ resin_per_accepted(slot, main, effective, k, off_piece, q4) -> float
 state_lattice(dims, max_points=9, max_lines=4) -> [v, ...]
 suffix_sum(states, grid=None) -> {v: Σ_{w ≽ v} p[w]}      # 逐分量后缀和
 tail_confidence(main, effective, k, n, q4=FOUR_SUB_RATE,
-                mode="any", key=None, unit="piece") -> {v: 置信度}
+                unit="piece") -> {v: 置信度}
 ```
 
 `q_v` 与 `P₁` 都是**通过筛选后的条件分布**（`filtered_piece_states`）。
@@ -504,14 +513,14 @@ tail_confidence(main, effective, k, n, q4=FOUR_SUB_RATE,
 - 复杂度：`state_lattice` 用"选支撑集 + 正整数拆分"生成，不遍历 `10^dims`；
   后缀和是 `O(dims × |grid|)` 的多维累积。实测 |E|=5 → 1876 格点、0.03s；|E|=10 → 38251 格点、0.2s。
 - 精度：`1−(1−q)^n` 用 `expm1/log1p`，小 q、大 n 不丢精度。
-- 错误语义：`k` 不在 1~4、`n < 1`、`mode` 非法、`dims ≤ 0` → `ValueError`。
+- 错误语义：`k` 不在 1~4、`n < 1`、`unit` 非法、`dims ≤ 0` → `ValueError`。
 
 ### 13.4 校验（`tests/test_relic.py::TestTailConfidence`）
 
 1. 形状：键集 = `state_lattice`、`v=0` 恒为 1、值域 [0,1]；
 2. `|E|` 取 1~5 都成立；
-3. `mode="any"` 与闭式 `1−(1−q_v)^n` 对拍（1e-12）；
+3. 与闭式 `1−(1−q_v)^n` 对拍（1e-12）；`n=1` 时就是单件的逐分量后缀概率；
 4. `n` 单调不减；`v` 越大置信度越小；
 5. `k` 越高置信度越高；
-6. `mode="best"` = `best_of_n_states` 的后缀和（1e-12）、恒 ≤ `any`、`n=1` 时两者相等；
-7. 非法参数报错。
+6. `unit="run"` 与闭式 `1−[(1−q)(1−0.065q)]^n` 对拍（1e-12），且恒 ≥ 同次数的 `"piece"`；
+7. 非法参数报错（`k` 越界、`n<1`、`unit` 非法、`dims≤0`）。

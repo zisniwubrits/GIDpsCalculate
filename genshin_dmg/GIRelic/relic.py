@@ -750,10 +750,9 @@ def suffix_sum(states: dict, grid=None) -> dict:
 
 
 def tail_confidence(main: str, effective, k: int, n: int,
-                    q4: float = FOUR_SUB_RATE, mode: str = "any",
-                    key=None, unit: str = "piece",
+                    q4: float = FOUR_SUB_RATE, unit: str = "piece",
                     extra_rate: float = EXTRA_DROP_RATE) -> dict:
-    """拿到 ``n`` 次机会之后，"至少达到 v"的置信度分布（逐分量支配）。
+    """拿到 ``n`` 次机会之后，"至少有一件每个有效维度都不小于 v"的置信度。
 
     用户口径：
 
@@ -766,14 +765,12 @@ def tail_confidence(main: str, effective, k: int, n: int,
         即每轮 1 或 2 件（各自独立过筛选）；
     * 返回值形状：``{(v1, v2, …): 置信度}``，覆盖所有单件可能出现的 v。
 
-    两种口径（**不等**，默认 ``"any"``）：
+    口径唯一：**任一件逐分量支配 v 即算**（= 逐分量最大值分布的后缀和）
 
-    * ``mode="any"``：**任一件**逐分量支配 v 即算（= 逐分量最大值分布的后缀和）
-      ``1 − (1 − q_v)^n``，``q_v = Σ_{w ≥ v} P₁[w]``。
-      ``unit="run"`` 时精确换成 ``1 − [(1−q_v)(1−extra_rate·q_v)]^n``
-      （每轮 1 件的概率 ``1−extra_rate``、2 件的概率 ``extra_rate``）；
-    * ``mode="best"``：先按全序键选出"最好"那件（默认词条总数，将来可换伤害），
-      再取其后缀和 ``Σ_{w ≥ v} P_N[w]``。恒有 ``best ≤ any``（只支持 ``unit="piece"``）。
+        ``q_v = Σ_{w ≥ v} P₁[w]``，``P[v] = 1 − (1 − q_v)^n``
+
+    ``unit="run"`` 时精确换成 ``1 − [(1−q_v)(1−extra_rate·q_v)]^n``
+    （每轮 1 件的概率 ``1−extra_rate``、2 件的概率 ``extra_rate``）。
     """
     from math import expm1, log1p
 
@@ -782,20 +779,11 @@ def tail_confidence(main: str, effective, k: int, n: int,
         raise ValueError("n 必须是正整数")
     if not isinstance(k, int) or isinstance(k, bool) or not 1 <= k <= 4:
         raise ValueError("k 取 1~4（胚要求初始可见的 4 条里至少几个有效）")
-    if mode not in ("any", "best"):
-        raise ValueError("mode 只能是 'any' 或 'best'")
     if unit not in ("piece", "run"):
         raise ValueError("unit 只能是 'piece'（胚数）或 'run'（刷本次数）")
-    if unit == "run" and mode != "any":
-        raise ValueError("unit='run' 只支持 mode='any'（最好那件的分布在随机件数下不展开）")
 
     states = filtered_piece_states(main, eff, k, q4, tracked=eff)
-    grid = state_lattice(len(eff))
-
-    if mode == "best":
-        return suffix_sum(best_of_n_states(states, n, key=key or total_state_key), grid)
-
-    single = suffix_sum(states, grid)          # q_v
+    single = suffix_sum(states, state_lattice(len(eff)))     # q_v
     out: dict = {}
     for vector, prob in single.items():
         if prob <= 0.0:

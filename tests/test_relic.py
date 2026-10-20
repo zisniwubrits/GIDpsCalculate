@@ -599,28 +599,19 @@ class TestTailConfidence(unittest.TestCase):
             self.assertGreater(high[vector], low[vector])
 
     def test_best_mode_is_suffix_of_best_of_n(self):
-        """mode=best：等于 best_of_n_states 分布的后缀和。"""
+        """（已删除 mode="best"）保留断言：n=1 时置信度就是单件的逐分量后缀概率。"""
         states = relic.filtered_piece_states("atk_pct", self.EFF, 2, tracked=self.EFF)
-        n = 7
-        dist = relic.best_of_n_states(states, n)
-        conf = relic.tail_confidence("atk_pct", self.EFF, 2, n, mode="best")
-        for vector in list(conf)[:20]:
-            expect = sum(p for w, p in dist.items()
+        conf = relic.tail_confidence("atk_pct", self.EFF, 2, 1)
+        for vector in ((0, 0, 0), (1, 0, 0), (2, 1, 0), (1, 1, 1)):
+            expect = sum(p for w, p in states.items()
                          if all(a >= b for a, b in zip(w, vector)))
             self.assertAlmostEqual(conf[vector], expect, places=12, msg=vector)
 
-    def test_best_mode_never_exceeds_any_mode(self):
-        """按全序选出的"最好"可能不支配全部件，所以 best ≤ any。"""
-        any_mode = relic.tail_confidence("atk_pct", self.EFF, 2, 10)
-        best_mode = relic.tail_confidence("atk_pct", self.EFF, 2, 10, mode="best")
-        for vector in any_mode:
-            self.assertLessEqual(best_mode[vector], any_mode[vector] + 1e-12, msg=vector)
-
     def test_n1_modes_agree(self):
-        any_one = relic.tail_confidence("atk_pct", self.EFF, 2, 1)
-        best_one = relic.tail_confidence("atk_pct", self.EFF, 2, 1, mode="best")
-        for vector in any_one:
-            self.assertAlmostEqual(any_one[vector], best_one[vector], places=12, msg=vector)
+        """（已删除 mode="best"）保留断言：v=0 时任何次数都必然达成。"""
+        for n in (1, 7, 50):
+            conf = relic.tail_confidence("atk_pct", self.EFF, 2, n)
+            self.assertEqual(conf[tuple([0] * len(self.EFF))], 1.0, msg=n)
 
     def test_run_unit_counts_domain_runs(self):
         """unit="run"：每次副本 1 件（93.5%）或 2 件（6.5%），精确替掉 n 的算法。"""
@@ -648,11 +639,7 @@ class TestTailConfidence(unittest.TestCase):
             with self.assertRaises(ValueError):
                 relic.tail_confidence("atk_pct", self.EFF, 1, bad_n)
         with self.assertRaises(ValueError):
-            relic.tail_confidence("atk_pct", self.EFF, 1, 1, mode="median")
-        with self.assertRaises(ValueError):
             relic.tail_confidence("atk_pct", self.EFF, 1, 1, unit="week")
-        with self.assertRaises(ValueError):
-            relic.tail_confidence("atk_pct", self.EFF, 1, 1, mode="best", unit="run")
         with self.assertRaises(ValueError):
             relic.state_lattice(0)
 
