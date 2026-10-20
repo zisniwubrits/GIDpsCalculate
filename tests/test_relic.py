@@ -614,22 +614,20 @@ class TestTailConfidence(unittest.TestCase):
             self.assertEqual(conf[tuple([0] * len(self.EFF))], 1.0, msg=n)
 
     def test_run_unit_counts_domain_runs(self):
-        """unit="run"：每次副本 1 件（93.5%）或 2 件（6.5%），精确替掉 n 的算法。"""
-        states = relic.filtered_piece_states("atk_pct", self.EFF, 2, tracked=self.EFF)
-        for n in (1, 5, 40):
-            conf = relic.tail_confidence("atk_pct", self.EFF, 2, n, unit="run")
-            for vector in ((0, 0, 0), (1, 0, 0), (1, 1, 1)):
-                q = sum(p for w, p in states.items()
-                        if all(a >= b for a, b in zip(w, vector)))
-                expect = 1 - ((1 - q) * (1 - relic.EXTRA_DROP_RATE * q)) ** n
-                self.assertAlmostEqual(conf[vector], expect, places=12, msg=(n, vector))
+        """（已删除 unit 参数）保留断言：n 就是得胚数量，不做刷本次数折算。"""
+        import inspect
+
+        params = inspect.signature(relic.tail_confidence).parameters
+        self.assertEqual(list(params), ["main", "effective", "k", "n", "q4"])
 
     def test_runs_are_at_least_as_good_as_pieces(self):
-        """同样次数下，"刷 n 次" ≥ "n 个胚"（多出来的那件只可能帮忙）。"""
-        piece = relic.tail_confidence("atk_pct", self.EFF, 2, 10)
-        runs = relic.tail_confidence("atk_pct", self.EFF, 2, 10, unit="run")
-        for vector in piece:
-            self.assertGreaterEqual(runs[vector], piece[vector] - 1e-12, msg=vector)
+        """（已删除 unit 参数）保留断言：k 越高、n 越大，同一 v 的置信度不减。"""
+        few = relic.tail_confidence("atk_pct", self.EFF, 2, 5)
+        many = relic.tail_confidence("atk_pct", self.EFF, 2, 50)
+        stricter = relic.tail_confidence("atk_pct", self.EFF, 3, 5)
+        for vector in ((1, 0, 0), (1, 1, 0)):
+            self.assertLessEqual(few[vector], many[vector] + 1e-12)
+            self.assertLessEqual(few[vector], stricter[vector] + 1e-12)
 
     def test_rejects_bad_arguments(self):
         for bad_k in (0, 5, -1):
@@ -638,8 +636,8 @@ class TestTailConfidence(unittest.TestCase):
         for bad_n in (0, -3):
             with self.assertRaises(ValueError):
                 relic.tail_confidence("atk_pct", self.EFF, 1, bad_n)
-        with self.assertRaises(ValueError):
-            relic.tail_confidence("atk_pct", self.EFF, 1, 1, unit="week")
+        with self.assertRaises(TypeError):
+            relic.tail_confidence("atk_pct", self.EFF, 1, 1, unit="run")   # 已无此参数
         with self.assertRaises(ValueError):
             relic.state_lattice(0)
 

@@ -138,16 +138,13 @@
 
 ### 2.6 置信度（口径）
 
-"n 次机会里，**至少有一件**每个有效维度都 ≥ v"的概率——等价于"逐分量最大值 ≥ v"：
+**输入只有「得胚数量 n」**——不折算刷本次数、不乘 6.5% 双掉（要按副本算由调用方自己换算后传 n）。
 
-```
-q_v = Σ_{w ≥ v} P₁[w]          # 单件（通过筛选后）的支配概率
-P[v] = 1 − (1 − q_v)^n         # unit="piece"：n 个胚
-     = 1 − [(1−q_v)(1−0.065·q_v)]^n   # unit="run"：n 次副本（每轮 1 或 2 件）
-```
+含义：这 n 个胚里，**至少有一件的每个有效维度都 ≥ v**。
+口径唯一（逐分量支配）；**不做**"先按全序选最好再判 v"那一套（用户已明确不要，它 ≤ 本口径）。
 
-- 输出 `{(v1,…,vm): 置信度}`，覆盖单件可能出现的全部 v（**非零分量 ≤ 4**、**分量和 ≤ 9**）。
-- **不做**"先按全序选最好再判 v"的口径（用户已明确不要；它 ≤ 上式）。
+输出 `{(v1,…,vm): 置信度}`，覆盖单件可能出现的全部 v（**非零分量 ≤ 4**、**分量和 ≤ 9**）。
+公式见 §3.3。
 
 ---
 
@@ -169,7 +166,12 @@ $$
 
 ### 3.3 支配概率（置信度，`tail_confidence`）
 
-`q_v` 是 `P₁` 的逐分量后缀和；`1 − (1−q_v)^n` 是"n 件最大值 ≥ v"的概率。它**不是分布**（求和 ≠ 1）。
+```
+q_v = Σ_{w ≥ v} P₁[w]           # 单件（通过筛选后的条件分布）的支配概率
+P[v] = 1 − (1 − q_v)^n          # n = 得胚数量
+```
+
+它是"n 件逐分量最大值 ≥ v"的概率，**不是分布**（对 v 求和 ≠ 1）：v 越大越难，`v=0` 恒为 1。
 
 ### 3.4 两条纪律
 
@@ -228,7 +230,7 @@ resin_per_accepted(slot, main, effective, min_effective=1, off_piece=False, q4=F
 # ---- 置信度（§2.6）----
 state_lattice(dims, max_points=9, max_lines=4) -> [v, …]
 suffix_sum(states, grid=None) -> {v: Σ_{w ≽ v} p[w]}
-tail_confidence(main, effective, k, n, q4=FOUR_SUB_RATE, unit="piece", extra_rate=EXTRA_DROP_RATE) -> {v: 置信度}
+tail_confidence(main, effective, k, n, q4=FOUR_SUB_RATE) -> {v: 置信度}
 
 # ---- 伤害函数（adapter，需要工程）----
 STATS_ORDER                                  # 9 项，顺序即 ABI 下标
@@ -243,7 +245,7 @@ relic_program.run(program, stats) -> {"noncrit", "crit", "expected"};  run_expec
 |---|---|
 | 主词条该部位出不了 | `resin_cost` → `inf` |
 | 没有胚能通过筛选（`k` 过大） | `pass_probability` → `0.0`；`filtered_piece_states` → `ValueError`；`resin_per_accepted` → `inf` |
-| 有效词条集合非法/为空、`k∉1~4`、`n<1`、`unit` 非法、`dims≤0` | `ValueError` |
+| 有效词条集合非法/为空、`k∉1~4`、`n<1`、`dims≤0` | `ValueError` |
 | 全序键撞键、状态列表非法 | `ValueError` |
 | 工程链含不可编译卡片 | `NotCompilable`（调用方回退解释层） |
 
@@ -260,7 +262,7 @@ relic_program.run(program, stats) -> {"noncrit", "crit", "expected"};  run_expec
 5. 单调性：N↑ 期望不减、q4↑ 更好；`tail_confidence` 对 n↑ / k↑ 不减、对 v↑ 不增；
 6. 点数随 q4：8 / 8.2 / 9；
 7. 恒等式：两种起手集合分布相同（1e-14）；不筛选（k≤1 且 E=全池）= `piece_states`（1e-14）；
-8. 置信度闭式：`1−(1−q)^n` 与 `1−[(1−q)(1−0.065q)]^n`（1e-12）；
+8. 置信度闭式：`1−(1−q_v)^n`（1e-12），`n=1` 时等于单件的逐分量后缀概率；
 9. 独立性：`nodes/damage/expr/graph` 的 import 白名单（静态 AST + 干净解释器）。
 
 跑法：`python -m pytest -q`（仓库根）。提交前必须全绿。
@@ -291,7 +293,7 @@ relic_program.run(program, stats) -> {"noncrit", "crit", "expected"};  run_expec
 | 3 | 单槽模型（P₁ → S → N 件最好的通式） | ✅ `e378f6b` |
 | 3.5 | 向量状态的 best-of-N（口径 B） | ✅ `dce03e4` |
 | 3.6 | 筛选模型（有效词条 + 接受条件 + 条件分布 + 树脂） | ✅ `a8469de` |
-| 3.7 | 置信度分布（逐分量后缀和，`unit=piece/run`） | ✅ `cba2d52` |
+| 3.7 | 置信度分布（逐分量后缀和，输入得胚数量 n） | ✅ `cba2d52` |
 | 3.8 | 独立化（包内副本 + adapter 分层） | ✅ `7363e6f` `cbc027c` |
 | 4 | 把"最好"的标量换成**真实伤害** | ⬜ 待做（接 adapter） |
 | 5 | 5 槽联合（4 套装 + 1 散件）+ 预算约束最优 | ⬜ 待做 |

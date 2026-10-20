@@ -750,37 +750,28 @@ def suffix_sum(states: dict, grid=None) -> dict:
 
 
 def tail_confidence(main: str, effective, k: int, n: int,
-                    q4: float = FOUR_SUB_RATE, unit: str = "piece",
-                    extra_rate: float = EXTRA_DROP_RATE) -> dict:
-    """拿到 ``n`` 次机会之后，"至少有一件每个有效维度都不小于 v"的置信度。
+                    q4: float = FOUR_SUB_RATE) -> dict:
+    """拿到 ``n`` 个**胚**之后，"至少有一件每个有效维度都不小于 v"的置信度。
 
     用户口径：
 
     * ``effective``：有效词条种类集合（长度 1~5，这里允许 1~10）；
     * ``k``（1~4）：胚的定义。4 条起手看**初始 4 条**里有效条数 ≥ k；
       3 条起手看**初始 3 条 + +4 的那一条**共 4 条里有效条数 ≥ k；
-    * ``n`` + ``unit``：计数的单位
-      - ``"piece"``（默认）：n 个**通过筛选的胚**；
-      - ``"run"``：n **次副本**——每次必掉 1 件、另有 ``extra_rate`` 概率再掉 1 件，
-        即每轮 1 或 2 件（各自独立过筛选）；
+    * ``n``：**得胚数量**（不是刷本次数、不折算 6.5% 双掉——那是调用方的事）；
     * 返回值形状：``{(v1, v2, …): 置信度}``，覆盖所有单件可能出现的 v。
 
     口径唯一：**任一件逐分量支配 v 即算**（= 逐分量最大值分布的后缀和）
 
         ``q_v = Σ_{w ≥ v} P₁[w]``，``P[v] = 1 − (1 − q_v)^n``
-
-    ``unit="run"`` 时精确换成 ``1 − [(1−q_v)(1−extra_rate·q_v)]^n``
-    （每轮 1 件的概率 ``1−extra_rate``、2 件的概率 ``extra_rate``）。
     """
     from math import expm1, log1p
 
     eff = check_effective(effective)
     if not isinstance(n, int) or isinstance(n, bool) or n < 1:
-        raise ValueError("n 必须是正整数")
+        raise ValueError("n 必须是正整数（得胚数量）")
     if not isinstance(k, int) or isinstance(k, bool) or not 1 <= k <= 4:
         raise ValueError("k 取 1~4（胚要求初始可见的 4 条里至少几个有效）")
-    if unit not in ("piece", "run"):
-        raise ValueError("unit 只能是 'piece'（胚数）或 'run'（刷本次数）")
 
     states = filtered_piece_states(main, eff, k, q4, tracked=eff)
     single = suffix_sum(states, state_lattice(len(eff)))     # q_v
@@ -791,13 +782,8 @@ def tail_confidence(main: str, effective, k: int, n: int,
         elif prob >= 1.0:
             out[vector] = 1.0
         else:
-            if unit == "piece":
-                miss = log1p(-prob)                     # log(1−q)
-            else:
-                # 每轮 1 件的概率 1−r、2 件的概率 r；全不达标 = (1−q)·(1−r·q)
-                miss = log1p(-prob) + log1p(-float(extra_rate) * prob)
-            # 1 − exp(n·log miss) 用 expm1，避免小 q、大 n 时丢精度
-            out[vector] = -expm1(n * miss)
+            # 1 − (1−q)^n 用 expm1/log1p，避免小 q、大 n 时丢精度
+            out[vector] = -expm1(n * log1p(-prob))
     return out
 
 
