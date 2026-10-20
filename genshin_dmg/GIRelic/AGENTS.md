@@ -474,7 +474,9 @@ resin_per_accepted(slot, main, effective, k, off_piece, q4) -> float
 
 - **`k`**（胚的定义）：4 条起手看**初始 4 条**里有效条数 ≥ k；
   3 条起手看**初始 3 条 + +4 补的那一条**共 4 条里有效条数 ≥ k（与 §12 一致）；
-- **`n`**：**通过筛选的胚**的个数（不是掉落次数）；每个胚都强化到 +20；
+- **`n`** + **`unit`**：计数的单位
+  - `"piece"`（默认）：**n 个通过筛选的胚**（每个胚都强化到 +20）；
+  - `"run"`：**n 次副本**——每次必掉 1 件、另有 6.5% 概率再掉 1 件，两件各自独立过筛选；
 - 输出形状：`{(v1, v2, …, vm): 置信度}`，`m = |E|`，
   覆盖"单件可能出现"的全部 v（`非零分量 ≤ 4`、`分量和 ≤ 9`），由 `state_lattice` 生成。
 
@@ -482,10 +484,11 @@ resin_per_accepted(slot, main, effective, k, off_piece, q4) -> float
 
 | mode | 含义 | 公式 | 关系 |
 |---|---|---|---|
-| `"any"` | 任一件逐分量支配 v 即算（= 逐分量最大值分布的后缀和） | `1 − (1 − q_v)^n`，`q_v = Σ_{w ≽ v} P₁[w]` | 上界 |
-| `"best"` | 先按全序键选出"最好"那件，再取其后缀和 | `Σ_{w ≽ v} P_N[w]` | 恒有 `best ≤ any` |
+| `"any"` | 任一件逐分量支配 v 即算（= 逐分量最大值分布的后缀和） | `1 − (1 − q_v)^n`；`unit="run"` 时 `1 − [(1−q_v)(1−0.065·q_v)]^n` | 上界 |
+| `"best"` | 先按全序键选出"最好"那件，再取其后缀和 | `Σ_{w ≽ v} P_N[w]` | 恒有 `best ≤ any`；仅支持 `unit="piece"` |
 
-`q_v` 与 `P₁` 都是**通过筛选后的条件分布**（`filtered_piece_states`）。
+`unit="run"` 的推导：每轮 1 件的概率 `1−0.065`、2 件的概率 `0.065`，
+"一件都没达标"= `(1−q_v)[(1−0.065) + 0.065(1−q_v)] = (1−q_v)(1−0.065·q_v)`，n 轮取幂。
 
 ### 13.3 接口
 
@@ -493,8 +496,10 @@ resin_per_accepted(slot, main, effective, k, off_piece, q4) -> float
 state_lattice(dims, max_points=9, max_lines=4) -> [v, ...]
 suffix_sum(states, grid=None) -> {v: Σ_{w ≽ v} p[w]}      # 逐分量后缀和
 tail_confidence(main, effective, k, n, q4=FOUR_SUB_RATE,
-                mode="any", key=None) -> {v: 置信度}
+                mode="any", key=None, unit="piece") -> {v: 置信度}
 ```
+
+`q_v` 与 `P₁` 都是**通过筛选后的条件分布**（`filtered_piece_states`）。
 
 - 复杂度：`state_lattice` 用"选支撑集 + 正整数拆分"生成，不遍历 `10^dims`；
   后缀和是 `O(dims × |grid|)` 的多维累积。实测 |E|=5 → 1876 格点、0.03s；|E|=10 → 38251 格点、0.2s。
